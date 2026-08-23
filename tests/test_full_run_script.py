@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from evaluation_harness.adapters.microcosm import MicrocosmRelease
+from scripts import run_full_chronicle_evaluation
 from scripts.run_full_chronicle_evaluation import authenticate_microcosm_inputs
 
 
@@ -53,3 +54,23 @@ def test_full_run_rejects_a_mismatched_caller_supplied_microcosm_input(
 
     with pytest.raises(ValueError, match="dataset checksum"):
         authenticate_microcosm_inputs(dataset, diagnostics, release=release)
+
+
+def test_default_dispatch_preserves_the_us_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = {"path": "us"}
+    received: tuple | None = None
+
+    def fake_us(*arguments):
+        nonlocal received
+        received = arguments
+        return expected
+
+    monkeypatch.setattr(run_full_chronicle_evaluation, "_run_us", fake_us)
+    paths = tuple(Path(name) for name in ("snapshot", "dataset", "acs", "output"))
+
+    actual = run_full_chronicle_evaluation.run(*paths)
+
+    assert actual is expected
+    assert received == (*paths, None, None)

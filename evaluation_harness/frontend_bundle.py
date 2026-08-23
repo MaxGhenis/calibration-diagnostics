@@ -31,6 +31,11 @@ DEFAULT_SOURCE_LABELS = {
     "yale_reconstruction_2024": (
         "Yale Tax-Data + Tax-Simulator (reconstruction)"
     ),
+    "microcosm_be_v04_axiom": "Microcosm-BE v0.4 × Axiom rules engine",
+    "microcosm_be_v04_euromod": "Microcosm-BE v0.4 × EUROMOD BE_2025",
+    "euromod_be2025_jrc_silc": (
+        "EUROMOD BE_2025 on EU-SILC (JRC country report 2025)"
+    ),
 }
 
 
@@ -343,6 +348,8 @@ def _build_groups(
     source_ids: list[str],
     capabilities: list[dict[str, Any]],
     scores: list[dict[str, Any]],
+    *,
+    calibration_sample_source_ids: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     fact_values = tuple(facts)
     definitions = {
@@ -442,21 +449,37 @@ def _build_groups(
                     "sources": source_values,
                 }
             )
-    microcosm_source_ids = [
-        source_id
-        for source_id in source_ids
-        if any(name in source_id.lower() for name in ("populace", "microcosm"))
-    ]
-    if len(microcosm_source_ids) != 1:
-        raise ValueError(
-            "frontend bundle requires exactly one Microcosm source to define the "
-            "shared calibration sample"
-        )
-    microcosm_source_id = microcosm_source_ids[0]
+    if calibration_sample_source_ids is None:
+        microcosm_source_ids = [
+            source_id
+            for source_id in source_ids
+            if any(
+                name in source_id.lower()
+                for name in ("populace", "microcosm")
+            )
+        ]
+        if len(microcosm_source_ids) != 1:
+            raise ValueError(
+                "frontend bundle requires exactly one Microcosm source to "
+                "define the shared calibration sample unless the run names "
+                "its calibration_sample_source_ids"
+            )
+    else:
+        microcosm_source_ids = list(calibration_sample_source_ids)
+        if (
+            not microcosm_source_ids
+            or len(microcosm_source_ids) != len(set(microcosm_source_ids))
+            or not set(microcosm_source_ids).issubset(source_ids)
+        ):
+            raise ValueError(
+                "calibration_sample_source_ids must name a non-empty, unique "
+                "subset of evaluation sources"
+            )
     all_fact_keys = {fact.fact_key for fact in fact_values}
     in_sample_fact_keys = {
         row["fact_key"]
-        for row in capabilities_by_source[microcosm_source_id]
+        for source_id in microcosm_source_ids
+        for row in capabilities_by_source[source_id]
         if row.get("calibration_exposure") == "direct_calibration_target"
     }
     sample_fact_keys = {
@@ -713,9 +736,24 @@ def publish_frontend_bundle(
     }
     summary_partition = _write_partition(output / "summary.json", summary_document)
 
+    calibration_sample_source_ids = run_summary.get(
+        "calibration_sample_source_ids"
+    )
+    if calibration_sample_source_ids is not None and not isinstance(
+        calibration_sample_source_ids, list
+    ):
+        raise ValueError(
+            "evaluation run calibration_sample_source_ids must be an array"
+        )
     groups_document = {
         **common,
-        "groups": _build_groups(facts, source_ids, capabilities, scores_values),
+        "groups": _build_groups(
+            facts,
+            source_ids,
+            capabilities,
+            scores_values,
+            calibration_sample_source_ids=calibration_sample_source_ids,
+        ),
     }
     groups_partition = _write_partition(output / "groups.json", groups_document)
 
