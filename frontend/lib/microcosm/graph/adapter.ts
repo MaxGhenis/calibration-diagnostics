@@ -305,16 +305,23 @@ export function verifyProjectionBinding(
  * Blocking is read before failure, and the order matters. `blocked` comes from
  * the executor's own per-node record, `receipt.execution.state === "unreached"`
  * — a statement about this node. `failed` comes from the run manifest's
- * `known_failures`, a run-level list carried through as recorded; its
- * derivation belongs to the producer and is not defined here. Where the two
- * disagree about one node, the direct per-node record is the one shown, so a
- * step the executor recorded as never reached reads that way rather than as
- * failed. A gate exception is the executor's per-node record too, and that one
- * is a real failure.
+ * `known_failures`, which is a derived umbrella, not a list of things that
+ * failed. In the producer's own `Manifest.known_failures`
+ * (`packages/microcosm-graph/src/microcosm/graph/manifest.py`, read on
+ * `origin/main` of the local microcosm clone) it collects every gate node whose
+ * outcome is outside `_CERTIFYING_GATE_OUTCOMES = {"pass", "not_applicable"}`,
+ * plus any node explicitly rejected. `unreached` is outside that set, so a gate
+ * the run never reached lands in `known_failures` and, read first, would be
+ * reported as a failure. The per-node record is the more specific evidence and
+ * is read first instead. A gate exception is the executor's per-node record
+ * too, and that one is a real failure.
  *
  * Both manifests this dashboard ships record an empty `known_failures`, so the
  * order is not exercised by the shipped candidate. It is the reading rule, and
- * it is tested against a node carrying both flags. */
+ * it is tested against a node carrying both flags. The line numbers the review
+ * cited do not match the revision read here, and which revision produced the
+ * shipped manifests was not established, so this is the derivation as that file
+ * defines it today, not a claim about the run. */
 export function executionState(node: ProjectionNode | undefined): ExecutionState {
   if (!node || !node.receipt_present) return "not_evidenced";
   if (node.gate_exception) return "failed";
@@ -337,9 +344,10 @@ export function gateState(node: ProjectionNode | undefined): GateState {
   switch (node.gate.outcome) {
     case "pass":
       return "pass";
-    // A gate that declared itself not applicable certified nothing, so it is
-    // not reported as a pass. It also refused nothing, so it withholds no
-    // output below.
+    // The producer groups this with a pass as a certifying outcome, so it is
+    // not a failure and does not enter `known_failures`. It still attested
+    // nothing about this step, so it is not reported as a pass. It refused
+    // nothing either, so it withholds no output below.
     case "not_applicable":
       return "not_applicable";
     case "fail":

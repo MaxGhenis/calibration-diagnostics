@@ -34,6 +34,7 @@ import {
   cacheReading,
   executionReading,
   gateReading,
+  gateRecorded,
   layoutReceiptGraph,
   stateFor,
 } from "@/lib/microcosm/graph/presentation";
@@ -46,6 +47,10 @@ interface CardData {
   execution: string;
   cache: string;
   gate: string;
+  /** Whether this receipt recorded a gate at all. Separate from the tone above,
+   * because a gate that did not apply is read in the same neutral tone as the
+   * absence of one and must not disappear from the card. */
+  gateRecorded: boolean;
   unconnected: boolean;
   selected: boolean;
 }
@@ -86,7 +91,7 @@ function ReceiptCard({ data }: NodeProps<CardData>) {
         />
         <span className="truncate text-[10px] leading-none text-muted-foreground">
           {data.groupLabel}
-          {data.gate !== "neutral" ? " · gate" : ""}
+          {data.gateRecorded ? " · gate" : ""}
         </span>
       </div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !border-0 !bg-[var(--border-strong)]" />
@@ -136,6 +141,7 @@ function Canvas({
             execution: executionReading(state.execution).tone,
             cache: cacheReading(state.cache).tone,
             gate: gateReading(state.gate).tone,
+            gateRecorded: gateRecorded(state.gate),
             unconnected: node.unconnected,
             selected: node.id === selectedId,
           },
