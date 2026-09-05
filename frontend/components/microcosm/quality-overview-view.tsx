@@ -31,6 +31,8 @@ import {
 import {
   distributionDefinition,
   geographyKey,
+  percentPoints,
+  percentShare,
   supportDefinition,
   type PopulationDistributions,
   type PopulationSupport,
@@ -58,13 +60,6 @@ const fmt = (value: number | null | undefined, digits = 1) =>
   value == null
     ? "—"
     : value.toLocaleString("en-US", { maximumFractionDigits: digits });
-const percent = (value: number | null | undefined) =>
-  value == null
-    ? "—"
-    : value.toLocaleString("en-US", {
-        style: "percent",
-        maximumSignificantDigits: 3,
-      });
 
 export function CandidateCatalog() {
   const context = useQualityContext();
@@ -425,7 +420,7 @@ export function QualityOverviewView() {
             <p className="mt-3 text-sm text-muted-foreground">
               {series.label} · {series.entity} · {series.weight_basis} weights ·{" "}
               {distributions.data?.period}. Missing values account for{" "}
-              {percent(
+              {percentShare(
                 series.total_weight
                   ? series.missing_weight / series.total_weight
                   : null,
@@ -449,7 +444,9 @@ export function QualityOverviewView() {
                   />
                   <Tooltip
                     separator=": "
-                    formatter={(value) => `${fmt(Number(value))}%`}
+                    formatter={(value) =>
+                      percentPoints(value == null ? null : Number(value))
+                    }
                   />
                   <Legend />
                   <Bar
@@ -550,7 +547,7 @@ export function QualityOverviewView() {
                         </td>
                         <td>{fmt(row.weight_sum)}</td>
                         <td>{fmt(row.effective_sample_size)}</td>
-                        <td>{percent(row.max_weight_share)}</td>
+                        <td>{percentShare(row.max_weight_share)}</td>
                         {context.selection.incumbent ? (
                           <td>{fmt(other?.effective_sample_size)}</td>
                         ) : null}

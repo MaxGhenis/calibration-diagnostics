@@ -50,6 +50,23 @@ export interface PopulationDistributions extends PopulationAggregateIdentity {
   }>;
 }
 
+/** Weighted shares are routinely tiny but meaningful, so they are rendered with
+ * significant digits rather than a fixed decimal place: a 0.0437% bin must not
+ * read as 0%. Every share goes through these two, so a chart tooltip and the
+ * label beside it cannot disagree. `percentShare` takes a fraction of one;
+ * `percentPoints` takes the percentage points a chart plots. */
+export function percentShare(value: number | null | undefined): string {
+  return value == null
+    ? "—"
+    : value.toLocaleString("en-US", {
+        style: "percent",
+        maximumSignificantDigits: 3,
+      });
+}
+export function percentPoints(value: number | null | undefined): string {
+  return percentShare(value == null ? null : value / 100);
+}
+
 export function geographyKey(geography: AggregateGeography): string {
   return JSON.stringify([
     geography.level,
