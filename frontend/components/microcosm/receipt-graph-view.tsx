@@ -70,7 +70,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1">
       <dt className="w-40 shrink-0 text-xs text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 flex-1 break-all text-xs text-foreground">{children}</dd>
+      <dd className="min-w-[min(100%,14rem)] flex-1 break-words text-xs text-foreground">{children}</dd>
     </div>
   );
 }
