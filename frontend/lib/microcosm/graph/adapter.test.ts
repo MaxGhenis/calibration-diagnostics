@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { CandidateQualityManifest } from "../quality/types";
 import {
+  PAIR_SEPARATOR,
   ReceiptGraphUnavailableError,
   buildReceiptGraph,
   cacheState,
@@ -843,5 +844,44 @@ describe("the limits distinguish what is bound from what the projection asserts"
     expect(payload.binding.computation_content_key).toMatch(/^[a-f0-9]{64}$/);
     for (const execution of payload.executions)
       expect(bound).not.toContain(execution.manifest_sha256);
+  });
+});
+
+/* ------------------------------------ the source has to stay readable text */
+
+describe("the modules a reviewer has to read are plain text", () => {
+  // `dependencyEdges` joins a producer id and a consumer id into one map key
+  // with a separator no id can contain. It was written as a raw control byte in
+  // the source, which is right at runtime and wrong on disk: one such byte
+  // makes the whole file read as binary. `file(1)` reports "data" for it,
+  // `grep -I` skips it in silence, and a review that greps this module for a
+  // symbol gets no hits and no warning that the file was never searched. An
+  // escape sequence builds the same string and leaves the file text.
+  test("no module here carries a byte that makes it read as binary", () => {
+    const dir = fileURLToPath(new URL("./", import.meta.url));
+    for (const name of [
+      "adapter.ts",
+      "navigation.ts",
+      "presentation.ts",
+      "projections.ts",
+      "types.ts",
+    ]) {
+      const offset = readFileSync(`${dir}${name}`).indexOf(0);
+      expect(`${name}: first NUL byte at ${offset}`).toBe(
+        `${name}: first NUL byte at -1`,
+      );
+    }
+  });
+
+  test("the joined pair key is still unambiguous", () => {
+    // Whatever the separator's spelling in the source, it has to be one no id
+    // contains, or two different producer/consumer pairs collide on one map
+    // entry and their artifacts merge.
+    const ids = graph().nodes.map((node) => node.id);
+    for (const id of ids) expect(id).not.toContain(PAIR_SEPARATOR);
+    const pairs = new Set(
+      ids.flatMap((from) => ids.map((to) => `${from}${PAIR_SEPARATOR}${to}`)),
+    );
+    expect(pairs.size).toBe(ids.length * ids.length);
   });
 });
