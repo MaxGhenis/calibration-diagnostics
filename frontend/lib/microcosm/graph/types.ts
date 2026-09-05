@@ -84,6 +84,11 @@ export interface NodeExecutionState {
   outputs_reason: string;
   node_key: string | null;
   output_keys: { name: string; artifact_key: string | null }[];
+  /** Content keys for the population frame and weights this receipt recorded.
+   * They are kept per execution, not merged, so a run that used a different
+   * frame shows two values rather than one. */
+  frame_key: string | null;
+  weight_key: string | null;
   wall_time_seconds: number | null;
 }
 
@@ -109,8 +114,9 @@ export interface ReceiptGraphNode {
   measures: ReceiptMeasure[];
   source_pins: ReceiptSourcePin[];
   states: NodeExecutionState[];
-  /** True when the executions disagree about this node's own identity. The
-   * per-execution values stay in `states`; nothing is merged away. */
+  /** True when the executions disagree about this node's own identity — its
+   * node key, its recorded outputs, or the frame and weight keys it recorded.
+   * The per-execution values stay in `states`; nothing is merged away. */
   identity_differs: boolean;
   /** No recorded typed artifact connects this receipt to any other. */
   unconnected: boolean;

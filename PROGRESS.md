@@ -84,13 +84,33 @@ to or from them. Coverage is partial and has to say so.
 - The manifests carry `host` (`MacBook-Pro-10.local`) and per-column artifact
   keys for 248 columns. Neither leaves the server.
 
+### Built
+
+- `lib/microcosm/graph/types.ts` — the browser-facing contract. Execution,
+  cache, gate and mapping are four separate enumerations; artifact dependency,
+  documentary citation and semantic alignment are three separate edge families.
+- `lib/microcosm/graph/adapter.ts` — re-checks every identity the projection
+  claims against the candidate manifest and the publisher's build evidence
+  before a node is drawn, then derives edges from declared typed artifacts only.
+- `lib/microcosm/graph/projections.ts` — lookup by (country, candidate,
+  manifest digest) over imported modules. A request carries no path.
+- `lib/microcosm/graph/presentation.ts` — wording per axis, Dagre layout,
+  one-hop neighbours.
+- `lib/microcosm/graph/navigation.ts` — URL selection and keyboard movement as
+  pure functions, so both are testable without a browser.
+- `app/api/microcosm/graph/route.ts` — immutable candidate in, allowlisted
+  payload or an explicit `available: false` out.
+- `components/microcosm/receipt-graph-{view,canvas}.tsx` — output-first list,
+  ReactFlow 11 canvas, inspector; the list is the keyboard path.
+- `components/microcosm/microcosm-pipeline-view.tsx` — receipts first, July
+  overview folded away and dated, `acs_rent` marked as under revision.
+
+Per-execution frame and weight keys are kept unmerged, so two executions that
+recorded different frames would show two values rather than the first one.
+
 ## Next
 
-1. Reproducible projection generator + checked-in compact projection.
-2. `lib/microcosm/graph/` adapter: logical ids, status precedence, recorded
-   edges, cold/replay comparison.
-3. `app/api/microcosm/graph/route.ts` bound to the immutable candidate.
-4. `components/microcosm/receipt-graph-view.tsx` (list + ReactFlow + inspector).
-5. Pipeline view integration; historical July overview collapsed and dated.
-6. Tests, `bun test`, `bun run lint`, `bun run build`, WebKit pass.
-7. Author report and patch.
+1. Tests: adapter, route, navigation, presentation, rendered surface.
+2. Candidate context on the target-detail trace link.
+3. `bun test`, `bun run lint`, `bun run build`, WebKit pass.
+4. Author report and patch.
