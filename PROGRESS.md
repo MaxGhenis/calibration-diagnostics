@@ -1,60 +1,96 @@
-# Resolved-population identity guard (D1)
+# Receipt-backed graph view for a selected candidate run
 
-September 5 follow-up: the narrative below records the frozen `266e2674` work.
-Independent Fable review requested two further fixes: published identity must
-use its resolved storage address, and Latest must resolve on the incumbent side
-too. The local `candidate-quality-pointer-symmetry-20260905` successor applies
-both, with 390 tests, typecheck and production build passing. WebKit reproduces
-the original alias mismatch and verifies the corrected shared explanation and
-empty incumbent. Actual development-candidate national/CD views and mobile
-focus checks pass; independent successor review is pending. Nothing is pushed
-or deployed. This supersedes the earlier completion wording for review status.
+Branch `candidate-receipt-graph-20260905`, base
+`6dda4e7af2dd432ff7aa88b3f07abf16e0a33a72` (reviewed dashboard head). Nothing
+is pushed; no cloud, deploy or dataset mutation is in scope. Only this worktree
+is touched.
 
-Branch `candidate-quality-resolved-identity-20260905`, branch base
-`14552168cad50f963c3064a4cb73adfcc605231e`, predecessor head
-`e868a320257d187f122ac8d1fa4c201ee4c6cf60` (branch
-`candidate-quality-review-fixes-20260905`, left frozen and clean).
+Goal: a bounded, receipt-backed graph/list/inspector for the actual immutable
+candidate `us-graph-f001-geography-20260905-v1`, integrated into the Pipeline
+view, drawing only recorded typed-artifact dependencies and keeping execution,
+cache, gate and mapping state on separate axes.
 
-Finding D1 of
-`/Users/maxghenis/architecture-reviews/microcosm-20260904/dashboard-review-fixes-independent-review.md`:
-the self-comparison guard added at e868 compares literal transport strings, so
-two spellings of one population still compared against themselves.
+## State
+
+Research and verification complete; implementation in progress.
 
 ## Done
 
-- Worktree inspected before editing: clean at e868a32, no upstream configured,
-  nothing pushed. `frontend/node_modules` was absent and was installed from the
-  checked-in `bun.lock` with `--frozen-lockfile`; no dependency was upgraded.
-- `frontend/lib/microcosm/quality/identity.ts`: the shared resolution. A
-  candidate names its population by the digest its immutable manifest binds,
-  read with that population's period and entity and the country; a published
-  release names one by the concrete id the pointer resolves to. Same key is one
-  population; different keys under the same kind of name is a comparison; a
-  candidate digest against a published release id, a build with no population,
-  or one digest declared under two periods leaves the question open and is
-  labelled rather than claimed.
-- `loadComparison` refuses a resolved self-comparison with `SelfComparisonError`,
-  which `classifyApiError` answers 400, so `/api/microcosm/compare` cannot be
-  used to bypass the views. `buildComparison` is untouched, so the staging diff
-  keeps building on its own terms.
-- One client hook, `useResolvedComparison`, drives the population strip, the
-  compare page and the quality overview: a refused incumbent empties the
-  control, the A selection, the incumbent overlay and the Incumbent ESS column
-  together, and the authored sentence explains it.
-- `resolvedReleaseId` maps a hand-authored `?release=latest` and the empty
-  default onto the same release.
-- Regression tests: `identity.test.ts` (the pure rules and the whole client
-  decision) and `resolved-identity.test.ts` (both demonstrated aliases and two
-  genuinely different populations through the actual loader and the compare
-  route, on synthetic fixtures with every published fetch stubbed).
-- Visible focus ring on the `<main>` landmark.
-- `docs/candidate-quality.md` records what settles an incumbent.
-- Verified: `bun test` 385 pass / 0 fail, `bun run lint` (tsc --noEmit) clean,
-  `bun run build` succeeds with the route table identical to the e868 build.
-  Logs in the review directory.
+### Evidence verified first-hand (not taken from the assessment)
+
+Byte digests recomputed with `shasum -a 256` in this session:
+
+| File | SHA-256 |
+| --- | --- |
+| `quality/manifests/ff2f231b….json` (candidate manifest) | `ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885` |
+| `f001-geography-v1/quality-aggregates/public-build-evidence.json` | `1d3b94d8720b07cb1be22fe65efd88eba31787742c090b411d28938e40abbf6b` |
+| `f001-geography-v1/cold/graph-manifest.json` | `3467a00d64cd786f4351f298fe6d41ef2d144fc6f3cd41a1e30e824df2330070` |
+| `f001-geography-v1/resume/graph-manifest.json` | `20c963e2cb6989ad1df396a03f8494fb566a47e3a6d8055fe20d85035b91161b` |
+
+All four match the assessment. The configured quality directory is
+`/Users/maxghenis/PolicyEngine/_buildo-runtime/out/us-graph-launch-20260905/quality`
+(`index.json`, `manifests/`, `artifacts/`); the preserved run evidence is
+`/Users/maxghenis/PolicyEngine/_buildo-runtime/out/us-graph-launch-20260905/f001-geography-v1`.
+
+### The association chain that has to hold before anything is drawn
+
+- The candidate manifest binds `build_manifest` at
+  `artifacts/1d3b94d8….json`, scope `run`, identity
+  `{candidate_release_id, run_id}` — those bytes are the public build evidence.
+  This is a real publisher attachment, read through the existing verified
+  reader.
+- `provenance.source_implementation_sha256` =
+  `18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0`
+  = build evidence `implementation_sha256` for every mode
+  = `kernel_impl_hash` on all six node receipts.
+- `population.sha256` = `9d648…` = build evidence `population_sha256`
+  for `direct`, `cold` and `resume`.
+- Build evidence `checks.cold.manifest_sha256` =
+  `checks.resume.manifest_sha256` = `73639eb8…`, which is the `key` field
+  inside **both** graph manifests. That is the computation content key, not a
+  run-instance identifier; the two executions are distinguished by their
+  manifest **byte** digests above.
+- Build evidence `checks.cold.kernel_calls` = 4 and `checks.resume.kernel_calls`
+  = 0, matching 4 computed / 2 cache hits in the cold manifest and 6 cache hits
+  in the replay manifest.
+- The `assign_us_puma_ladder.lookup` receipt pins
+  `crosswalk_sha256 = c7cb040b…` and `ladder_sha256 = 39a2ab2a…`, equal to the
+  build evidence `source_sha256.congressional_district_vintage_crosswalk` and
+  `source_sha256.puma_ladder`.
+
+### Recorded dependencies (the only edges that may be drawn)
+
+From `typed_artifacts.inputs`, identical in both executions, with each
+`producer_key` equal to the named producer's own node key:
+
+- `assemble_stacked_spine.prepare` → `assemble_stacked_spine`
+  (`frame_context`, `preparation`)
+- `assemble_stacked_spine` → `assign_us_puma_ladder` (`frame_context`)
+- `assign_us_puma_ladder.lookup` → `assign_us_puma_ladder`
+  (`crosswalk`, `ladder`)
+
+`assign_us_puma_ladder.boundary` and `assign_us_puma_ladder.gate` record no
+typed inputs or outputs at all, so the saved manifests cannot support any edge
+to or from them. Coverage is partial and has to say so.
+
+### Things the evidence does not support and that must stay unavailable
+
+- Calibration diagnostics, cross-dataset, demographics, model coverage,
+  release manifest, reform validation and validation reach are all `missing`
+  on this candidate, each with the producer's own reason.
+- No target binding, Chronicle fact mapping or concept alignment exists here.
+- `release_eligibility` is `excluded`; `execution_status` is `completed`.
+  Those are separate axes and both are shown.
+- The manifests carry `host` (`MacBook-Pro-10.local`) and per-column artifact
+  keys for 248 columns. Neither leaves the server.
 
 ## Next
 
-- Nothing outstanding for D1. Receipt at
-  `/Users/maxghenis/architecture-reviews/microcosm-20260904/dashboard-resolved-identity-author-receipt.md`,
-  including the limitations that remain.
+1. Reproducible projection generator + checked-in compact projection.
+2. `lib/microcosm/graph/` adapter: logical ids, status precedence, recorded
+   edges, cold/replay comparison.
+3. `app/api/microcosm/graph/route.ts` bound to the immutable candidate.
+4. `components/microcosm/receipt-graph-view.tsx` (list + ReactFlow + inspector).
+5. Pipeline view integration; historical July overview collapsed and dated.
+6. Tests, `bun test`, `bun run lint`, `bun run build`, WebKit pass.
+7. Author report and patch.
