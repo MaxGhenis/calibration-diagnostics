@@ -459,6 +459,15 @@ export function pinDifferences(
   );
 }
 
+/** Joins a producer id to a consumer id into one map key. Node ids are dotted
+ * identifiers, so a character that cannot appear in one keeps the pair
+ * unambiguous. It is written as an escape on purpose: the byte itself, typed
+ * into the source, makes this whole file read as binary to `file`, to `grep -I`
+ * and to anything else that stops at the first NUL, which silently removes the
+ * module from a reviewer's search results. The string built here is the same
+ * either way. */
+export const PAIR_SEPARATOR = "\u0000";
+
 /** Edges come only from typed artifact inputs a receipt actually declared, and
  * only when the named producer is a receipt in the same execution whose own key
  * is the one the consumer recorded. An input naming an absent or mismatched
@@ -486,7 +495,7 @@ function recordedEdges(projection: ReceiptProjection): {
           );
           continue;
         }
-        const pair = `${producer} ${node.id}`;
+        const pair = `${producer}${PAIR_SEPARATOR}${node.id}`;
         const existing = byPair.get(pair);
         const artifact = {
           name: input.name,
