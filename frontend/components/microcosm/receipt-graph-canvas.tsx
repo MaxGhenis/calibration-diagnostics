@@ -11,6 +11,12 @@
 // technology, and this one holds real controls — the zoom buttons and the
 // attribution link — that a keyboard reaches and would then find unannounced.
 // A group keeps the one-sentence label and leaves those controls addressable.
+//
+// Being a group also exposes what it contains, so the drawing itself is marked
+// decorative on the cards. Otherwise a screen reader reads the six receipts a
+// second time, as loose text with none of the relationships that are the only
+// reason to draw them. What the picture says is in the group's label; what the
+// receipts say is in the list; the controls stay real controls.
 
 import { useEffect, useMemo } from "react";
 import ReactFlow, {
@@ -34,6 +40,7 @@ import {
   cacheReading,
   executionReading,
   gateReading,
+  gateRecorded,
   layoutReceiptGraph,
   stateFor,
 } from "@/lib/microcosm/graph/presentation";
@@ -46,6 +53,10 @@ interface CardData {
   execution: string;
   cache: string;
   gate: string;
+  /** Whether this receipt recorded a gate at all. Separate from the tone above,
+   * because a gate that did not apply is read in the same neutral tone as the
+   * absence of one and must not disappear from the card. */
+  gateRecorded: boolean;
   unconnected: boolean;
   selected: boolean;
 }
@@ -61,6 +72,14 @@ const TONE_BORDER: Record<string, string> = {
 function ReceiptCard({ data }: NodeProps<CardData>) {
   return (
     <div
+      // The card is the drawing. Every word on it — the stage name, the native
+      // id, the group, whether a gate was recorded — is in the list beside the
+      // canvas, which is the keyboard and screen-reader path. Exposing it here
+      // as well reads the same six receipts a second time, without the
+      // relationships the picture is carrying, so the picture is announced by
+      // the group's one-sentence label and its cards are decorative. They are
+      // not focusable either: `nodesFocusable` is off.
+      aria-hidden="true"
       style={{
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
@@ -86,7 +105,7 @@ function ReceiptCard({ data }: NodeProps<CardData>) {
         />
         <span className="truncate text-[10px] leading-none text-muted-foreground">
           {data.groupLabel}
-          {data.gate !== "neutral" ? " · gate" : ""}
+          {data.gateRecorded ? " · gate" : ""}
         </span>
       </div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !border-0 !bg-[var(--border-strong)]" />
@@ -136,6 +155,7 @@ function Canvas({
             execution: executionReading(state.execution).tone,
             cache: cacheReading(state.cache).tone,
             gate: gateReading(state.gate).tone,
+            gateRecorded: gateRecorded(state.gate),
             unconnected: node.unconnected,
             selected: node.id === selectedId,
           },

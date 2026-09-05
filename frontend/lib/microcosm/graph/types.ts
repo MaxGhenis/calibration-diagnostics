@@ -23,9 +23,15 @@ export type CacheState = "hit" | "computed" | "unknown";
 
 /** A gate belongs to the receipt that recorded it and to its declared scope
  * only. Most receipts have none, which is not a pass. Neither is a gate that
- * declared itself not applicable: it withheld nothing and certified nothing,
- * so it keeps its own reading. Every member here is a declared outcome of the
- * producer's own gate vocabulary; none is invented by this dashboard. */
+ * declared itself not applicable: the producer counts that outcome as
+ * certifying, alongside a pass, so it is not a failure, but it attested nothing
+ * about the step, so it keeps its own reading rather than borrowing the passing
+ * one. Every member here is a declared outcome of the producer's own gate
+ * vocabulary; none is invented by this dashboard.
+ *
+ * Adding a member here is a compile error until it is worded in
+ * `presentation.ts`. That is deliberate: a fallback branch is how
+ * `not_applicable` came to be read as a pass. */
 export type GateState =
   | "pass"
   | "not_applicable"
@@ -38,7 +44,8 @@ export type GateState =
  * outputs that may be offered, outputs withheld because this step failed, was
  * never reached or had its own gate refuse them, and the separate case of a
  * receipt that simply declared no typed or opaque artifact. The third is not a
- * warning and is not a claim that the step recorded nothing at all. */
+ * warning and is not a claim that the step recorded nothing at all. Worded
+ * exhaustively in `presentation.ts` for the same reason `GateState` is. */
 export type OutputState = "usable" | "no_typed_artifact" | "not_usable";
 
 /** Whether a mapping to another system exists. Missing is not failure. */

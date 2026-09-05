@@ -7,6 +7,7 @@ import {
   executionReading,
   formatMeasure,
   gateReading,
+  gateRecorded,
   layoutReceiptGraph,
   neighbours,
   outputReading,
@@ -280,9 +281,18 @@ describe("formatting", () => {
 });
 
 describe("wording that has to survive a status this run does not use", () => {
-  test("reads the two eligibility statuses this evidence carries as sentences", () => {
+  test("reads every declared eligibility status as a sentence", () => {
+    // `EligibilityStatus` in the quality contract declares four. This evidence
+    // carries only `excluded`; the other three are worded so that a candidate
+    // published with one of them does not read as a fragment.
     expect(releaseEligibilityReading("excluded")).toBe("Excluded from release");
     expect(releaseEligibilityReading("eligible")).toBe("Eligible for release");
+    expect(releaseEligibilityReading("ineligible")).toBe(
+      "Not eligible for release",
+    );
+    expect(releaseEligibilityReading("not_evaluated")).toBe(
+      "Release eligibility not evaluated",
+    );
   });
 
   test("renders an unfamiliar status without inventing grammar around it", () => {
@@ -303,5 +313,84 @@ describe("what the reader is told before a request is even possible", () => {
 
   test("no candidate is still its own message", () => {
     expect(selectionNotice("no_candidate").title).toMatch(/no candidate/i);
+  });
+});
+
+describe("a gate that did not apply is still a gate on the canvas", () => {
+  // The card shows a "· gate" marker so a reader can see at a glance which
+  // receipts recorded one. It was decided from the gate reading's tone, and
+  // giving `not_applicable` a neutral tone silently took the marker away: on
+  // the canvas that receipt then looked exactly like one that recorded no gate
+  // at all, which is the confusion this whole axis exists to prevent. The
+  // marker is a question about the record, not about the tone.
+  test("every state that is a gate record is marked as one", () => {
+    for (const state of [
+      "pass",
+      "not_applicable",
+      "fail",
+      "evidence_absent",
+      "unreached",
+    ] as const)
+      expect(`${state}: ${gateRecorded(state)}`).toBe(`${state}: true`);
+  });
+
+  test("the absence of a gate is the only state that is not", () => {
+    expect(gateRecorded("no_gate_record")).toBe(false);
+  });
+
+  test("a neutral tone does not decide it", () => {
+    expect(gateReading("not_applicable").tone).toBe("neutral");
+    expect(gateReading("no_gate_record").tone).toBe("neutral");
+    expect(gateRecorded("not_applicable")).not.toBe(
+      gateRecorded("no_gate_record"),
+    );
+  });
+});
+
+describe("the producer's words for a gate that did not apply", () => {
+  // `microcosm.graph.manifest._CERTIFYING_GATE_OUTCOMES` is
+  // `{"pass", "not_applicable"}`: the producer counts a gate that did not apply
+  // alongside a pass, and neither enters `known_failures`. Telling the reader
+  // it "certified nothing" states the opposite of the producer's own grouping.
+  test("does not claim the producer treats it as uncertifying", () => {
+    const help = gateReading("not_applicable").help;
+    expect(help).not.toMatch(/certified nothing/i);
+    expect(help).toMatch(/certifying/i);
+    expect(help).toMatch(/did not apply/i);
+  });
+
+  test("still keeps it out of the passing reading", () => {
+    expect(gateReading("not_applicable").label).not.toMatch(/passed/i);
+  });
+});
+
+describe("no state is read by a fallback that was written for another one", () => {
+  // This is the shape of the mislabel the review found: `not_applicable` fell
+  // through to the passing case and was reported as a pass. A `default:` branch
+  // makes that silent for the next member added, so every declared member has
+  // to earn a reading of its own.
+  test("each gate state has a label no other gate state has", () => {
+    const states = [
+      "pass",
+      "not_applicable",
+      "fail",
+      "no_gate_record",
+      "evidence_absent",
+      "unreached",
+    ] as const;
+    const labels = states.map((state) => gateReading(state).label);
+    expect(new Set(labels).size).toBe(states.length);
+  });
+
+  test("each output state has a label no other output state has", () => {
+    const labels = (["usable", "no_typed_artifact", "not_usable"] as const).map(
+      (outputs) =>
+        outputReading({
+          outputs,
+          outputs_usable: outputs === "usable",
+          outputs_reason: "whatever the receipt said",
+        } as NodeExecutionState).label,
+    );
+    expect(new Set(labels).size).toBe(3);
   });
 });

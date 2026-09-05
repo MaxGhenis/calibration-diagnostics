@@ -24,6 +24,15 @@ export interface AxisReading {
   help: string;
 }
 
+/** Reached only if a member is added to one of these unions and left unworded.
+ * The `never` parameter makes that a compile error at the call site; the throw
+ * is what happens if a value arrives from outside the type system anyway,
+ * because guessing a reading for a state nobody worded is how a step gets
+ * described as something it is not. */
+function unread(state: never, axis: string): never {
+  throw new Error(`No reading is defined for this ${axis}: ${String(state)}.`);
+}
+
 /** What the receipt says happened. Never "passed": a recorded execution is not
  * a verdict. */
 export function executionReading(state: ExecutionState): AxisReading {
@@ -79,7 +88,13 @@ export function cacheReading(state: CacheState): AxisReading {
   }
 }
 
-/** A gate reading belongs to the receipt that recorded it. */
+/** A gate reading belongs to the receipt that recorded it.
+ *
+ * Every declared state is named. There is no `default` here on purpose: the
+ * mislabel this axis was fixed for — `not_applicable` folded into the passing
+ * case — is exactly what a fallback branch hides, so a member added to
+ * `GateState` and not handled is a compile error at `unread` below rather than
+ * a member silently read as something else. */
 export function gateReading(state: GateState): AxisReading {
   switch (state) {
     case "pass":
@@ -92,7 +107,11 @@ export function gateReading(state: GateState): AxisReading {
       return {
         label: "Gate not applicable",
         tone: "neutral",
-        help: "This step's gate recorded that it did not apply here. It certified nothing and withheld nothing.",
+        // The producer groups this outcome with a pass as certifying, so it is
+        // not a failure and does not enter the run's failure list. It still
+        // attested nothing about this step, which is why it is not shown as a
+        // pass either.
+        help: "This step's gate recorded that it did not apply here. The producer counts that as a certifying outcome, alongside a pass, so it is not a failure; it attested nothing about this step, so it is not a pass.",
       };
     case "fail":
       return {
@@ -112,18 +131,28 @@ export function gateReading(state: GateState): AxisReading {
         tone: "warning",
         help: "This step's gate did not run.",
       };
-    default:
+    case "no_gate_record":
       return {
         label: "No gate record",
         tone: "neutral",
         help: "This step recorded no gate. That is not a pass.",
       };
+    default:
+      return unread(state, "gate state");
   }
+}
+
+/** Whether this reading describes a gate the receipt actually recorded. The
+ * canvas marks a card that carries a gate, and that is a question about the
+ * record: `not_applicable` is a gate, and it is read in the same neutral tone
+ * as the absence of one, so the tone cannot answer it. */
+export function gateRecorded(state: GateState): boolean {
+  return state !== "no_gate_record";
 }
 
 /** Three readings, and only one of them warns. A receipt that recorded no typed
  * or opaque artifact succeeded; it is stated neutrally, and its own words say
- * what it did record. */
+ * what it did record. Named exhaustively, for the reason `gateReading` is. */
 export function outputReading(state: NodeExecutionState): AxisReading {
   switch (state.outputs) {
     case "usable":
@@ -134,12 +163,14 @@ export function outputReading(state: NodeExecutionState): AxisReading {
         tone: "neutral",
         help: state.outputs_reason,
       };
-    default:
+    case "not_usable":
       return {
         label: "Outputs not usable",
         tone: "warning",
         help: state.outputs_reason,
       };
+    default:
+      return unread(state.outputs, "output state");
   }
 }
 
@@ -172,13 +203,27 @@ export function stateFor(
 }
 
 /** Release eligibility as a sentence, for whatever the manifest happens to say.
- * The two statuses this evidence uses are worded properly; anything else is
- * named as a status rather than dropped into a sentence it does not fit. */
+ *
+ * `EligibilityStatus` in the quality contract declares four, and all four are
+ * worded here. This candidate's evidence carries only `excluded`; the other
+ * three are worded so a candidate published with one of them does not read as a
+ * fragment. A status outside the declared four is named as a status rather than
+ * dropped into a sentence it does not fit. */
 export function releaseEligibilityReading(status: string): string {
-  if (!status) return "Release eligibility not stated";
-  if (status === "eligible") return "Eligible for release";
-  if (status === "excluded") return "Excluded from release";
-  return `Release eligibility: ${status.replaceAll("_", " ")}`;
+  switch (status) {
+    case "":
+      return "Release eligibility not stated";
+    case "eligible":
+      return "Eligible for release";
+    case "ineligible":
+      return "Not eligible for release";
+    case "excluded":
+      return "Excluded from release";
+    case "not_evaluated":
+      return "Release eligibility not evaluated";
+    default:
+      return `Release eligibility: ${status.replaceAll("_", " ")}`;
+  }
 }
 
 /** What the reader is told when the selection cannot produce a request at all.

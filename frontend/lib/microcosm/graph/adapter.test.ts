@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { CandidateQualityManifest } from "../quality/types";
 import {
+  PAIR_SEPARATOR,
   ReceiptGraphUnavailableError,
   buildReceiptGraph,
   cacheState,
@@ -142,8 +143,8 @@ describe("receipt consistency regressions from the independent probes", () => {
     const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
     const result = buildReceiptGraph(p, manifest(), checks);
     expect(result.executions[0].manifest_sha256).toBe("e".repeat(64));
-    expect(result.comparison.execution_note).toMatch(/asserted by this projection/);
-    expect(result.limits.join(" ")).toMatch(/neither manifest byte digest is pinned/i);
+    expect(result.comparison.execution_note).toMatch(/paired by this projection/);
+    expect(result.limits.join(" ")).toMatch(/does not pin either recorded run manifest/i);
     expect(checks.find(c => c.label === "Implementation")!.detail).toMatch(/agree/);
     expect(checks.map(c => c.detail).join(" ")).not.toMatch(/Every receipt was produced/);
   });
@@ -1099,14 +1100,56 @@ describe("the limits distinguish what is bound from what the projection asserts"
     expect(limits).not.toMatch(/never serialised|never serialized|does not exist/i);
   });
 
-  test("marks the two-execution reading as projection-asserted, not publisher-bound", () => {
+  test("marks the pairing as this projection's and the executions as published", () => {
     const payload = graph();
     expect(payload.comparison.execution_note).toMatch(
-      /asserted by this projection/i,
+      /paired by this projection/i,
     );
+    expect(payload.limits.join(" ")).toMatch(/paired by this projection/i);
     expect(payload.limits.join(" ")).toMatch(
-      /neither manifest byte digest is pinned by anything the publisher attached/i,
+      /does not pin either recorded run manifest's byte digest/i,
     );
+  });
+
+  test("does not understate the evidence the publisher does bind", () => {
+    // Read from the attached build evidence itself: `checks.cold` and
+    // `checks.resume` are two blocks with different kernel-call counts, 4 and
+    // 0, and different start times. That there were two executions is
+    // therefore the publisher's own record, not this projection's claim. What
+    // the projection asserts is narrower: which recorded manifest bytes belong
+    // to which mode. The evidence's own `manifest_sha256` is the shared content
+    // key for both modes, so it pins neither byte digest.
+    const evidence = RAW_EVIDENCE.checks as Record<string, { kernel_calls: number; manifest_sha256: string }>;
+    expect(evidence.cold.kernel_calls).toBe(4);
+    expect(evidence.resume.kernel_calls).toBe(0);
+    expect(evidence.cold.manifest_sha256).toBe(evidence.resume.manifest_sha256);
+
+    const payload = graph();
+    const note = `${payload.comparison.execution_note} ${payload.limits.join(" ")}`;
+    expect(note).toMatch(/kernel/i);
+    expect(note).not.toMatch(
+      /that separation is asserted by this projection|the two executions are asserted by this projection/i,
+    );
+    expect(note).toMatch(/which .{0,40}bytes belong to which|pairing/i);
+  });
+
+  test("names the one slice of column ownership the publisher does pin", () => {
+    // `checks.<mode>.gate.capabilities.tolerance_writers` lists, for the four
+    // household columns inside the gate's declared tolerance scope, which steps
+    // wrote them. That is publisher-bound column ownership, and the limits say
+    // the column-level flow lives only in the unpinned declaration. It is still
+    // not drawn — it covers one gate's scope, not the graph — but the limits
+    // must not claim it does not exist.
+    const writers = (
+      (RAW_EVIDENCE.checks as Record<string, Record<string, Record<string, Record<string, unknown>>>>)
+        .cold.gate.capabilities.tolerance_writers
+    ) as Record<string, string[]>;
+    expect(Object.keys(writers)).toHaveLength(4);
+    expect(Object.keys(writers).every((column) => column.startsWith("household."))).toBe(true);
+
+    const limits = graph().limits.join(" ");
+    expect(limits).toMatch(/tolerance scope|the gate's declared/i);
+    expect(limits).toMatch(/four household columns/i);
   });
 
   test("still separates that from the digests the publisher's evidence does bind", () => {
@@ -1118,5 +1161,44 @@ describe("the limits distinguish what is bound from what the projection asserts"
     expect(payload.binding.computation_content_key).toMatch(/^[a-f0-9]{64}$/);
     for (const execution of payload.executions)
       expect(bound).not.toContain(execution.manifest_sha256);
+  });
+});
+
+/* ------------------------------------ the source has to stay readable text */
+
+describe("the modules a reviewer has to read are plain text", () => {
+  // `dependencyEdges` joins a producer id and a consumer id into one map key
+  // with a separator no id can contain. It was written as a raw control byte in
+  // the source, which is right at runtime and wrong on disk: one such byte
+  // makes the whole file read as binary. `file(1)` reports "data" for it,
+  // `grep -I` skips it in silence, and a review that greps this module for a
+  // symbol gets no hits and no warning that the file was never searched. An
+  // escape sequence builds the same string and leaves the file text.
+  test("no module here carries a byte that makes it read as binary", () => {
+    const dir = fileURLToPath(new URL("./", import.meta.url));
+    for (const name of [
+      "adapter.ts",
+      "navigation.ts",
+      "presentation.ts",
+      "projections.ts",
+      "types.ts",
+    ]) {
+      const offset = readFileSync(`${dir}${name}`).indexOf(0);
+      expect(`${name}: first NUL byte at ${offset}`).toBe(
+        `${name}: first NUL byte at -1`,
+      );
+    }
+  });
+
+  test("the joined pair key is still unambiguous", () => {
+    // Whatever the separator's spelling in the source, it has to be one no id
+    // contains, or two different producer/consumer pairs collide on one map
+    // entry and their artifacts merge.
+    const ids = graph().nodes.map((node) => node.id);
+    for (const id of ids) expect(id).not.toContain(PAIR_SEPARATOR);
+    const pairs = new Set(
+      ids.flatMap((from) => ids.map((to) => `${from}${PAIR_SEPARATOR}${to}`)),
+    );
+    expect(pairs.size).toBe(ids.length * ids.length);
   });
 });

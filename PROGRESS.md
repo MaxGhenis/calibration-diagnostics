@@ -20,8 +20,9 @@ cache, gate and mapping state on separate axes.
 
 ## State
 
-Original build complete and frozen at `ce1a559`. Review fixes in progress on the
-dependent branch; see the review-fix section below.
+Original build complete and frozen at `ce1a559`. The review fixes are complete
+and frozen on the dependent branch; see the review-fix section below. Nothing on
+either branch is pushed.
 
 ## Review fixes (branch `candidate-receipt-graph-review-20260905`)
 
@@ -31,13 +32,36 @@ All four findings and every smaller note addressed, red-then-green. Frozen
 clean. Nothing pushed. Ports 4397 and 4398 were left running throughout; the
 browser pass used 4483.
 
+Re-verified afterwards at head, which turned up seven further defects — one in
+the original build and six introduced or left standing by these fixes. All seven
+are fixed, each red before green, and each is recorded below in its own section
+rather than folded into the four findings. The corrections that contradict what
+this record said earlier are marked in place; nothing was deleted.
+
 ### Done
 
 Baseline on the new branch first reproduced the original figures: `bun test`
 507 pass / 0 fail / 1851 assertions.
 
-Fifteen assertions and two unloadable modules were committed failing at
-`25e042d` before any fix, and pass at `0691785`:
+Thirteen assertions and two unloadable test modules were committed failing at
+`25e042d` before any fix, and pass at `0691785`. `bun test` reports that as
+"15 fail, 2 errors" — the two modules that could not load are counted inside the
+fifteen, not alongside it, so the number of failing assertions is thirteen.
+(Corrected here: this line previously said "fifteen assertions", which read
+bun's total as if it were all assertions. The full-suite figure at `25e042d` is
+480 pass / 15 fail / 2 errors / 495 run across 58 files; the two unloadable
+modules are why 495 ran there and 534 run at head.)
+
+The same red was re-demonstrated at head: with the eight implementation files
+reverted to `ce1a559` and every test left at `5627aac`, the suite reports 480
+pass / 16 fail / 2 errors — fourteen failing assertions, plus
+`navigation.test.ts` and `presentation.test.ts` unable to load at all
+(`Export named 'graphSelectionReadiness' not found`, `Export named
+'selectionNotice' not found`). One assertion more than at `25e042d`, because
+`5627aac` rewrote what the precedence test claims about the producer. The files
+were restored in the same command and the tree verified clean afterwards.
+
+What each fix is, and what it is red against:
 
 - **Finding 4, precedence.** Two independent sources in the projection can name
   the same node: the run-level `known_failures` list, and the executor's own
@@ -48,18 +72,37 @@ Fifteen assertions and two unloadable modules were committed failing at
   shipped manifests record an empty `known_failures`, so nothing here is
   triggered by this candidate; the case is built in a test.
 
-  *Not verified this session:* the review attributed the collision to
-  `known_failures` sweeping in gates whose outcome is `unreached`, citing
-  `manifest.py:583-595`. That file was not found in any repository reachable
-  from here, and the derivation of `known_failures` is not defined in this
-  repository — the generator carries the list through as recorded. The fix
-  therefore rests on the narrower premise that a per-node record from the
-  executor is more direct than a run-level list, which is true whatever
-  populates the list. Comments and tests were rewritten to claim only that.
+  *Verified, after this record twice said otherwise:* the review attributed the
+  collision to `known_failures` sweeping in gates whose outcome is `unreached`,
+  citing `manifest.py:583-595`. An earlier commit on this branch said that file
+  "was not found in any repository reachable from here" and narrowed every
+  comment accordingly. That was wrong. It is
+  `packages/microcosm-graph/src/microcosm/graph/manifest.py` on `origin/main` of
+  the local microcosm clone at `/Users/maxghenis/PolicyEngine/microcosm`, and
+  read there this session, `Manifest.known_failures` collects every gate node
+  whose outcome is outside `_CERTIFYING_GATE_OUTCOMES = {"pass",
+  "not_applicable"}`, plus any node explicitly rejected. `unreached` is outside
+  that set, so an unreached gate does land in the list, exactly as the review
+  said. The comments say that now, with the file named.
+
+  Two things are still not established and are not claimed: the line numbers
+  there are 526–539, not 583–595, so the revision read is not the one the review
+  read; and which revision produced the two shipped manifests was not
+  determined. The comment states what that file defines today, not what the run
+  did. The behaviour is unchanged either way — the per-node record is read
+  first — but the reason given for it is now the true one.
 - **Finding 4, `not_applicable`.** A gate outcome of `not_applicable` had been
   folded into the passing state. It is its own `GateState` now, worded "Gate not
   applicable", neutral tone, and it withholds nothing — it certified nothing and
   refused nothing.
+
+  *Corrected later in the session, twice.* "It certified nothing" is wrong: the
+  producer's `_CERTIFYING_GATE_OUTCOMES` is `{"pass", "not_applicable"}`, so it
+  counts this outcome as certifying alongside a pass. The accurate statement is
+  that it is not a failure and it attested nothing about the step, which is why
+  it is still not shown as a pass. The neutral tone also silently removed the
+  canvas card's gate marker. Both are in "four defects in the fixes themselves"
+  below.
 - **Finding 2, outputs.** `outputs_usable` was a boolean, so a receipt that
   recorded no typed or opaque artifact was told to the reader in the same
   warning words as one whose outputs were withheld. Two of the six receipts on
@@ -80,9 +123,20 @@ Fifteen assertions and two unloadable modules were committed failing at
   the population, implementation, content-key and source digests. The payload's
   `execution_note` says so and is now rendered directly under the content-key
   note in the comparison card, not only in the folded limits.
+
+  *Corrected later in the session.* The first wording drew the conclusion too
+  wide — "that separation is asserted by this projection" — when the build
+  evidence carries a check block for each mode, one recording four kernel calls
+  and one none. That there were two executions is published; only the pairing of
+  bytes to mode is this projection's. See "two places the record understates the
+  evidence" below.
 - **Note, canvas accessibility.** `role="img"` hid a subtree that still held the
   three zoom buttons and the attribution link. The container is a labelled
   `role="group"` now, so those controls stay addressable and named.
+
+  *Extended later in the session.* A group also exposes what it contains, so the
+  six cards were read a second time as loose text. The cards are `aria-hidden`
+  now; the label, the controls and the list are unchanged.
 - **Note, the absent-state fallback.** It omitted `frame_key` and `weight_key`
   and compiled only because the value it stood in for is typed non-nullable. It
   is an annotated constant now; deleting either field is a compile error
@@ -91,10 +145,18 @@ Fifteen assertions and two unloadable modules were committed failing at
   anything but `excluded`. `releaseEligibilityReading` words the two statuses
   this evidence uses and names any other as a status.
 
+  *Corrected later in the session.* "The two statuses this evidence uses" is
+  wrong on both counts: `EligibilityStatus` declares four, and this evidence
+  carries only `excluded`, in all three candidate manifests in the quality
+  directory. All four are worded now.
+
 Generator, adapter, presentation, types and tests were checked against each
-other. No model status was invented: `not_applicable` is already a declared
-outcome in the generator's `GATE_OUTCOMES`, and the generator's comment now
-says why its `known_failures` is not the last word. The checked-in projection is
+other. No model status was invented: the generator's `GATE_OUTCOMES` is
+character-for-character `microcosm.graph.decl.GATE_OUTCOMES`
+(`("pass", "fail", "evidence_absent", "not_applicable", "unreached")`, read on
+`origin/main` of the local microcosm clone), so `not_applicable` is the
+producer's word, not this dashboard's. The generator's comment now says why its
+`known_failures` is not the last word, and names the file that derives it. The checked-in projection is
 byte-unchanged and still regenerates to
 `c28f3a88b16ad01bd7ae64e1c6a73de88a0cd4660333168c50a3ef0730c8c3f2`; nothing
 under `_buildo-runtime` was written to.
@@ -106,29 +168,138 @@ serialised" and that "no amount of work here closes that". That is wrong, and
 this record repeats the mistake by omission. `graph.json`
 (`7d4e1502a89475726f3bc87f47f310e855e850343b6cd8da73c174a842ab94ac`) sits beside
 the preserved run evidence and holds the full declaration: bases, populations,
-column inputs and outputs, sources and artifact producers. It names two
-relationships the run manifests cannot support and this viewer therefore does
-not draw — `assign_us_puma_ladder.boundary` has `base:
-assemble_stacked_spine`, and `assign_us_puma_ladder.gate` has `population:
-assign_us_puma_ladder.boundary`.
+column inputs and outputs, sources and artifact producers.
 
-Not drawing from it remains correct: no publisher attachment pins its bytes, so
-nothing re-verifies that it belongs to this candidate. The accurate statement is
-"unpinned, so unused", not "does not exist", and that is what the limits say
-now. No edge was added, and the immutable candidate was not touched.
+It declares five base or population relationships across the same six nodes,
+enumerated from the file itself:
+
+| From | To | Kind | Drawn here |
+| --- | --- | --- | --- |
+| `assemble_stacked_spine.prepare` | `assemble_stacked_spine` | base | already an artifact edge |
+| `assemble_stacked_spine` | `assign_us_puma_ladder.lookup` | population | no |
+| `assemble_stacked_spine` | `assign_us_puma_ladder.boundary` | base | no |
+| `assign_us_puma_ladder.boundary` | `assign_us_puma_ladder` | population | no |
+| `assign_us_puma_ladder.boundary` | `assign_us_puma_ladder.gate` | population | no |
+
+*Corrected again, later in this session:* this section first said the
+declaration "names two relationships" the viewer does not draw, naming the two
+that touch the two unconnected receipts. That was the review's phrasing and it
+is an undercount. Four of the five would add a link the canvas does not have,
+and with them every one of the six receipts is connected — the declaration is
+the difference between the "4 of 6 connected" this view states and a complete
+graph, not a detail at its edges. It also attaches sources to two nodes
+(`asec_raw_stage` and `acs_native` on the spine preparation,
+`us_puma_ladder_2020` and `us_cd_crosswalk_117_119` on the lookup), which is a
+source edge family this view has no evidence for at all.
+
+Saying that plainly is the point: the gap is large, and it is still not closed
+here. No publisher attachment pins `graph.json`'s bytes, so nothing re-verifies
+that this file belongs to this candidate, and an edge drawn from it would be an
+edge the reader cannot check. The accurate statement is "unpinned, so unused",
+not "does not exist", and that is what the limits say now. No edge was added,
+the edge count is still three, nothing reads `graph.json` at runtime or in a
+test, and the immutable candidate was not touched.
 
 ### Verified
 
+`bun test`, `tsc`, `bun run build` and the projection regeneration were all run
+at the final head. The browser pass ran at `456cc64`, the last commit that
+changed anything a browser executes: everything after it touches `PROGRESS.md`
+or the generated `next-env.d.ts` and nothing else. The red row is the older
+head `5627aac`; the commits after it added tests of their own, each red before
+its fix and named in the sections above.
+
 | Command | Result |
 | --- | --- |
-| `bun test` (frontend) | 534 pass, 0 fail, 1953 assertions, 58 files |
-| `bun run lint` (`tsc --noEmit`) | clean |
-| `bun run build` | compiled, 21/21 pages |
-| WebKit, playwright-core 1.58.0, port 4483 | 43/43 |
+| `bun test` (frontend) | 546 pass, 0 fail, 2007 assertions, 58 files |
+| `bun run lint` (`tsc --noEmit`) | clean, exit 0 |
+| `bun run build` | compiled, 21/21 static pages, exit 0 |
+| WebKit, playwright-core 1.58.0, port 4483 | 48/48 |
+| red at `ce1a559`'s implementation with head's tests | 480 pass, 16 fail, 2 errors |
+| projection regenerated from the preserved evidence | byte-identical to the checked-in file |
 
 The browser pass ran real WebKit through `playwright-core`, never Chrome and
 never CDP, against `bun run dev` with `MICROCOSM_QUALITY_US_DIR` on the real
-quality directory.
+quality directory. The version is read at runtime from the harness's own
+`playwright-core/package.json`, which resolves to 1.58.0, matching the 1.58.0
+its `bun.lock` pins; the script prints the resolved version with its results
+rather than naming one.
+
+The regeneration wrote to `/tmp`, not into the evidence tree, and produced
+`c28f3a88b16ad01bd7ae64e1c6a73de88a0cd4660333168c50a3ef0730c8c3f2` — `cmp`
+against `lib/microcosm/graph/receipts/us-graph-f001-geography-20260905-v1.json`
+reports no difference. The only change `5627aac` made to the generator is a
+comment, so this is a check that the comment change altered nothing, and that
+the projection at head still derives from the bytes it names.
+
+`graph.json` beside the run evidence was re-hashed in this pass and is
+`7d4e1502a89475726f3bc87f47f310e855e850343b6cd8da73c174a842ab94ac`, the digest
+recorded in the correction below. Nothing reads it at runtime or in a test.
+
+### Found while verifying, and fixed: four defects in the fixes themselves
+
+Red at `0a9d4eb`, green at `e28c0f8`. None of these was in the review.
+
+- **The gate marker vanished for a gate that did not apply.** The canvas card
+  shows "· gate" when the gate reading's tone is not neutral. Giving
+  `not_applicable` a neutral tone therefore took the marker away, so on the
+  canvas that receipt looked exactly like one that recorded no gate at all —
+  the confusion the separate gate axis exists to prevent. `gateRecorded` decides
+  it now, which is a question about the record rather than about the tone.
+- **"It certified nothing" contradicted the producer.**
+  `_CERTIFYING_GATE_OUTCOMES` is `{"pass", "not_applicable"}`, so the producer
+  groups the two. The help text now says the producer counts it alongside a
+  pass, so it is not a failure, and that it attested nothing about the step,
+  which is why it is still not shown as a pass. Keeping it distinct from a pass
+  was the review's point and is unchanged.
+- **`releaseEligibilityReading` worded two of four statuses**, and its comment
+  called them "the two statuses this evidence uses". `EligibilityStatus`
+  declares `not_evaluated`, `eligible`, `ineligible` and `excluded`; this
+  evidence carries only `excluded`, in all three candidate manifests in the
+  quality directory. All four are worded now and the comment says which one is
+  actually present.
+- **Both readings ended in a `default` branch**, which is precisely how
+  `not_applicable` came to be read as a pass: the next member added is absorbed
+  in silence. Each is exhaustive now over an `unread(state: never)` guard.
+  Verified by adding a member to `GateState` and reading
+  `TS2345 ... not assignable to parameter of type 'never'` at
+  `presentation.ts:141`, then restoring it.
+
+The canvas is also decorative on its cards now. `role="group"` fixed the
+review's note — the zoom controls are no longer buried in a `role="img"`
+subtree — but a group exposes what it contains, so a screen reader read the six
+receipts a second time as loose text, without the relationships that are the
+only reason to draw them. The cards carry `aria-hidden`, the group keeps its
+one-sentence label, and the controls stay real controls. `nodesFocusable` and
+`edgesFocusable` were already off, so the list remains the only keyboard path.
+
+### Found while verifying, and fixed: adapter.ts read as a binary file
+
+Not in the review. `adapter.ts` carried one raw NUL byte, at `ce1a559` and at
+every commit after it: the separator joining a producer id to a consumer id in
+the edge map was typed as the character rather than written as an escape. It is
+correct at runtime and wrong on disk. `file` reports the module as `data`,
+`grep -I` skips it without saying so, and `git` only missed it because its
+binary sniff reads the first 8000 bytes and the NUL is at 18709. A grep for
+`gateState` across this repository returned nothing from the one file that
+defines it, which is how this was found.
+
+The separator is now `PAIR_SEPARATOR`, an escape building the same
+one-character string, so the edges are unchanged. Red at `51fb320`, green at
+`8e357d6`. Two tests: every module in `lib/microcosm/graph` is free of NUL
+bytes, and no node id contains the separator, so the thirty-six possible
+producer/consumer pairs still produce thirty-six distinct keys.
+
+This is a hygiene fix inside a file this branch already owns, not a feature
+change. It is called out here because it was not requested.
+
+### Left as written: the original author report
+
+`architecture-reviews/microcosm-20260904/calibration-receipt-graph-author-report.md`
+still contains the "was never serialised" sentence the review flagged. That file
+is the frozen record of the original build at `ce1a559` and is not rewritten
+here; the correction lives in this record and in the review receipt for these
+fixes, which is where a reader is pointed.
 
 ### Found while testing, not fixed here
 
@@ -144,6 +315,18 @@ touched.
 
 Nothing outstanding on this branch. Root's independent review of the frozen
 commit.
+
+Two things are named here rather than acted on, because both are outside what
+this branch owns:
+
+1. The compiled structural declaration would connect all six receipts and is
+   pinned by nothing. Closing that is a publishing change on the producer's
+   side — attaching `graph.json`, or its digest, to the candidate — not a
+   dashboard change. Until then this view stays partial and says so.
+2. `useQualityManifest` still issues a manifest request with an empty digest for
+   an incomplete selection and takes a 503. That hook and that route are
+   byte-identical to `6dda4e7`, and the same request 503s for any unresolvable
+   candidate.
 
 ## Done (original build, branch `candidate-receipt-graph-20260905`)
 

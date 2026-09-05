@@ -342,12 +342,16 @@ function projectNode(id, node, failedIds) {
     group_label: GROUP_LABELS[group(id)] ?? group(id),
     role: capabilities.role ?? null,
     receipt_present: true,
-    // `known_failures` is a run-level list the manifest records; its derivation
-    // belongs to the producer and is carried through as recorded rather than
-    // recomputed or interpreted here. It is deliberately not the last word:
-    // `blocked` below is the executor's own per-node record of the same node,
-    // and the adapter reads that one first, so a node the executor recorded as
-    // unreached is not reported as one that failed.
+    // `known_failures` is the manifest's own derived umbrella, carried through
+    // as recorded rather than recomputed here. In the producer's
+    // `Manifest.known_failures`
+    // (`packages/microcosm-graph/src/microcosm/graph/manifest.py`, read on
+    // `origin/main` of the local microcosm clone) it collects every gate node
+    // whose outcome is outside `{"pass", "not_applicable"}`, `unreached` among
+    // them, plus any node explicitly rejected. So it is deliberately not the
+    // last word: `blocked` below is the executor's own per-node record of the
+    // same node, and the adapter reads that one first, so a gate the run never
+    // reached is not reported as one that failed.
     failed: failedIds.includes(id) || receipt.rejected === true,
     blocked: execution?.state === "unreached",
     gate_exception: execution?.state === "gate_exception",

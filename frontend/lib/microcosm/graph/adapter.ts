@@ -428,16 +428,23 @@ export function verifyProjectionBinding(
  * Blocking is read before failure, and the order matters. `blocked` comes from
  * the executor's own per-node record, `receipt.execution.state === "unreached"`
  * — a statement about this node. `failed` comes from the run manifest's
- * `known_failures`, a run-level list carried through as recorded; its
- * derivation belongs to the producer and is not defined here. Where the two
- * disagree about one node, the direct per-node record is the one shown, so a
- * step the executor recorded as never reached reads that way rather than as
- * failed. A gate exception is the executor's per-node record too, and that one
- * is a real failure.
+ * `known_failures`, which is a derived umbrella, not a list of things that
+ * failed. In the producer's own `Manifest.known_failures`
+ * (`packages/microcosm-graph/src/microcosm/graph/manifest.py`, read on
+ * `origin/main` of the local microcosm clone) it collects every gate node whose
+ * outcome is outside `_CERTIFYING_GATE_OUTCOMES = {"pass", "not_applicable"}`,
+ * plus any node explicitly rejected. `unreached` is outside that set, so a gate
+ * the run never reached lands in `known_failures` and, read first, would be
+ * reported as a failure. The per-node record is the more specific evidence and
+ * is read first instead. A gate exception is the executor's per-node record
+ * too, and that one is a real failure.
  *
  * Both manifests this dashboard ships record an empty `known_failures`, so the
  * order is not exercised by the shipped candidate. It is the reading rule, and
- * it is tested against a node carrying both flags. */
+ * it is tested against a node carrying both flags. The line numbers the review
+ * cited do not match the revision read here, and which revision produced the
+ * shipped manifests was not established, so this is the derivation as that file
+ * defines it today, not a claim about the run. */
 export function executionState(node: ProjectionNode | undefined): ExecutionState {
   if (!node || !node.receipt_present) return "not_evidenced";
   if (node.gate_exception) return "failed";
@@ -460,9 +467,10 @@ export function gateState(node: ProjectionNode | undefined): GateState {
   switch (node.gate.outcome) {
     case "pass":
       return "pass";
-    // A gate that declared itself not applicable certified nothing, so it is
-    // not reported as a pass. It also refused nothing, so it withholds no
-    // output below.
+    // The producer groups this with a pass as a certifying outcome, so it is
+    // not a failure and does not enter `known_failures`. It still attested
+    // nothing about this step, so it is not reported as a pass. It refused
+    // nothing either, so it withholds no output below.
     case "not_applicable":
       return "not_applicable";
     case "fail":
@@ -582,6 +590,15 @@ export function pinDifferences(
   );
 }
 
+/** Joins a producer id to a consumer id into one map key. Node ids are dotted
+ * identifiers, so a character that cannot appear in one keeps the pair
+ * unambiguous. It is written as an escape on purpose: the byte itself, typed
+ * into the source, makes this whole file read as binary to `file`, to `grep -I`
+ * and to anything else that stops at the first NUL, which silently removes the
+ * module from a reviewer's search results. The string built here is the same
+ * either way. */
+export const PAIR_SEPARATOR = "\u0000";
+
 /** Edges come only from typed artifact inputs a receipt actually declared, and
  * only when the named producer is a receipt in the same execution whose own key
  * and declared output artifact/key/type/version agree with the input. Missing
@@ -627,7 +644,7 @@ function recordedEdges(projection: ReceiptProjection): {
           dropped.push(`${execution.mode}: ${node.id} input ${input.name} has no unique matching artifact key, type and version declared by producer ${producer}.`);
           continue;
         }
-        const pair = `${producer} ${node.id}`;
+        const pair = `${producer}${PAIR_SEPARATOR}${node.id}`;
         const existing = byPair.get(pair);
         const artifact = {
           name: input.name,
@@ -919,12 +936,18 @@ export function buildReceiptGraph(
     // this run does have — the boundary step's base and the gate step's
     // population — are absent from the canvas.
     "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
+    "One narrow slice of column ownership is published: the build evidence names, for the four household columns inside the gate's declared tolerance scope, which steps wrote each of them. It is not drawn either, because it describes that gate's scope rather than the graph.",
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
     "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
-    // Summary identity agreement does not authenticate full receipt bytes.
-    "Two executions are told apart here by the byte digest of each recorded run manifest. Neither manifest byte digest is pinned by anything the publisher attached, so that separation is asserted by this projection. The population, implementation, content-key and source digests checked above are bound by the publisher's own build evidence.",
+    // Precise in both directions. That there were two executions is the
+    // publisher's own record — two check blocks, one computing four kernel
+    // calls and one computing none. What this projection asserts is only the
+    // pairing: which recorded manifest bytes belong to which of them. The
+    // evidence's own manifest digest is the shared content key, so it pins
+    // neither byte digest.
+    "The publisher's build evidence records two executions of this run, one computing four kernel calls and one computing none. It does not pin either recorded run manifest's byte digest — its own manifest digest is the content key the two share — so which bytes shown here belong to which execution is paired by this projection, not published. The population, implementation, content-key and source digests checked above are bound by that same build evidence.",
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
@@ -1004,7 +1027,7 @@ export function buildReceiptGraph(
         new Set(executions.map((execution) => execution.manifest_sha256)).size ===
         executions.length,
       execution_note:
-        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. The digests themselves are asserted by this projection: the publisher's build evidence pins the shared content key, not either manifest's bytes.",
+        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. That there were two is also the publisher's own record — its build evidence carries a check for each, one computing four kernel calls and one computing none. What it does not pin is either manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.",
       output_identity: comparison,
       cache_differences: cacheDifferences,
     },
