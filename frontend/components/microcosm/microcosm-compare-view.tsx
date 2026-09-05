@@ -669,7 +669,12 @@ export function MicrocosmCompareView() {
               ]}
             />
             <span className="text-muted-foreground">→</span>
-            <ToolbarSelect label="B (compare)" value={b} onChange={setB} options={options} />
+            <ToolbarSelect
+              label="B (compare)"
+              value={b}
+              onChange={setB}
+              options={options.filter((option) => option.value !== a)}
+            />
           </div>
         )}
       </SectionCard>

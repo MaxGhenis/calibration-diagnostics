@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+
 import { useQualityContext } from "./quality-context";
 import { QualityLink } from "./quality-link";
 import {
@@ -14,6 +16,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 
 export function QualityStrip() {
   const context = useQualityContext();
+  const search = useSearchParams();
   const { data: catalog } = useQualityIndex();
   const { data: releases } = useMicrocosmReleases();
   const manifest = useQualityManifest();
@@ -38,6 +41,21 @@ export function QualityStrip() {
       context.setSelection({ candidate, manifest_sha256 });
     } else context.setSelection({ release: value });
   };
+  // An incumbent is a comparison against a different population, so the one
+  // already selected is not on offer. While the population is Latest its own
+  // release id is the same population under another name, so that goes too.
+  const selected = new Set(
+    [
+      context.release,
+      context.release ? "" : (releases?.latest_release_id ?? ""),
+    ].filter(Boolean),
+  );
+  // A hand-authored URL can still name the selected population as its own
+  // incumbent. That resolves to no comparison rather than a false one; say so,
+  // instead of leaving the control looking as though it lost the selection.
+  const selfComparison = Boolean(
+    context.release && search.get("incumbent") === context.release,
+  );
   const eligibility = manifest.data?.release_eligibility;
   return (
     <section
@@ -72,9 +90,7 @@ export function QualityStrip() {
           >
             <option value="">No comparison selected</option>
             {options
-              .filter(
-                (option) => option.value && option.value !== context.release,
-              )
+              .filter((option) => option.value && !selected.has(option.value))
               .map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -124,6 +140,12 @@ export function QualityStrip() {
             explicit identity match
           </span>
         )}
+        {selfComparison ? (
+          <span>
+            The requested incumbent is the selected population itself, so no
+            comparison is shown.
+          </span>
+        ) : null}
         {catalog?.freshness === "stale" ? (
           <span>
             Candidate discovery feed is over 24 hours old; immutable attachments
