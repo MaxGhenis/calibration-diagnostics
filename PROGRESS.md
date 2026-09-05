@@ -5,6 +5,14 @@ Branch `candidate-receipt-graph-20260905`, base
 is pushed; no cloud, deploy or dataset mutation is in scope. Only this worktree
 is touched.
 
+Continued on the dependent branch `candidate-receipt-graph-review-20260905`,
+base `ce1a559f07b70ce681e6a94d83702adbcf28610d`, which carries the fixes for the
+four findings of the independent review at
+`architecture-reviews/microcosm-20260904/calibration-receipt-graph-fable51.md`.
+The original branch's record below is kept as written except where a statement
+turned out to be wrong; those are corrected in place with the correction marked,
+not deleted.
+
 Goal: a bounded, receipt-backed graph/list/inspector for the actual immutable
 candidate `us-graph-f001-geography-20260905-v1`, integrated into the Pipeline
 view, drawing only recorded typed-artifact dependencies and keeping execution,
@@ -12,9 +20,24 @@ cache, gate and mapping state on separate axes.
 
 ## State
 
-Research and verification complete; implementation in progress.
+Original build complete and frozen at `ce1a559`. Review fixes in progress on the
+dependent branch; see the review-fix section below.
 
-## Done
+## Review fixes (branch `candidate-receipt-graph-review-20260905`)
+
+### State
+
+Started. Baseline on the new branch reproduces the original figures: `bun test`
+507 pass / 0 fail / 1851 assertions.
+
+### Next
+
+1. Red tests for the four review findings and the smaller notes.
+2. Fixes, then green.
+3. `tsc --noEmit`, `next build`, WebKit checks on a free local port.
+4. Detail receipt and JSON receipt in the review directory; frozen commit.
+
+## Done (original build, branch `candidate-receipt-graph-20260905`)
 
 ### Evidence verified first-hand (not taken from the assessment)
 
