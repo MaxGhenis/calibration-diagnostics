@@ -57,7 +57,7 @@ Population attachments with embedded `release_id`, `candidate_release_id` or pop
 
 Point `cross_dataset` to the existing `cross_dataset.frontend_bundle.v1` manifest. Its population-scoped descriptor names `run_id`, `snapshot_id` and candidate `source_id`, alongside the candidate/population binding. The evaluation run and snapshot are independent evidence identities; the evaluation run need not equal the population build run.
 
-Copy the whole bundle without changing its original relative partition layout, typically under `artifacts/<bundle-manifest-sha256>/manifest.json`. The existing Cross-dataset reader still checks run, snapshot, jurisdiction, source and partition hashes. Registering only the manifest without its partitions produces unavailable evidence.
+Copy the whole bundle without changing its original relative partition layout, typically under `artifacts/<bundle-manifest-sha256>/manifest.json`. The bundle manifest is an attachment, so its digest is checked over its bytes like any other. Inside the bundle, the existing Cross-dataset reader still checks run, snapshot, jurisdiction, source and its own partition hashes, which it takes over decoded text; for the strict BOM-free UTF-8 this reader accepts, that is the same digest as over the bytes. Registering only the manifest without its partitions produces unavailable evidence.
 
 ### Discovery
 
