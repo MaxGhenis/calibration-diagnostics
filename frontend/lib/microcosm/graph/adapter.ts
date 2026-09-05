@@ -134,6 +134,10 @@ export interface BuildEvidenceCheck {
   gate?: {
     outcome?: unknown;
     scope?: unknown;
+    /** The gate's declared capabilities. Only `tolerance_writers` is read, and
+     * only to count what the publisher named; nothing here is drawn, and the
+     * projection carries no counterpart for any of it. */
+    capabilities?: { tolerance_writers?: unknown };
     evidence?: {
       passed?: unknown;
       gates?: Record<string, {
@@ -777,13 +781,138 @@ function compareOutputs(projection: ReceiptProjection, ids: string[]) {
   };
 }
 
+/* ------------------------------------------------------------------ wording */
+
+/** Small counts read as words in these sentences, which are prose rather than
+ * a table; anything larger reads as a figure. Exported so a test asserts the
+ * same spelling the sentence uses instead of writing the word out again. */
+export const COUNT_WORDS = [
+  "no",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+
+function countWord(value: number): string {
+  return COUNT_WORDS[value] ?? value.toLocaleString("en-US");
+}
+
+function opening(word: string): string {
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+}
+
+function plural(count: number, singular: string, suffix = "s"): string {
+  return count === 1 ? singular : `${singular}${suffix}`;
+}
+
+/** A status the publisher recorded, said plainly. The reader's manifest is
+ * validated against a closed vocabulary before it reaches here, so this is not
+ * where an unknown value is caught; it is where an empty one stops reading as
+ * a missing word in a sentence. */
+function statedAs(value: string): string {
+  return value.trim() ? value.replaceAll("_", " ") : "not stated";
+}
+
+/** How many kernel calls the publisher recorded, without saying which
+ * execution is which. That pairing is this projection's, not the publisher's,
+ * and this clause is about what the publisher bound. */
+function kernelCallClause(counts: number[]): string {
+  const calls = (value: number) =>
+    value === 0
+      ? "no kernel calls"
+      : `${countWord(value)} ${plural(value, "kernel call")}`;
+  if (counts.length === 1) return `computing ${calls(counts[0])}`;
+  const each = counts.map((value) =>
+    value === 0 ? "one computing none" : `one computing ${calls(value)}`,
+  );
+  return `${each.slice(0, -1).join(", ")} and ${each[each.length - 1]}`;
+}
+
+/** The publisher's per-execution kernel-call counts, or nothing when any of
+ * them is not a count. Verification forces each to equal the published figure,
+ * so this guard only holds for a caller that skipped it. */
+function publishedKernelCalls(projection: ReceiptProjection): number[] | null {
+  const counts = projection.executions.map((execution) => execution.kernel_calls);
+  return counts.every(
+    (value): value is number =>
+      typeof value === "number" && Number.isSafeInteger(value) && value >= 0,
+  )
+    ? counts
+    : null;
+}
+
+/** A column name's entity, when every named column shares one and it is a
+ * plain identifier. Anything else is left unnamed rather than pasted into a
+ * sentence: this string is derived from publisher bytes and ends up in a
+ * response body, so it may not carry a path, a host or punctuation. */
+const ENTITY = /^[a-z][a-z0-9_]*$/;
+
+function sharedEntity(columns: string[]): string | null {
+  const entities = new Set(
+    columns.map((column) =>
+      column.includes(".") ? column.slice(0, column.indexOf(".")) : "",
+    ),
+  );
+  const only = entities.size === 1 ? [...entities][0] : "";
+  return ENTITY.test(only) ? only : null;
+}
+
+/** The one slice of column ownership the publisher binds: for each column
+ * inside a gate's declared tolerance scope, which steps wrote it. It is read
+ * from the build evidence because the projection carries no counterpart, and
+ * it is read only to say how much of it there is — this view draws none of it.
+ *
+ * A column counts only when the record actually names a writing step for it.
+ * An absent, empty or unreadable record therefore yields nothing, and the
+ * sentence built from this says the publisher named none rather than guessing
+ * at a number. Nothing here refuses: this is a count for a sentence, not an
+ * identity the run is bound by, and a candidate whose gate capabilities cannot
+ * be parsed is still a candidate whose receipts were verified. */
+export function publishedToleranceColumns(
+  projection: ReceiptProjection,
+  buildEvidence: Record<string, unknown>,
+): string[] {
+  const columns = new Set<string>();
+  for (const execution of projection.executions) {
+    const writers = buildEvidenceCheck(buildEvidence, execution.evidence_key)
+      .gate?.capabilities?.tolerance_writers;
+    if (!writers || typeof writers !== "object" || Array.isArray(writers)) continue;
+    for (const [column, steps] of Object.entries(
+      writers as Record<string, unknown>,
+    ))
+      if (
+        column &&
+        Array.isArray(steps) &&
+        steps.length &&
+        steps.every((step) => typeof step === "string" && step.length > 0)
+      )
+        columns.add(column);
+  }
+  return [...columns].sort();
+}
+
 /**
  * Build the payload the view draws. Callers must have verified the binding
  * first; this function assumes it and does not re-derive identity.
+ *
+ * The build evidence is taken for the sentences that state what the publisher
+ * bound — how many executions it records, how many kernel calls each computed,
+ * and how many columns its gate capabilities name a writer for. Those numbers
+ * have no counterpart in the projection, and stating them from anywhere else
+ * would be describing this run from memory. Nothing structural is read from it
+ * here and no edge is drawn from it.
  */
 export function buildReceiptGraph(
   projection: ReceiptProjection,
   manifest: CandidateQualityManifest,
+  buildEvidence: Record<string, unknown>,
   checks: BindingCheck[],
 ): ReceiptGraphAvailable {
   const { edges, dropped } = recordedEdges(projection);
@@ -894,6 +1023,20 @@ export function buildReceiptGraph(
     manifest.attachments[name]?.reason ??
     "The selected candidate publishes no evidence of this kind.";
 
+  // Everything the sentences below state about this run, read from the run.
+  // Each of these was a literal until it was derived, and each was true only
+  // of the one projection registered at the time.
+  const executionCount = executions.length;
+  const kernelCalls = publishedKernelCalls(projection);
+  const toleranceColumns = publishedToleranceColumns(projection, buildEvidence);
+  const toleranceEntity = sharedEntity(toleranceColumns);
+  const projectedSourcePins = projection.executions.reduce(
+    (total, execution) =>
+      total +
+      execution.nodes.reduce((count, node) => count + node.source_pins.length, 0),
+    0,
+  );
+
   const mappings: MappingAxis[] = [
     {
       key: "calibration",
@@ -938,18 +1081,25 @@ export function buildReceiptGraph(
     // this run does have — the boundary step's base and the gate step's
     // population — are absent from the canvas.
     "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
-    "One narrow slice of column ownership is published: the build evidence names, for the four household columns inside the gate's declared tolerance scope, which steps wrote each of them. It is not drawn either, because it describes that gate's scope rather than the graph.",
+    // Read from the publisher's gate capabilities, not from this candidate. A
+    // run whose gates name no writer for any column gets the second sentence,
+    // because there is then no published slice to point at.
+    toleranceColumns.length
+      ? `One narrow slice of column ownership is published: the build evidence names, for the ${countWord(toleranceColumns.length)} ${toleranceEntity ? `${toleranceEntity} ` : ""}${plural(toleranceColumns.length, "column")} inside the ${gateRecords.length === 1 ? "gate's declared tolerance scope" : "gates' declared tolerance scopes"}, which steps wrote each of them. It is not drawn either, because it describes that scope rather than the graph.`
+      : "No column ownership is published alongside that declaration: the build evidence records no writer for any column inside a gate's declared tolerance scope, so nothing here names which step wrote a column.",
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
-    "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
+    `Recorded execution and release eligibility are separate readings: the candidate manifest records this run's execution as ${statedAs(manifest.execution_status)} and its release eligibility as ${statedAs(manifest.release_eligibility.status)}.`,
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
-    // Precise in both directions. That there were two executions is the
-    // publisher's own record — two check blocks, one computing four kernel
-    // calls and one computing none. What this projection asserts is only the
-    // pairing: which recorded manifest bytes belong to which of them. The
-    // evidence's own manifest digest is the shared content key, so it pins
-    // neither byte digest.
-    "The publisher's build evidence records two executions of this run, one computing four kernel calls and one computing none. It does not pin either recorded run manifest's byte digest — its own manifest digest is the content key the two share — so which bytes shown here belong to which execution is paired by this projection, not published. The population, implementation, content-key and source digests checked above are bound by that same build evidence.",
+    // Precise in both directions. How many executions there were, and how many
+    // kernel calls each computed, is the publisher's own record: one check
+    // block per execution, and verification refuses a projection whose counts
+    // disagree with them. What this projection asserts is only the pairing:
+    // which recorded manifest bytes belong to which of them. The evidence's own
+    // manifest digest is the shared content key, so it pins no byte digest.
+    // The closing clause names source digests only where receipts declared a
+    // source pin for that binding to have happened to.
+    `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "the two share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
@@ -1016,8 +1166,12 @@ export function buildReceiptGraph(
     },
     gates: {
       records: gateRecords.length,
-      note: gateScopes.length
-        ? `One gate record in this run, scoped to ${gateScopes.join(", ")}. It attests to its own scope and to nothing else here.`
+      // Counted, and keyed off the count. Keyed off the declared scopes, a
+      // gate that recorded an outcome without one produced `records: 1` beside
+      // the sentence "No gate record in this run" — the payload contradicting
+      // itself. A gate is still a gate record when it declared no scope.
+      note: gateRecords.length
+        ? `${opening(countWord(gateRecords.length))} ${plural(gateRecords.length, "gate record")} in this run, ${gateScopes.length ? `scoped to ${gateScopes.join(", ")}` : "with no declared scope"}. ${gateRecords.length === 1 ? "It attests to its own scope" : "They attest to their own scopes"} and to nothing else here.`
         : "No gate record in this run. That is not a pass.",
     },
     comparison: {
@@ -1028,8 +1182,18 @@ export function buildReceiptGraph(
       distinct_executions:
         new Set(executions.map((execution) => execution.manifest_sha256)).size ===
         executions.length,
+      // The card's own heading, composed here rather than in the component, so
+      // one run's execution count is stated in one place. Verification has
+      // already forced the byte digests apart and the content keys together,
+      // so the only thing that varies between runs is how many there were.
+      title:
+        executionCount === 1
+          ? "One recorded execution"
+          : `Same computation, ${countWord(executionCount)} executions`,
       execution_note:
-        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. That there were two is also the publisher's own record — its build evidence carries a check for each, one computing four kernel calls and one computing none. What it does not pin is either manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.",
+        executionCount === 1
+          ? `One recorded run manifest, so this is a single recorded execution${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The publisher's build evidence carries one check for it. What it does not pin is that manifest's bytes: its own manifest digest is the content key, so which bytes belong to this execution is paired by this projection.`
+          : `The recorded run manifests have different byte digests, so these are ${countWord(executionCount)} executions; the shared content key says the computation and its outputs were the same. That there were ${countWord(executionCount)} is also the publisher's own record — its build evidence carries a check for each${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. What it does not pin is ${executionCount === 2 ? "either" : "any"} manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.`,
       output_identity: comparison,
       cache_differences: cacheDifferences,
     },

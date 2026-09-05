@@ -621,7 +621,7 @@ export function ReceiptGraphSurface({
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="rounded-md border border-border bg-card px-4 py-3">
           <div className="text-xs font-semibold text-foreground">
-            Same computation, two executions
+            {payload.comparison.title}
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {payload.comparison.content_key_note}
@@ -644,7 +644,7 @@ export function ReceiptGraphSurface({
             ))}
             <Field label="Outputs">
               {payload.comparison.output_identity.identical
-                ? `Identical across both executions: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
+                ? `Identical across every recorded execution: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
                 : `${payload.comparison.output_identity.differences.length} differences across ${payload.comparison.output_identity.compared_nodes} receipts.`}
             </Field>
             <Field label="Kernel calls">

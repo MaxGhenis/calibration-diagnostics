@@ -217,6 +217,10 @@ export interface ReceiptGraphComparison {
   content_key: string;
   content_key_note: string;
   distinct_executions: boolean;
+  /** How this run's executions are headed. Composed with the note below rather
+   * than written into the component, so the number of executions is stated in
+   * one place and cannot be right in the body and wrong in the heading. */
+  title: string;
   execution_note: string;
   output_identity: OutputIdentityComparison;
   cache_differences: {
