@@ -5,6 +5,7 @@ import type {
   QualityIndexResponse,
 } from "@/lib/microcosm/quality/types";
 import { apiGet } from "../client";
+import { qualityAttachmentOptions } from "../quality-attachment";
 
 export function useQualityIndex() {
   const { selection } = useQualityContext();
@@ -57,25 +58,5 @@ export function useQualityAttachment<T>(
   token?: string,
 ) {
   const { selection } = useQualityContext();
-  const identity = token?.startsWith("candidate:")
-    ? token.split(":").slice(1)
-    : [selection.candidate, selection.manifest_sha256];
-  const candidate = identity[0];
-  const sha = identity[1];
-  return useQuery({
-    queryKey: ["quality", view, selection.country, candidate, sha],
-    queryFn: () =>
-      apiGet<T>("/microcosm/quality", {
-        view,
-        country: selection.country,
-        candidate,
-        manifest_sha256: sha,
-      }),
-    enabled:
-      enabled &&
-      Boolean(candidate) &&
-      (token === undefined || token.startsWith("candidate:")),
-    staleTime: Infinity,
-    retry: false,
-  });
+  return useQuery(qualityAttachmentOptions<T>(view, selection, enabled, token));
 }
