@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { CandidateQualityReader } from "../quality/artifact";
 import type { CandidateQualityManifest } from "../quality/types";
 import {
+  PAIR_SEPARATOR,
   ReceiptGraphUnavailableError,
   cacheState,
   verifyExecutionStates,
@@ -541,6 +542,23 @@ export function normalizeGraphAttachment(
   ];
   let exceptional = false;
   const dependencies = new Map<string, Set<string>>(expectedIds.map(nodeId => [nodeId, new Set<string>()]));
+  // A receipt carrying the same node key in two executions is the same recorded
+  // computation, so the typed inputs it declares belong to that key rather than
+  // to the execution. Root removed node b's input from the second execution
+  // only: it was accepted, and because the drawn inspector reads descriptive
+  // fields from the first execution that recorded the node, the reader saw the
+  // first execution's inputs for both. `identity_differs` stayed false, since
+  // that comparison reads node keys, typed outputs and opaque keys and never
+  // inputs.
+  //
+  // Compared canonically per local input slot, so declaration order is
+  // irrelevant and an added, removed or mutated slot is a contradiction rather
+  // than a silently-dropped edge. Nothing else is required to agree: cache
+  // state, execution state, wall time and gate readings legitimately differ
+  // between a cold computation and a warm hit. A receipt absent from an
+  // execution, one that records no node key, and one whose key genuinely
+  // differs are each compared with nothing.
+  const contracts = new Map<string, string>();
   for (const e of executions) {
     const c = build.checks[e.mode];
     executionCheck(c);
@@ -588,6 +606,15 @@ export function normalizeGraphAttachment(
         equal(o.numeric, a.numeric);
         equal(o.tolerance, a.tolerance);
         dependencies.get(n.id)!.add(a.producer as string);
+      }
+      if (n.receipt_present && n.node_key !== null) {
+        const identity = `${n.id}${PAIR_SEPARATOR}${n.node_key}`;
+        const declared = canonical(Object.fromEntries(n.typed_inputs.map((a: RecordValue) => [a.name, a])));
+        const recorded = contracts.get(identity);
+        if (recorded === undefined)
+          contracts.set(identity, declared);
+        else
+          equal(recorded, declared);
       }
     }
     checks.push({

@@ -392,3 +392,90 @@ describe("invented consumed artifact reproducibility agreement", () => {
     expect(p.nodes.every(n => n.typed_inputs.every(a => a.numeric === null && a.tolerance === null))).toBe(true);
   });
 });
+
+// The frozen head accepted every removal, addition and mutation below.
+describe("invented cross-execution typed input contracts", () => {
+  test("refuses an input the second execution removed for the same node key", () => {
+    refusal(x => {
+      x.graph.executions[1].nodes[1].typed_inputs = [];
+    });
+  });
+  test("refuses an input the second execution added for the same node key", () => {
+    refusal(x => {
+      const warm = x.graph.executions[1];
+      warm.nodes[2].typed_inputs.push({
+        ...warm.nodes[0].typed_outputs[0],
+        name: "extra",
+        producer: warm.nodes[0].id,
+        producer_key: warm.nodes[0].node_key
+      });
+    });
+  });
+  test("refuses a mutated artifact identity even when the second execution is self-consistent", () => {
+    refusal(x => {
+      const warm = x.graph.executions[1];
+      warm.nodes[0].typed_outputs[0].artifact_key = h("7");
+      warm.nodes[1].typed_inputs[0].artifact_key = h("7");
+    });
+  });
+  test("refuses a mutated tolerance even when the second execution is self-consistent", () => {
+    refusal(x => {
+      const warm = x.graph.executions[1];
+      warm.nodes[0].typed_outputs[0].tolerance = 0.25;
+      warm.nodes[1].typed_inputs[0].tolerance = 0.25;
+    });
+  });
+  test("refuses a renamed local input slot for the same node key", () => {
+    refusal(x => {
+      x.graph.executions[1].nodes[1].typed_inputs[0].name = "renamed";
+    });
+  });
+  test("keeps declaration order irrelevant for the same node key", () => {
+    const x = inventedGraph();
+    for (const e of x.graph.executions)
+      e.nodes[2].typed_inputs = [{
+          ...e.nodes[0].typed_outputs[0],
+          name: "from_a",
+          producer: e.nodes[0].id,
+          producer_key: e.nodes[0].node_key
+        }, {
+          ...e.nodes[1].typed_outputs[0],
+          name: "from_b",
+          producer: e.nodes[1].id,
+          producer_key: e.nodes[1].node_key
+        }];
+    x.graph.executions[1].nodes[2].typed_inputs.reverse();
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.edges.map(e => [e.from, e.to]).sort()).toEqual([["a", "b"], ["a", "c"], ["b", "c"]]);
+  });
+  test("keeps differing cache, wall time and gate readings for the same node key", () => {
+    const x = inventedGraph();
+    x.graph.executions[1].nodes[1].wall_time_seconds = 12.5;
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    const a = p.nodes.find(n => n.id === "a")!;
+    expect(a.states.map(s => s.cache)).toEqual(["computed", "hit"]);
+    expect(a.identity_differs).toBe(false);
+    expect(p.nodes.find(n => n.id === "b")!.states.map(s => s.wall_time_seconds)).toEqual([0, 12.5]);
+  });
+  test("compares nothing across a genuinely different node key", () => {
+    const x = inventedGraph();
+    // c is a terminal, so no other receipt names its key.
+    x.graph.executions[1].nodes[2].node_key = h("9");
+    x.graph.executions[1].nodes[2].typed_inputs = [];
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    const c = p.nodes.find(n => n.id === "c")!;
+    expect(c.identity_differs).toBe(true);
+    expect(p.edges.find(e => e.to === "c")!.modes).toEqual(["cold"]);
+  });
+  test("compares nothing against an execution that records no receipt for the node", () => {
+    const x = inventedGraph();
+    x.manifest.execution_status = "failed";
+    const warm = x.graph.executions[1];
+    warm.nodes[2].receipt_present = false;
+    warm.nodes[2].typed_inputs = [];
+    warm.cache_hit_count--;
+    (x.build.checks as any).warm.direct_real_engine_array_parity = false;
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.nodes.find(n => n.id === "c")!.states.map(s => s.execution)).toEqual(["recorded", "not_evidenced"]);
+  });
+});
