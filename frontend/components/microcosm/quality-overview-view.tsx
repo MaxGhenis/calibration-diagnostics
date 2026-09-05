@@ -23,6 +23,7 @@ import {
 } from "@/lib/api/hooks/use-quality";
 import { useMicrocosmTargetDiagnostics } from "@/lib/api/hooks/use-microcosm";
 import { QualityMethodologyNote } from "./quality-methodology-note";
+import { parseCandidateToken } from "@/lib/microcosm/quality/selection";
 import {
   EVIDENCE_FAMILIES,
   type EvidenceFamily,
@@ -132,6 +133,7 @@ export function CandidateCatalog() {
 export function QualityOverviewView() {
   const context = useQualityContext();
   const manifest = useQualityManifest();
+  const hasIncumbent = Boolean(parseCandidateToken(context.selection.incumbent));
   const data = manifest.data;
   const targetDiagnostics = useMicrocosmTargetDiagnostics(
     { release: context.release, limit: 1 },
@@ -150,12 +152,12 @@ export function QualityOverviewView() {
   );
   const incumbentSupport = useQualityAttachment<PopulationSupport>(
     "support",
-    Boolean(context.selection.incumbent),
+    hasIncumbent,
     context.selection.incumbent,
   );
   const incumbentDistributions = useQualityAttachment<PopulationDistributions>(
     "distributions",
-    Boolean(context.selection.incumbent),
+    hasIncumbent,
     context.selection.incumbent,
   );
   const [level, setLevel] = useState("national");
@@ -186,7 +188,7 @@ export function QualityOverviewView() {
   const districtVintageKnown =
     !selectedGeo?.level.includes("district") || Boolean(selectedGeo.vintage);
   const comparisonSeries =
-    series && districtVintageKnown
+    hasIncumbent && series && districtVintageKnown
       ? incumbentDistributions.data?.series.find(
           (other) =>
             distributionDefinition(
@@ -199,7 +201,8 @@ export function QualityOverviewView() {
     support.data?.rows.filter((row) => row.geography.level === selectedLevel) ??
     [];
   const supportComparable = Boolean(
-    support.data &&
+    hasIncumbent &&
+      support.data &&
       incumbentSupport.data &&
       supportDefinition(support.data) ===
         supportDefinition(incumbentSupport.data),

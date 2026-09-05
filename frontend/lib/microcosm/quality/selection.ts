@@ -15,6 +15,14 @@ export interface QualitySelection {
   incumbent: string;
 }
 
+export function parseCandidateToken(token: string) {
+  const match =
+    /^candidate:([A-Za-z0-9][A-Za-z0-9._-]{0,299}):([a-f0-9]{64})$/.exec(token);
+  return match
+    ? { candidate: match[1], manifest_sha256: match[2] }
+    : undefined;
+}
+
 export function selectionFromSearch(
   params: URLSearchParams,
   country: MicrocosmCountry,
@@ -24,18 +32,15 @@ export function selectionFromSearch(
   // Accept the existing loader transport form in copied target URLs as the
   // same global candidate context, rather than loading candidate calibration
   // while unrelated default evaluation remains selected.
-  const token =
-    /^candidate:([A-Za-z0-9][A-Za-z0-9._-]{0,299}):([a-f0-9]{64})$/.exec(
-      release,
-    );
-  const candidate = matches ? params.get("candidate") || token?.[1] || "" : "";
+  const token = parseCandidateToken(release);
+  const candidate = matches ? params.get("candidate") || token?.candidate || "" : "";
   return {
     country,
     candidate,
     manifest_sha256: matches
       ? params.get("candidate")
         ? (params.get("manifest_sha256") ?? "")
-        : (token?.[2] ?? params.get("manifest_sha256") ?? "")
+        : (token?.manifest_sha256 ?? params.get("manifest_sha256") ?? "")
       : "",
     release: candidate ? "" : release,
     incumbent: matches ? (params.get("incumbent") ?? "") : "",
