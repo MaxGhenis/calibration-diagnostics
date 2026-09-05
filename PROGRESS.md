@@ -302,3 +302,7 @@ shape `selectionUrl` already returned for the candidate selector.
 - State: bounded correction on dependent base `5627aac7d8f68662c1dc85eb5e31cc879648559c`; underlying work is not root-approved.
 - Done: read repository guidance, native and ROOT successor probes, adapter/types, publisher fixture and generator. Confirmed clean requested branch/base; artifacts and existing servers preserved.
 - Next: commit failing regression tests, fix verification and typed-edge consistency, run graph/quality/route tests, TypeScript and one green full suite; freeze commits and write review receipts.
+
+- State: red regression step recorded before adapter edits.
+- Done: unchanged baseline 62/62 passes; expanded adapter tests 68 pass / 42 fail, covering summary/identity/execution/gate refusals, declared typed-output matching, state precedence and the retained unpinned-byte limit. Logs: `/private/tmp/calibration-receipt-consistency-20260905/{baseline-adapter,red-adapter}.log`.
+- Next: implement bounded checks. Read-only generator audit confirms explicit field selection and no actual path leak in shipped evidence; the source-like detail probe mutates projection content only.

@@ -91,6 +91,150 @@ function graph() {
   return buildReceiptGraph(built.projection, built.manifest, checks);
 }
 
+// Mutations below are local projections / aggregate evidence copies, never
+// changes to the publisher fixtures or claims about another real execution.
+function evidenceChecks(value: Record<string, unknown>) {
+  return value.checks as Record<string, Record<string, any>>;
+}
+
+describe("receipt consistency regressions from the independent probes", () => {
+  const refusals: [string, NonNullable<Parameters<typeof verify>[0]>][] = [
+    ["contradictory computed count", ({ projection: p }) => { p.executions[0].computed_count = 999; }],
+    ["contradictory cache-hit count", ({ projection: p }) => { p.executions[0].cache_hit_count = 888; }],
+    ["contradictory kernel calls", ({ projection: p }) => { p.executions[0].kernel_calls = 777; }],
+    ["missing published kernel count", ({ evidence: e }) => { delete evidenceChecks(e).cold.kernel_calls; }],
+    ["invalid published kernel count", ({ evidence: e }) => { evidenceChecks(e).cold.kernel_calls = "4"; }],
+    ["no executions", ({ projection: p }) => { p.executions = []; }],
+    ["omitted published graph execution", ({ projection: p }) => { p.executions.pop(); }],
+    ["duplicate execution", ({ projection: p }) => { p.executions.push(clone(p.executions[0])); }],
+    ["duplicate display mode", ({ projection: p }) => { p.executions[1].mode = p.executions[0].mode; }],
+    ["duplicate evidence key", ({ projection: p }) => { p.executions[1].evidence_key = p.executions[0].evidence_key; }],
+    ["duplicate execution byte digest", ({ projection: p }) => { p.executions[1].manifest_sha256 = p.executions[0].manifest_sha256; }],
+    ["contradictory projection content key", ({ projection: p }) => { p.computation_content_key = "e".repeat(64); }],
+    ["no node receipts", ({ projection: p }) => { p.executions[1].nodes = []; p.executions[1].cache_hit_count = 0; }],
+    ["duplicate node id", ({ projection: p }) => { p.executions[1].nodes.push(clone(p.executions[1].nodes[0])); p.executions[1].cache_hit_count++; }],
+    ["missing receipt implementation", ({ projection: p }) => { p.executions[0].nodes[0].kernel_impl_hash = null; }],
+    ["missing published source pin", ({ evidence: e }) => { delete evidenceChecks(e).cold.source_sha256.puma_ladder; }],
+    ["missing gate records", ({ projection: p }) => { for (const e of p.executions) for (const n of e.nodes) n.gate = null; }],
+    ["duplicate gate records", ({ projection: p }) => { p.executions[0].nodes[0].gate = clone(p.executions[0].nodes.find(n => n.gate)!.gate); }],
+    ["missing publisher gate", ({ evidence: e }) => { delete evidenceChecks(e).cold.gate; }],
+    ["contradictory gate passed", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.passed = false; }],
+    ["contradictory check passed", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].passed = false; }],
+    ["missing gate check", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.checks = []; }],
+    ["duplicate gate check", ({ projection: p }) => { const g = p.executions[0].nodes.find(n => n.gate)!.gate!; g.checks.push(clone(g.checks[0])); }],
+    ["contradictory gate failure", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].failures.push("invented failure"); }],
+    ["contradictory gate detail", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].details[0].value = 999; }],
+    ["duplicate gate detail", ({ projection: p }) => { const c = p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0]; c.details.push(clone(c.details[0])); }],
+    ["missing gate detail", ({ projection: p }) => { p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].details.pop(); }],
+    ["projection-only source-like gate detail", ({ projection: p }) => {
+      p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].details.push({ key: "diagnostic", value: "/tmp/receipt-graph-probe-private.csv" });
+    }],
+    ["contradictory publisher passed evidence", ({ evidence: e }) => { evidenceChecks(e).cold.gate.evidence.passed = false; }],
+  ];
+  for (const [name, mutate] of refusals)
+    test(`refuses ${name}`, () => {
+      expect(() => verify(mutate)).toThrow(ReceiptGraphUnavailableError);
+    });
+
+  test("byte digests remain projection assertions, with the existing visible limit", () => {
+    const p = projection();
+    p.executions[0].manifest_sha256 = "e".repeat(64);
+    const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
+    const result = buildReceiptGraph(p, manifest(), checks);
+    expect(result.executions[0].manifest_sha256).toBe("e".repeat(64));
+    expect(result.comparison.execution_note).toMatch(/asserted by this projection/);
+    expect(result.limits.join(" ")).toMatch(/neither manifest byte digest is pinned/i);
+    expect(checks.find(c => c.label === "Implementation")!.detail).toMatch(/agree/);
+    expect(checks.map(c => c.detail).join(" ")).not.toMatch(/Every receipt was produced/);
+  });
+
+  test("matches gate objects by names rather than publisher object order", () => {
+    expect(() => verify(({ projection: p }) => {
+      p.executions[0].nodes.find(n => n.gate)!.gate!.checks[0].details.reverse();
+    })).not.toThrow();
+  });
+
+  test.each(["fail", "not_applicable", "unreached", "evidence_absent"])(
+    "keeps a consistently recorded %s gate distinct from passing", outcome => {
+      const p = projection();
+      const e = evidence();
+      for (const execution of p.executions) {
+        const node = execution.nodes.find(n => n.gate)!;
+        const passed = outcome === "fail" ? false : null;
+        node.gate = { outcome, scope: node.gate!.scope, passed, checks: [] };
+        evidenceChecks(e)[execution.evidence_key].gate = {
+          outcome, scope: node.gate.scope, evidence: { passed, gates: {} },
+        };
+        // known_failures is an independent recorded umbrella. Its presence
+        // does not turn an unreached executor record into a failure.
+        node.failed = outcome === "unreached" || outcome === "fail";
+        execution.failed_node_ids = node.failed ? [node.id] : [];
+        if (outcome === "unreached") {
+          node.blocked = true;
+          node.execution_record = { state: "unreached", blocked_by: [], unavailable_artifacts: [] };
+          execution.blocked_node_ids = [node.id];
+          if (node.cache === "computed") execution.computed_count--;
+          else execution.cache_hit_count--;
+          execution.kernel_calls = execution.computed_count;
+          evidenceChecks(e)[execution.evidence_key].kernel_calls = execution.kernel_calls;
+        }
+      }
+      const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, e);
+      const result = buildReceiptGraph(p, manifest(), checks);
+      const states = result.nodes.find(n => n.role === "gate")!.states;
+      expect(states.every(s => s.gate === outcome)).toBe(true);
+      expect(states.every(s => s.execution === (outcome === "unreached" ? "blocked" : outcome === "fail" ? "failed" : "recorded"))).toBe(true);
+      if (outcome === "unreached") expect(states.every(s => s.cache === "unknown")).toBe(true);
+    },
+  );
+
+  test("a matching but self-contradictory passing gate is refused", () => {
+    expect(() => verify(({ projection: p, evidence: e }) => {
+      p.executions[0].nodes.find(n => n.gate)!.gate!.passed = false;
+      evidenceChecks(e).cold.gate.evidence.passed = false;
+    })).toThrow(ReceiptGraphUnavailableError);
+  });
+});
+
+describe("a typed input must resolve its producer's declared output", () => {
+  type Mutate = (input: ProjectionNode["typed_inputs"][number], producer: ProjectionNode) => void;
+  const cases: [string, Mutate][] = [
+    ["missing producer key", input => { delete input.producer_key; }],
+    ["missing input artifact key", input => { input.artifact_key = null; }],
+    ["different artifact key", input => { input.artifact_key = "f".repeat(64); }],
+    ["different artifact name", input => { input.artifact = "undeclared"; }],
+    ["different artifact type", input => { input.type = "wrong.type"; }],
+    ["different artifact version", input => { input.type_version = 99; }],
+    ["missing artifact type", input => { input.type = null; }],
+    ["missing artifact version", input => { input.type_version = null; }],
+    ["missing producer output", (_, producer) => { producer.typed_outputs.shift(); }],
+    ["ambiguous producer output", (_, producer) => { producer.typed_outputs.push(clone(producer.typed_outputs[0])); }],
+    ["absent producer receipt", (_, producer) => { producer.receipt_present = false; }],
+  ];
+  for (const [label, mutate] of cases)
+    test(`drops ${label} with an explicit coverage limit`, () => {
+      const p = projection();
+      for (const execution of p.executions) {
+        const consumer = execution.nodes.find(n => n.id === "assemble_stacked_spine")!;
+        const producer = execution.nodes.find(n => n.id === "assemble_stacked_spine.prepare")!;
+        mutate(consumer.typed_inputs[0], producer);
+      }
+      const result = buildReceiptGraph(p, manifest(), verify());
+      const edge = result.edges.find(e => e.to === "assemble_stacked_spine");
+      expect(edge?.artifacts.some(a => a.name === "frame_context") ?? false).toBe(false);
+      expect(result.coverage.complete).toBe(false);
+      expect(result.limits.some(l => l.startsWith("cold: assemble_stacked_spine"))).toBe(true);
+    });
+
+  test("a consumer-local alias still resolves the declared artifact name", () => {
+    const p = projection();
+    for (const execution of p.executions)
+      execution.nodes.find(n => n.id === "assemble_stacked_spine")!.typed_inputs[0].name = "local_frame";
+    const result = buildReceiptGraph(p, manifest(), verify());
+    expect(result.edges.find(e => e.to === "assemble_stacked_spine")!.artifacts.some(a => a.name === "local_frame")).toBe(true);
+  });
+});
+
 /* ------------------------------------------------------------- evidence */
 
 describe("the evidence the projection is built from", () => {
