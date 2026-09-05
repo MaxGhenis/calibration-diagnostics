@@ -1,0 +1,26 @@
+{
+  "id": "us-graph-f001-geography-20260905-v1",
+  "description": "The immutable US development candidate this dashboard ships receipts for. An uncalibrated 1% development assembly, excluded from release: nothing here is a scientific result.",
+  "country": "us",
+  "candidate": "us-graph-f001-geography-20260905-v1",
+  "manifest_sha256": "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885",
+  "incumbent": "unchanged",
+  "fragment": "#support",
+  "entry_path": "/microcosm/quality",
+  "graph_path": "/microcosm/pipeline",
+  "list_step": {
+    "name": "Geography assignment",
+    "node_id": "assign_us_puma_ladder",
+    "inspector_text": "Outputs recorded"
+  },
+  "replay": {
+    "name": "Required replay",
+    "exact_name": true,
+    "mode": "replay",
+    "inspector_text": "0 of 6 receipts were computed here"
+  },
+  "canvas_node": {
+    "node_id": "assign_us_puma_ladder.gate",
+    "inspector_text": "Gate passed"
+  }
+}
