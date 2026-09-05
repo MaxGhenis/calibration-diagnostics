@@ -239,8 +239,10 @@ function verifyGate(execution: ProjectionExecution, check: BuildEvidenceCheck) {
     (gate.outcome === "pass" &&
       (gate.passed !== true || gate.checks.some(c => c.passed !== true || c.failures.length > 0))) ||
     (gate.outcome === "fail" && gate.passed === true) ||
+    // The producer permits diagnostics on these outcomes. Retain the checks
+    // without treating them as a gate pass; an affirmative verdict conflicts.
     (["not_applicable", "unreached", "evidence_absent"].includes(gate.outcome ?? "") &&
-      (gate.passed !== null || gate.checks.length > 0))
+      gate.passed === true)
   )
     refuse(`The ${execution.mode} gate outcome contradicts its verdict evidence.`);
 }
