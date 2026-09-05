@@ -96,6 +96,13 @@ export function publishedPopulationIdentity(
     : UNRESOLVED;
 }
 
+/** The concrete release a published selection names. The pointer is the
+ * selection's default, but it is also writable as `latest`, and both spellings
+ * mean whichever release the pointer currently holds. */
+export function resolvedReleaseId(selected: string, latest: string): string {
+  return !selected || selected === "latest" ? latest : selected;
+}
+
 /** The structural part of a loaded calibration that names its population. */
 export interface PopulationIdentitySource {
   country: MicrocosmCountry;

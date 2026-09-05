@@ -4,6 +4,7 @@ import {
   candidatePopulationIdentity,
   publishedPopulationIdentity,
   resolveComparison,
+  resolvedReleaseId,
   type ResolvedComparison,
 } from "@/lib/microcosm/quality/identity";
 import { parseCandidateToken } from "@/lib/microcosm/quality/selection";
@@ -122,7 +123,10 @@ export function useResolvedComparison(): ResolvedComparison {
     incumbent: selection.incumbent,
     selected: selected
       ? candidatePopulationIdentity(selection.country, selectedManifest.data)
-      : publishedPopulationIdentity(selection.country, release || latest),
+      : publishedPopulationIdentity(
+          selection.country,
+          resolvedReleaseId(release, latest),
+        ),
     against: incumbentToken
       ? candidatePopulationIdentity(selection.country, incumbentManifest.data)
       : publishedPopulationIdentity(selection.country, selection.incumbent),

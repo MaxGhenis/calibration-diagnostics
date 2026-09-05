@@ -8,6 +8,7 @@ import {
   populationIdentity,
   publishedPopulationIdentity,
   resolveComparison,
+  resolvedReleaseId,
 } from "./identity";
 
 const POPULATION_A = "a".repeat(64);
@@ -76,6 +77,23 @@ test("the pointer is not a population until it has been resolved", () => {
   expect(publishedPopulationIdentity("us", "build-a").basis).toBe(
     "published_release",
   );
+});
+
+test("both spellings of the pointer resolve to the release it holds", () => {
+  // A hand-authored ?release=latest and the empty default name one population;
+  // the picker only ever writes the empty form.
+  for (const spelling of ["", "latest"])
+    expect(resolvedReleaseId(spelling, "build-latest")).toBe("build-latest");
+  expect(resolvedReleaseId("build-a", "build-latest")).toBe("build-a");
+  expect(
+    comparisonIdentity(
+      publishedPopulationIdentity(
+        "us",
+        resolvedReleaseId("latest", "build-latest"),
+      ),
+      publishedPopulationIdentity("us", "build-latest"),
+    ).status,
+  ).toBe("same_population");
 });
 
 test("an identity that cannot be established leaves the comparison standing", () => {

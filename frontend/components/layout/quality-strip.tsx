@@ -11,6 +11,7 @@ import {
   releaseSelectOptions,
   useMicrocosmReleases,
 } from "@/lib/api/hooks/use-microcosm";
+import { resolvedReleaseId } from "@/lib/microcosm/quality/identity";
 import { StatusPill } from "@/components/shared/status-pill";
 
 export function QualityStrip() {
@@ -41,12 +42,13 @@ export function QualityStrip() {
     } else context.setSelection({ release: value });
   };
   // An incumbent is a comparison against a different population, so the one
-  // already selected is not on offer. While the population is Latest its own
-  // release id is the same population under another name, so that goes too.
+  // already selected is not on offer. While the population is the pointer --
+  // left empty or written out as "latest" -- its own release id is the same
+  // population under another name, so that goes too.
   const selected = new Set(
     [
       context.release,
-      context.release ? "" : (releases?.latest_release_id ?? ""),
+      resolvedReleaseId(context.release, releases?.latest_release_id ?? ""),
     ].filter(Boolean),
   );
   const eligibility = manifest.data?.release_eligibility;
