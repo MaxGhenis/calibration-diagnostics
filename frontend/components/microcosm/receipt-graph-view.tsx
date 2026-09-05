@@ -33,6 +33,7 @@ import {
   gateReading,
   neighbours,
   outputReading,
+  projectionBasisReading,
   releaseEligibilityReading,
   selectionNotice,
   stateFor,
@@ -736,15 +737,15 @@ export function ReceiptGraphSurface({
           <Field label="Population">
             <Mono>{payload.binding.population_sha256}</Mono>
           </Field>
-          <Field label="Implementation">
-            <Mono>{payload.binding.kernel_impl_hash}</Mono>
+          <Field label={payload.binding.implementation_set ? "Implementation set" : "Implementation"}>
+            <Mono>{payload.binding.implementation_set?.sha256 ?? payload.binding.kernel_impl_hash ?? "—"}</Mono>
           </Field>
           <Field label="Run">{payload.candidate.run_id}</Field>
           <Field label="Release eligibility">
             {payload.candidate.release_eligibility.reason}
           </Field>
           <Field label="Gates">{payload.gates.note}</Field>
-          <Field label="Receipt projection">{payload.projection.note}</Field>
+          <Field label={projectionBasisReading(payload.projection.basis)}>{payload.projection.note}</Field>
           <Field label="Stage names">{payload.projection.label_basis}</Field>
         </dl>
         <ul className="mt-2 list-disc pl-4 text-[11px] leading-relaxed text-muted-foreground">

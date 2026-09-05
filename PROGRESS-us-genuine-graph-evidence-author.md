@@ -16,6 +16,12 @@ Plan SHA256: 45544637213278dca2b2e126fcda78af1f8c77e849bf5bb454f69de92e088d15.
 - Added invented three-node aggregate fixture (two implementation hashes, one cold computation and two cache hits), shared contract negative tests before implementation.
 - Copied unchanged D dependencies into private frontend node_modules; initial symlink was removed before build.
 
+- Implemented the population attachment binding entry point, exact4MiB attachment-byte wrapper around unchanged quality reader, closed field and text bounds, per-node implementation-set and distinct execution-byte/content-key checks.
+- Reused existing ProjectionExecution/Node, state/cache/gate/edge/render path; added only explicit basis and implementation-set fields to legacy payload, with the complete old response snapshot passing.
+- Manifest-first route prefers present graph attachment including bounded pending/missing/failed reasons, rejects malformed or tampered present bytes without legacy registry lookup, and keeps sanitized unreadable-manifest503 and invalid-token400.
+- Focused dashboard tests:266pass,0fail across6files,819assertions. Earlier expected missing-module red run and stale-message expectation failure are retained in command log.
+- Author-side schema audit gaps (unknown executor state, non-gate gate record, inconsistent typed/opaque output keys) corrected and covered by negative tests. This is author work, not independent code approval.
+
 ## Next
 - Agree shared ProjectionExecution/Node attachment contract.
 - Commit invented fixtures, implement pure exporter and shared dashboard verifier in parallel.

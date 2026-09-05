@@ -394,3 +394,10 @@ describe("no state is read by a fallback that was written for another one", () =
     expect(new Set(labels).size).toBe(3);
   });
 });
+
+test("provenance basis has exhaustive distinct readings", async () => {
+  const { projectionBasisReading } = await import("./presentation");
+  expect(projectionBasisReading("local_projection")).toBe("Local receipt projection");
+  expect(projectionBasisReading("authenticated_attachment")).toBe("Authenticated aggregate graph attachment");
+  expect(() => projectionBasisReading("unknown" as never)).toThrow();
+});

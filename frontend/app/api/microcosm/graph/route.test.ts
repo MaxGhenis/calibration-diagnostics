@@ -126,6 +126,8 @@ describe("a candidate this dashboard has no receipts for", () => {
       await ask(`country=us&candidate=${CANDIDATE}&manifest_sha256=${FAILED_DIGEST}`)
     ).json();
     expect(payload.available).toBe(false);
+    expect(payload.reason).toMatch(/Manifest identity does not match the selected candidate/);
+    expect(JSON.stringify(payload)).not.toContain(FAILED_CANDIDATE);
   });
 
   test("refuses the shipped digest under another candidate's id", async () => {

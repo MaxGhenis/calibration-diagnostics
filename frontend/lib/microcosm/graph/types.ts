@@ -230,13 +230,21 @@ export interface ReceiptGraphComparison {
   }[];
 }
 
+export type ProjectionBasis = "local_projection" | "authenticated_attachment";
+
+export interface ImplementationSet {
+  sha256: string;
+  by_node: Record<string, { kernel_ref: string; kernel_impl_hash: string }>;
+}
+
 export interface ReceiptGraphAvailable {
   schema_version: typeof RECEIPT_GRAPH_SCHEMA;
   available: true;
   projection: {
     schema_version: string;
     version: number;
-    is_publisher_attachment: false;
+    is_publisher_attachment: boolean;
+    basis: ProjectionBasis;
     note: string;
     label_basis: string;
   };
@@ -253,7 +261,8 @@ export interface ReceiptGraphAvailable {
     candidate_manifest_sha256: string;
     build_evidence_sha256: string;
     population_sha256: string;
-    kernel_impl_hash: string;
+    kernel_impl_hash: string | null;
+    implementation_set: ImplementationSet | null;
     computation_content_key: string;
     checks: BindingCheck[];
   };

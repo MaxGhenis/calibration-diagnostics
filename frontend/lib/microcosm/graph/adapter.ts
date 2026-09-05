@@ -13,6 +13,8 @@ import {
   RECEIPT_GRAPH_SCHEMA,
   RECEIPT_PROJECTION_SCHEMA,
   type BindingCheck,
+  type ImplementationSet,
+  type ProjectionBasis,
   type CacheState,
   type ExecutionEdge,
   type ExecutionState,
@@ -70,20 +72,21 @@ export interface ProjectionNode {
 
 export interface ProjectionExecution {
   mode: string;
-  evidence_key: string;
+  evidence_key?: string | null;
   label: string;
   description: string;
   manifest_sha256: string;
-  manifest_schema_version: number | null;
+  manifest_schema_version?: number | null;
   content_key: string;
   kernel_calls: number | null;
+  source_preparation_calls?: number;
   computed_count: number;
   cache_hit_count: number;
   failed_node_ids: string[];
   blocked_node_ids: string[];
   gate_exception_node_ids: string[];
-  release_tier: string | null;
-  decision_count: number;
+  release_tier?: string | null;
+  decision_count?: number | null;
   nodes: ProjectionNode[];
 }
 
@@ -91,6 +94,8 @@ export interface ReceiptProjection {
   schema_version: string;
   projection_version: number;
   is_publisher_attachment: boolean;
+  basis?: ProjectionBasis;
+  implementation_set?: ImplementationSet | null;
   provenance_note: string;
   label_basis: string;
   coverage: { basis: string; complete: boolean; reason: string };
@@ -100,7 +105,7 @@ export interface ReceiptProjection {
   run_id: string;
   population_sha256: string;
   build_evidence_sha256: string;
-  kernel_impl_hash: string;
+  kernel_impl_hash: string | null;
   computation_content_key: string;
   content_key_note: string;
   executions: ProjectionExecution[];
@@ -117,7 +122,7 @@ function refuse(reason: string): never {
 
 const HEX64 = /^[a-f0-9]{64}$/;
 
-function sameDigest(actual: unknown, expected: string, description: string) {
+function sameDigest(actual: unknown, expected: string | null, description: string) {
   if (typeof actual !== "string" || actual !== expected)
     refuse(`${description} does not match the selected candidate.`);
 }
@@ -157,7 +162,7 @@ function requireUnique(values: string[], description: string) {
 /** Check the generator's duplicated state fields without re-deriving the
  * producer's known_failures list. An explicit rejection can set `failed`
  * without being in that list; an executor's unreached record still wins. */
-function verifyExecutionStates(execution: ProjectionExecution) {
+export function verifyExecutionStates(execution: ProjectionExecution) {
   const nodes = new Map(execution.nodes.map(node => [node.id, node]));
   for (const [field, ids] of [
     ["failed", execution.failed_node_ids],
@@ -333,7 +338,7 @@ export function verifyProjectionBinding(
   if (!projection.executions.length)
     refuse("The stored receipt projection records no executions.");
   requireUnique(projection.executions.map(e => e.mode), "execution modes");
-  requireUnique(projection.executions.map(e => e.evidence_key), "execution evidence keys");
+  requireUnique(projection.executions.map(e => e.evidence_key ?? ""), "execution evidence keys");
   requireUnique(projection.executions.map(e => e.manifest_sha256), "execution byte digests");
   // Only publisher checks with a graph content key describe graph executions.
   // The real `direct` check has none and is intentionally not projected.
@@ -366,7 +371,7 @@ export function verifyProjectionBinding(
   ];
 
   for (const execution of projection.executions) {
-    const check = buildEvidenceCheck(buildEvidence, execution.evidence_key);
+    const check = buildEvidenceCheck(buildEvidence, execution.evidence_key ?? execution.mode);
     sameDigest(execution.content_key, projection.computation_content_key,
       `Projected ${execution.mode} computation content key`);
     sameDigest(
@@ -881,7 +886,8 @@ export function publishedToleranceColumns(
 ): string[] {
   const columns = new Set<string>();
   for (const execution of projection.executions) {
-    const writers = buildEvidenceCheck(buildEvidence, execution.evidence_key)
+    if (projection.is_publisher_attachment) continue;
+    const writers = buildEvidenceCheck(buildEvidence, execution.evidence_key ?? execution.mode)
       .gate?.capabilities?.tolerance_writers;
     if (!writers || typeof writers !== "object" || Array.isArray(writers)) continue;
     for (const [column, steps] of Object.entries(
@@ -1090,6 +1096,8 @@ export function buildReceiptGraph(
     },
   ];
 
+  const basis = projection.basis ?? "local_projection";
+  const attached = basis === "authenticated_attachment";
   const limits = [
     projection.coverage.reason,
     // The compiled structural declaration is not missing from the world; it is
@@ -1097,13 +1105,13 @@ export function buildReceiptGraph(
     // is the accurate scope limitation, and it is the reason two relationships
     // this run does have — the boundary step's base and the gate step's
     // population — are absent from the canvas.
-    "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
+    ...(attached ? [] : ["The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run."]),
     // Read from the publisher's gate capabilities, not from this candidate. A
     // run whose gates name no writer for any column gets the second sentence,
     // because there is then no published slice to point at.
-    toleranceColumns.length
+    ...(attached ? [] : [toleranceColumns.length
       ? `One narrow slice of column ownership is published: the build evidence names, for the ${countWord(toleranceColumns.length)} ${toleranceEntity ? `${toleranceEntity} ` : ""}${plural(toleranceColumns.length, "column")} inside the ${gateRecords.length === 1 ? "gate's declared tolerance scope" : "gates' declared tolerance scopes"}, which steps wrote each of them. It is not drawn either, because it describes that scope rather than the graph.`
-      : "No column ownership is published alongside that declaration: the build evidence records no writer for any column inside a gate's declared tolerance scope, so nothing here names which step wrote a column.",
+      : "No column ownership is published alongside that declaration: the build evidence records no writer for any column inside a gate's declared tolerance scope, so nothing here names which step wrote a column."]),
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
     `Recorded execution and release eligibility are separate readings: the candidate manifest records this run's execution as ${statedAs(manifest.execution_status)} and its release eligibility as ${statedAs(manifest.release_eligibility.status)}.`,
@@ -1116,7 +1124,9 @@ export function buildReceiptGraph(
     // manifest digest is the shared content key, so it pins no byte digest.
     // The closing clause names source digests only where receipts declared a
     // source pin for that binding to have happened to.
-    `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "they share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
+    attached
+      ? "The authenticated publisher attachment declares aggregate graph structure. The build summary binds each exact execution-manifest byte digest separately from its computation content key. These are pointers to recorded raw execution evidence; this dashboard has not independently interpreted those raw manifest bytes or recomputed array parity. Source preparation is a separate recorded call count, never a graph node. No scientific gate is inferred from parity or cache equality."
+      : `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "they share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. All readings are kept.`,
@@ -1131,7 +1141,8 @@ export function buildReceiptGraph(
     projection: {
       schema_version: projection.schema_version,
       version: projection.projection_version,
-      is_publisher_attachment: false,
+      is_publisher_attachment: projection.is_publisher_attachment,
+      basis,
       note: projection.provenance_note,
       label_basis: projection.label_basis,
     },
@@ -1149,6 +1160,7 @@ export function buildReceiptGraph(
       build_evidence_sha256: projection.build_evidence_sha256,
       population_sha256: projection.population_sha256,
       kernel_impl_hash: projection.kernel_impl_hash,
+      implementation_set: projection.implementation_set ?? null,
       computation_content_key: projection.computation_content_key,
       checks,
     },
@@ -1208,7 +1220,9 @@ export function buildReceiptGraph(
           ? "One recorded execution"
           : `Same computation, ${countWord(executionCount)} executions`,
       execution_note:
-        executionCount === 1
+        attached
+          ? `The publisher authenticates ${countWord(executionCount)} recorded ${plural(executionCount, "execution")} with distinct execution-manifest byte digests and a shared computation content key${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The build summary binds both identities for each execution. This authenticates aggregate evidence and its declared pointers; the browser does not independently interpret the raw execution manifests.`
+          : executionCount === 1
           ? `One recorded run manifest, so this is a single recorded execution${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The publisher's build evidence carries one check for it. What it does not pin is that manifest's bytes: its own manifest digest is the content key, so which bytes belong to this execution is paired by this projection.`
           : `The recorded run manifests have different byte digests, so these are ${countWord(executionCount)} executions; the shared content key says the computation and its outputs were the same. That there were ${countWord(executionCount)} is also the publisher's own record — its build evidence carries a check for each${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. What it does not pin is ${executionCount === 2 ? "either" : "any"} manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.`,
       output_identity: comparison,

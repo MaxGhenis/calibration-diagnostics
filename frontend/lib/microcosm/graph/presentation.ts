@@ -12,6 +12,7 @@ import type {
   ExecutionState,
   GateState,
   NodeExecutionState,
+  ProjectionBasis,
   ReceiptGraphNode,
 } from "./types";
 
@@ -324,4 +325,14 @@ export function formatMeasure(value: string | number | boolean): string {
 
 export function shortDigest(value: string | null): string {
   return value ? `${value.slice(0, 12)}…` : "—";
+}
+
+/** Each provenance basis is worded explicitly. A future basis must be reviewed
+ * here before the browser can present it as either existing kind of evidence. */
+export function projectionBasisReading(basis: ProjectionBasis): string {
+  switch (basis) {
+    case "local_projection": return "Local receipt projection";
+    case "authenticated_attachment": return "Authenticated aggregate graph attachment";
+    default: return unread(basis, "projection provenance");
+  }
 }

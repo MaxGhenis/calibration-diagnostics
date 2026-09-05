@@ -6,6 +6,7 @@ import {
   buildReceiptGraph,
   verifyProjectionBinding,
 } from "@/lib/microcosm/graph/adapter";
+import { boundedGraphReader, normalizeGraphAttachment, safePublisherReason, verifyGraphManifestPresentation } from "@/lib/microcosm/graph/attachment";
 import { receiptProjectionFor } from "@/lib/microcosm/graph/projections";
 import { RECEIPT_GRAPH_SCHEMA } from "@/lib/microcosm/graph/types";
 import { loadCandidate } from "@/lib/microcosm/quality/source";
@@ -43,14 +44,29 @@ export async function GET(request: Request) {
       { status: 400, headers: { "Cache-Control": "no-store" } },
     );
 
-  const projection = receiptProjectionFor(country, candidate, manifestSha256);
-  if (!projection)
-    return unavailable(
-      "This dashboard ships no build receipts for the selected candidate. Nothing is shown rather than another candidate's run.",
-    );
-
   try {
+    // Presence is authoritative only after the requested immutable manifest has
+    // been read. An unavailable or malformed present attachment never consults
+    // the legacy registry. Transport failures retain the quality reader's 503.
     const source = await loadCandidate(country, candidate, manifestSha256);
+    if (Object.hasOwn(source.manifest.attachments, "graph_receipts")) {
+      verifyGraphManifestPresentation(source.manifest);
+      const attachment = source.manifest.attachments.graph_receipts;
+      if (attachment.status !== "available")
+        return unavailable(safePublisherReason(attachment.reason));
+      const reader = boundedGraphReader(country, source.readBytes);
+      const graph = await reader.attachment(source.manifest, "graph_receipts");
+      const build = await reader.attachment(source.manifest, "build_manifest");
+      const { projection, checks } = normalizeGraphAttachment(graph, source.manifest, manifestSha256, build);
+      return NextResponse.json(buildReceiptGraph(projection, source.manifest, build, checks), {
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    const projection = receiptProjectionFor(country, candidate, manifestSha256);
+    if (!projection)
+      return unavailable(
+        "This dashboard ships no build receipts for the selected candidate. Nothing is shown rather than another candidate's run.",
+      );
     const buildEvidence = await source.reader.attachment(
       source.manifest,
       "build_manifest",

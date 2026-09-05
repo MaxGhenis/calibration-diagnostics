@@ -1829,3 +1829,15 @@ describe("the modules a reviewer has to read are plain text", () => {
     expect(pairs.size).toBe(ids.length * ids.length);
   });
 });
+
+// Snapshot captured from the unchanged base adapter before attachment support.
+// Only these two additive fields are authorized on the shared legacy payload.
+test("F001 complete response is byte-identical except explicit basis and set", () => {
+  const response = graph();
+  expect(response.projection.basis).toBe("local_projection");
+  expect(response.binding.implementation_set).toBeNull();
+  const { basis, ...projection } = response.projection;
+  const { implementation_set, ...binding } = response.binding;
+  const before = readFileSync(new URL("./fixtures/f001-response-before-attachment.json", import.meta.url), "utf8");
+  expect(JSON.stringify({ ...response, projection, binding }, null, 2) + "\n").toBe(before);
+});
