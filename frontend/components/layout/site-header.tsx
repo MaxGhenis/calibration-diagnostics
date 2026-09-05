@@ -33,8 +33,8 @@ export function SiteHeader() {
           /
         </span>
         {/* → the calibration strategy essay the dashboard sits beneath */}
-        <a href="/calibration">calibration</a>
-        <span className="site-crumb-sep" aria-hidden="true">
+        <a className="site-crumb-parent" href="/calibration">calibration</a>
+        <span className="site-crumb-sep site-crumb-parent" aria-hidden="true">
           /
         </span>
         {/* current surface → dashboard landing */}

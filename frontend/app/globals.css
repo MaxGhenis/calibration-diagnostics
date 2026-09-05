@@ -214,6 +214,7 @@ body::before {
 
 .site-nav-links {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: clamp(14px, 2.2vw, 26px);
   font-family: var(--mono);
@@ -245,6 +246,12 @@ body::before {
 @media (min-width: 900px) {
   .site-nav-editorial {
     display: inline;
+  }
+}
+/* Keep the current dashboard breadcrumb and repository link distinct on phones. */
+@media (max-width: 479px) {
+  .site-crumb-parent {
+    display: none;
   }
 }
 
