@@ -314,3 +314,7 @@ shape `selectionUrl` already returned for the candidate selector.
 - State: follow-up consistency review complete.
 - Done: refuse contradictory known-failure lists, blocked/gate-exception summaries and executor flags without deriving producer failures; keep explicit rejection and blocked-over-failure semantics. Dropped typed inputs cannot leave coverage marked complete. Red state/coverage tests: 115 pass / 18 fail; green: 133/133 pass.
 - Next: final checks and freeze. Requested review-directory writes also return `Operation not permitted`; reports will be staged in the temporary log directory for collection. Subfleet owns the final author-report capture.
+
+- State: code frozen after independent bounded review; validation limits remain explicit.
+- Done: final adapter 133/133; relevant tests in final suite 268 pass / 3 sandbox local-server setup failures; full suite run once, 602 pass / 3 setup failures across 58 files; final TypeScript clean (Bun 1.3.12, TypeScript 5.9.3). Native probe baseline observation equals ROOT's reproduction; contradictory claims refused or typed evidence omitted with reasons.
+- Next: collect staged details/receipt/patch/logs from `/private/tmp/calibration-receipt-consistency-20260905`. Managed permissions block requested review-directory writes and all private-port binds, so remote-source tests and actual WebKit remain unverified here. No interface change required a build. Existing 4397/4398/4402 listeners remain untouched; no push/deploy, candidate/fixture/generator/dependency changes or original-source/microdata reads.
