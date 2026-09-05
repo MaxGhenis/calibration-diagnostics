@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { GET as targetDiagnosticsGET } from "../../app/api/microcosm/target-diagnostics/route";
 
 import {
   loadStagingComparison,
@@ -137,4 +138,140 @@ test("Belgium staging loaders return an empty state before resolving artifacts",
     ...unavailable,
     run_id: "",
   });
+});
+
+test("staging target diagnostics uses the same geography keys and ambiguity contract", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/progress.json"))
+      return Response.json({
+        candidate_release_id: "invented-staging-geography",
+      });
+    if (url.endsWith("/calibration_diagnostics.json"))
+      return Response.json({
+        schema_version: 7,
+        dimensions: {
+          region: {
+            role: "geography",
+            level: "region",
+            label: "Region",
+            values: { north: "Shared", south: "Shared" },
+          },
+        },
+        targets: ["north", "south"].map((id, index) => ({
+          name: `invented.${id}@2024`,
+          source: { id: "invented" },
+          variable: {
+            id: index ? "other_population" : "population",
+            measure: "count",
+          },
+          dimensions: { region: id },
+          target: 100,
+          initial_estimate: 90,
+          final_estimate: 100,
+        })),
+      });
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  try {
+    const overview = await loadStagingTargetDiagnostics(
+      "http://example.test",
+      "invented-geography",
+      0,
+      "us",
+    );
+    expect(overview).toHaveProperty("geographies");
+    if (!("geographies" in overview))
+      throw new Error("Missing diagnostics fixture");
+    expect(overview.geographies).toHaveLength(2);
+    for (const key of overview.geographies) {
+      for (const selection of [
+        new URLSearchParams({ geography: key }),
+        new URLSearchParams({ facet: `geography:${key}` }),
+      ]) {
+        const selected = await loadStagingTargetDiagnostics(
+          `http://example.test?${selection}`,
+          "invented-geography",
+          0,
+          "us",
+        );
+        expect(selected).toMatchObject({
+          filtered_total: 1,
+          release_id: "invented-staging-geography",
+          targets: [{ geography_key: key }],
+        });
+      }
+    }
+    for (const selection of [
+      new URLSearchParams({
+        geography: "Shared",
+        variable: "invented / population · count",
+      }),
+      new URLSearchParams({ facet: "geography:Shared", scope: "healthcare" }),
+    ]) {
+      await expect(
+        loadStagingTargetDiagnostics(
+          `http://example.test?${selection}`,
+          "invented-geography",
+          0,
+          "us",
+        ),
+      ).rejects.toThrow("more than one geographic identity");
+    }
+    expect(
+      await loadStagingTargetDiagnostics(
+        "http://example.test?geography=unknown",
+        "invented-geography",
+        0,
+        "us",
+      ),
+    ).toMatchObject({ filtered_total: 0 });
+    // Exercise the real route's staging dispatch and shared error classifier.
+    for (const query of [
+      { geography: overview.geographies[0] },
+      { facet: `geography:${overview.geographies[1]}` },
+    ]) {
+      const params = new URLSearchParams(
+        Object.entries({
+          country: "us",
+          release: "staging:invented-geography",
+          ...query,
+        }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      );
+      const response = await targetDiagnosticsGET(
+        new Request(`http://example.test?${params}`),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect((await response.json()).filtered_total).toBe(1);
+    }
+    for (const query of [
+      { geography: "Shared", source: "missing" },
+      { facet: "geography:Shared", scope: "healthcare" },
+    ]) {
+      const params = new URLSearchParams(
+        Object.entries({
+          country: "us",
+          release: "staging:invented-geography",
+          ...query,
+        }).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      );
+      const response = await targetDiagnosticsGET(
+        new Request(`http://example.test?${params}`),
+      );
+      expect(response.status).toBe(400);
+      expect((await response.json()).detail).toContain(
+        "more than one geographic identity",
+      );
+    }
+    expect(calls.length).toBeGreaterThan(0);
+    expect(
+      calls.every((url) => url.includes("/runs/invented-geography/")),
+    ).toBe(true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

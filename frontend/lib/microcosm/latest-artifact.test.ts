@@ -155,7 +155,7 @@ test("derives Belgium population region, sex, and age-band browser facets", () =
   );
 
   expect(result.sources).toEqual(["statbel"]);
-  expect(result.dimensions).toEqual([
+  expect(displayDimensions(result.dimensions)).toEqual([
     { key: "geography", label: "Region", values: ["Brussels", "Flanders", "Wallonia"] },
     { key: "bd_sex", label: "Sex", values: ["Female", "Male"] },
     { key: "bd_age_band", label: "Age band", values: ["0–17", "18–64", "65+"] },
@@ -297,7 +297,7 @@ test("structured dimensions shape rows and honor artifact value order", () => {
     cal,
   );
   expect(page.target_schema).toEqual(cal.target_schema);
-  expect(page.dimensions).toEqual([
+  expect(displayDimensions(page.dimensions)).toEqual([
     { key: "geography", label: "Region", values: ["North", "South"] },
     { key: "bd_sex", label: "Sex", values: ["Male", "Female"] },
     { key: "bd_age_band", label: "Age band", values: ["65+", "0–17", "18–64"] },
@@ -439,7 +439,7 @@ test("structured UK geography preserves producer identity and ordering", () => {
     geography_rank: 3,
     level: "country",
   });
-  expect(page.dimensions[0]).toEqual({
+  expect(displayDimensions(page.dimensions)[0]).toEqual({
     key: "geography",
     label: "Geography",
     values: ["United Kingdom", "Great Britain", "England", "Scotland"],
@@ -481,7 +481,7 @@ test("structured geography falls back to deterministic sorting when order is inc
     cal,
   );
 
-  expect(page.dimensions[0]?.values).toEqual(["England", "United Kingdom"]);
+  expect(displayDimensions(page.dimensions)[0]?.values).toEqual(["England", "United Kingdom"]);
 });
 
 test("structured targets reject multiple populated geography dimensions", () => {
@@ -559,7 +559,7 @@ test("structured facet ordering falls back when any displayed value lacks a rank
     cal,
   );
 
-  expect(page.dimensions).toEqual([
+  expect(displayDimensions(page.dimensions)).toEqual([
     { key: "bd_category", label: "Category", values: ["Beta", "Zeta"] },
   ]);
 });
@@ -789,6 +789,10 @@ test("live-US-shaped schema 5 rows preserve the legacy dotted contract", () => {
     family: "bea_nipa.cy2023.proprietors_income.a041rc.amount",
     state: null,
     geography: "United States",
+    geography_key: "geo:v1:%5B%22legacy_id%22%2C%22national%22%2C%220100000US%22%5D",
+    geography_id: "0100000US",
+    geography_dimension_id: null,
+    geography_rank: null,
     level: "national",
     source: "bea_nipa",
     source_label: "BEA Nipa",
@@ -2378,7 +2382,7 @@ test("structured dimension ids remain independent when display labels repeat", (
   requestUrl.searchParams.append("facet", "bd_origin:North");
   requestUrl.searchParams.append("facet", "bd_destination:East");
   const page = latestMicrocosmTargetDiagnosticsPage(requestUrl.toString(), cal);
-  expect(page.dimensions).toEqual([
+  expect(displayDimensions(page.dimensions)).toEqual([
     { key: "bd_origin", label: "Region", values: ["North", "South"] },
     { key: "bd_destination", label: "Region", values: ["East", "West"] },
   ]);
@@ -2708,3 +2712,11 @@ test("the target page reports scope target counts for the release", () => {
   expect(page("").scope_counts).toEqual({ healthcare: 0 });
   expect(page("?scope=healthcare").scope_counts).toEqual({ healthcare: 0 });
 });
+
+// Existing facet tests verify displayed labels; geography-results.test.ts also
+// verifies the stable keys and their separate display-label mapping.
+function displayDimensions(dimensions: Array<{ key: string; label: string; values: string[]; value_labels?: Record<string, string> }>) {
+  return dimensions.map(({ key, label, values, value_labels }) => ({
+    key, label, values: values.map((value) => value_labels?.[value] ?? value),
+  }));
+}

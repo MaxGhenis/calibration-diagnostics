@@ -218,10 +218,32 @@ The published dimension ID, not its display label, determines `key`. Simple
 lowercase IDs retain keys such as `bd_age_band`; IDs containing other
 characters receive a lossless query-safe encoding. Consequently, two distinct
 dimensions may share a display label without merging into one facet.
-Facet values, including geography values, use rank order only when every
+Geography choices in the active target-results API and page use the same
+dimension/value identity keys as the calibration tree. `geographies` contains
+these keys, with display text in `geography_labels`. The geography dimension's
+`values` also contains keys, with display text in `value_labels`. Target response
+rows retain `geography_key`, `geography_id`, `geography_dimension_id`, and
+`geography_rank`; `geography` remains the published display text.
+
+Direct geography filters and geography facets accept stable keys. Old labels
+remain compatible when they identify one geography on the complete loaded
+surface. Ambiguous labels return HTTP 400 before scope, variable, source or level
+filters can hide the collision; unknown selections return no rows. Candidate
+and staging target diagnostics share this behavior. Candidate manifest and
+population attachment checks continue to run before shaping the results.
+
+Geography ranks apply only when all displayed identities have consistent ranks
+within one declared dimension. Incomplete or cross-dimension ordering uses the
+shared deterministic fallback. Other facet values use rank order only when every
 displayed value has a rank; otherwise the legacy facet sorter remains in force.
 Structured rows are also excluded from whole-population estimate-scope
 inference.
+
+The older `/api/microcosm/target-treemap` endpoint and unmounted `CalibrationMap`
+component retain label-based geography grouping. They do not support separate
+selection of equal-label geography identities. The active calibration explorer
+uses `/api/microcosm/target-tree`; the active targets page uses the identity-aware
+`/api/microcosm/target-diagnostics` endpoint described above.
 
 ### Target representation classification
 

@@ -383,10 +383,12 @@ function Disclosure({
 
 export function MicrocosmTargetDetail({
   row,
+  geographyLabel,
   dimensions,
   onClose,
 }: {
   row: MicrocosmTargetRow;
+  geographyLabel?: string;
   dimensions: MicrocosmTargetDimension[];
   onClose: () => void;
 }) {
@@ -460,7 +462,7 @@ export function MicrocosmTargetDetail({
         }));
 
   const headerScope = [
-    usStateName(row.geography) || null,
+    (geographyLabel ?? usStateName(row.geography)) || null,
     ...shownDimensions.map(dimensionPhrase),
   ].filter((value): value is string => Boolean(value));
   const metricTone = within10 == null ? "neutral" : within10 ? "positive" : "negative";
@@ -589,7 +591,7 @@ export function MicrocosmTargetDetail({
             </DetailSection>
 
             <DetailSection title="Scope">
-              <DefinitionItem label="Geography" value={usStateName(row.geography)} />
+              <DefinitionItem label="Geography" value={(geographyLabel ?? usStateName(row.geography))} />
               <DefinitionItem
                 label="Geography level"
                 value={canonicalLabel(chronicle?.geography_level || row.level)}
