@@ -1700,6 +1700,9 @@ export interface TargetSchema {
 export interface Calibration {
   source: "huggingface_live" | "candidate_quality";
   quality_manifest?: import("./quality/types").CandidateQualityManifest;
+  // Set only by the published loader after resolving its storage address.
+  // The diagnostics-authored release_id can be reused across addresses.
+  resolved_release_id?: string;
   country: MicrocosmCountry;
   // Typed `release_manifest.country` merged over the registration.
   country_info: ArtifactCountry;
@@ -2255,15 +2258,18 @@ async function loadReleaseUncached(
       ? Promise.resolve(updatedAt)
       : loadReleasePublishedAt(id, revalidate, country).catch(() => null),
   ]);
-  return buildCalibration(
-    diag,
-    id,
-    updatedAt ?? publishedAt,
-    buildManifest,
-    releaseManifest,
-    demographics,
-    country,
-  );
+  return {
+    ...buildCalibration(
+      diag,
+      id,
+      updatedAt ?? publishedAt,
+      buildManifest,
+      releaseManifest,
+      demographics,
+      country,
+    ),
+    resolved_release_id: id,
+  };
 }
 
 function targetDiagnosticsMetadata(rows: TargetRow[]): TargetDiagnosticsMetadata {

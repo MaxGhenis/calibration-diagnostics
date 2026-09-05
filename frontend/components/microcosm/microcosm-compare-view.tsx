@@ -17,6 +17,7 @@ import {
   type MicrocosmComparisonRow,
 } from "@/lib/api/hooks/use-microcosm";
 import { useResolvedComparison } from "@/lib/api/hooks/use-quality";
+import { resolvedReleaseId } from "@/lib/microcosm/quality/identity";
 
 const MAX_MOVER_REL_ERROR = 10; // Keep the compare summary to bounded relative errors (<= 1000%).
 const TARGET_COMPARE_PAGE_SIZE = 100;
@@ -564,8 +565,12 @@ export function MicrocosmCompareView() {
   const { data: releaseData, isLoading: releasesLoading } = useMicrocosmReleases();
   const releases = releaseData?.releases ?? [];
 
-  const [defaultB, setDefaultB] = useState("");
-  const b = quality.release || defaultB;
+  // Use the same current pointer as identity resolution, including for an
+  // explicit "latest" URL, instead of retaining a separate default in state.
+  const b = resolvedReleaseId(
+    quality.release,
+    releaseData?.latest_release_id || releases[0]?.release_id || "",
+  );
   // B may be the implicit Latest rather than an explicit selection, and A may
   // be another name for whatever B resolves to, so neither the URL tokens nor
   // the global selection settle this on their own. The shared resolution does:
@@ -579,12 +584,6 @@ export function MicrocosmCompareView() {
       const [, candidate, manifest_sha256] = value.split(":"); quality.setSelection({ candidate, manifest_sha256 });
     } else quality.setSelection({ release: value });
   };
-
-  // Resolve the global Latest selection without inventing an incumbent.
-  useEffect(() => {
-    if (!releases.length) return;
-    if (!b) setDefaultB(releaseData?.latest_release_id || releases[0].release_id);
-  }, [releases, releaseData, b]);
 
   const { data, isLoading, error } = useMicrocosmCompare(a, b);
 

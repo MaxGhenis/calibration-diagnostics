@@ -439,7 +439,8 @@ export interface MicrocosmComparison {
   // How the two requested populations resolved. A comparison the loader
   // established to be between one population is refused rather than returned,
   // so this is never "same_population" on a successful response.
-  identity: ComparisonIdentity;
+  // Staging comparisons share this shape but do not resolve release identity.
+  identity?: ComparisonIdentity;
   a: {
     release_id: string;
     description?: string | null;

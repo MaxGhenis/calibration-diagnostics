@@ -103,11 +103,39 @@ export function resolvedReleaseId(selected: string, latest: string): string {
   return !selected || selected === "latest" ? latest : selected;
 }
 
+/** Resolve the pointer on either side before comparing published selections.
+ * An empty selected release means Latest; an empty incumbent means no request.
+ * Keep the pointer requirement explicit so clients wait for either alias. */
+export function publishedComparisonIdentities(
+  country: MicrocosmCountry,
+  selected: string,
+  incumbent: string,
+  latest: string,
+): {
+  selected: PopulationIdentity;
+  incumbent: PopulationIdentity;
+  needsPointer: boolean;
+} {
+  return {
+    selected: publishedPopulationIdentity(
+      country,
+      resolvedReleaseId(selected, latest),
+    ),
+    incumbent: publishedPopulationIdentity(
+      country,
+      incumbent ? resolvedReleaseId(incumbent, latest) : "",
+    ),
+    needsPointer:
+      !latest && (!selected || selected === "latest" || incumbent === "latest"),
+  };
+}
+
 /** The structural part of a loaded calibration that names its population. */
 export interface PopulationIdentitySource {
   country: MicrocosmCountry;
   source: string;
   release_id: string;
+  resolved_release_id?: string;
   quality_manifest?: Pick<CandidateQualityManifest, "population">;
 }
 
@@ -119,7 +147,10 @@ export function populationIdentity(
         calibration.country,
         calibration.quality_manifest,
       )
-    : publishedPopulationIdentity(calibration.country, calibration.release_id);
+    : publishedPopulationIdentity(
+        calibration.country,
+        calibration.resolved_release_id ?? "",
+      );
 }
 
 /** Same basis and same key is one population under two names, whatever the

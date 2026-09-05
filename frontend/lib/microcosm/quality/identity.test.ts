@@ -6,6 +6,7 @@ import {
   candidatePopulationIdentity,
   comparisonIdentity,
   populationIdentity,
+  publishedComparisonIdentities,
   publishedPopulationIdentity,
   resolveComparison,
   resolvedReleaseId,
@@ -15,6 +16,39 @@ const POPULATION_A = "a".repeat(64);
 const POPULATION_B = "b".repeat(64);
 const population = (sha256: string, period = "2024", entity = "household") => ({
   population: { sha256, period, entity },
+});
+
+test("either side of a published comparison can name the Latest pointer", () => {
+  for (const [selected, incumbent] of [
+    ["build-current", "latest"],
+    ["latest", "build-current"],
+    ["", "build-current"],
+    ["", "latest"],
+  ]) {
+    const identities = publishedComparisonIdentities(
+      "us", selected!, incumbent!, "build-current",
+    );
+    expect(comparisonIdentity(identities.selected, identities.incumbent).status)
+      .toBe("same_population");
+    expect(identities.needsPointer).toBe(false);
+  }
+});
+
+test("an unresolved incumbent pointer waits even with an explicit selected release", () => {
+  const pending = publishedComparisonIdentities("us", "build-current", "latest", "");
+  expect(pending.needsPointer).toBe(true);
+  expect(pending.incumbent.basis).toBe("unresolved");
+  const explicit = publishedComparisonIdentities("us", "build-current", "build-old", "");
+  expect(explicit.needsPointer).toBe(false);
+  expect(comparisonIdentity(explicit.selected, explicit.incumbent).status)
+    .toBe("distinct_population");
+});
+
+test("no incumbent remains no identity, while a moved pointer changes the comparison", () => {
+  expect(publishedComparisonIdentities("us", "build-current", "", "build-current")
+    .incumbent.basis).toBe("unresolved");
+  const moved = publishedComparisonIdentities("us", "build-current", "latest", "build-new");
+  expect(comparisonIdentity(moved.selected, moved.incumbent).status).toBe("distinct_population");
 });
 
 test("a candidate names its population by digest, not by the id it was built under", () => {
@@ -126,9 +160,17 @@ test("a loaded calibration is identified by the channel it came from", () => {
     populationIdentity({
       country: "us",
       source: "huggingface_live",
-      release_id: "build-a",
+      release_id: "authored-build-name",
+      resolved_release_id: "build-a",
     }),
   ).toEqual(publishedPopulationIdentity("us", "build-a"));
+  expect(
+    populationIdentity({
+      country: "us",
+      source: "huggingface_live",
+      release_id: "authored-build-name",
+    }).basis,
+  ).toBe("unresolved");
 });
 
 test("the client resolution empties the incumbent it refuses and says why", () => {

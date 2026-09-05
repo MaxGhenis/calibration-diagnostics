@@ -96,6 +96,8 @@ URL context consists of `country`, `candidate`, `manifest_sha256`, `release` and
 
 Calibration uses the existing `buildCalibration` adapter with `candidate:<id>:<digest>` as a transport token. Target tables, target trees and version comparisons keep their existing identity and compatibility rules. Target inspection links come from actual calibration metadata. Structured geography work in dashboard #180 / core #855 remains the authority for those readers.
 
+Published comparison identity uses the resolved release storage address, separately from the diagnostics author's `release_id`. The `latest` alias resolves on either side of a comparison; the client waits for the pointer before displaying an incumbent. The compare selector uses that same current pointer. Candidate identity continues to use its authenticated population digest, period, entity and country.
+
 When a candidate is selected, staging displays that candidate's bound quality evidence. Without one, the legacy telemetry view has an explicitly separate run selection. Candidate variable lookup remains unavailable until candidate totals are supported; it never executes a calculation against a different published population. Legacy validation reach is labeled historical when there is no bound candidate attachment.
 
 ## Verification

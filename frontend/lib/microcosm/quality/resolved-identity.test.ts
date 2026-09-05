@@ -103,7 +103,11 @@ async function candidateSource() {
 
 /** Serve the named published releases and, optionally, a pointer at one of
  * them. Anything else answers 404 rather than reaching the network. */
-function publish(releases: string[], latest?: string): string[] {
+function publish(
+  releases: string[],
+  latest?: string,
+  declaredIds: Record<string, string> = {},
+): string[] {
   const requested: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -117,7 +121,7 @@ function publish(releases: string[], latest?: string): string[] {
         : new Response("fixture absent", { status: 404 });
     for (const id of releases)
       if (url.includes(`/releases/${id}/calibration_diagnostics.json`))
-        return Response.json({ ...DIAGNOSTICS, release_id: id });
+        return Response.json({ ...DIAGNOSTICS, release_id: declaredIds[id] ?? id });
     return new Response("fixture absent", { status: 404 });
   }) as typeof fetch;
   return requested;
@@ -145,6 +149,24 @@ test("two immutable manifests recording one population do not compare", async ()
   await expect(
     loadComparison(second, first, isolated(), "us"),
   ).rejects.toBeInstanceOf(SelfComparisonError);
+});
+
+test("published addresses stay distinct when diagnostics reuse an authored id", async () => {
+  publish(["address-a", "address-b"], undefined, {
+    "address-a": "declared-build",
+    "address-b": "declared-build",
+  });
+  const comparison = await loadComparison("address-a", "address-b", isolated(), "us");
+  expect(comparison.identity.status).toBe("distinct_population");
+  expect(comparison.summary.common).toBe(1);
+});
+
+test("the resolved pointer matches its address despite a different authored id", async () => {
+  publish(["address-current"], "address-current", {
+    "address-current": "declared-earlier-build",
+  });
+  await expect(loadComparison("address-current", "latest", isolated(), "us"))
+    .rejects.toBeInstanceOf(SelfComparisonError);
 });
 
 test("a reused candidate id over different population bytes still compares", async () => {

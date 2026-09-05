@@ -2,9 +2,8 @@ import { queryOptions, skipToken, useQuery } from "@tanstack/react-query";
 import { useQualityContext } from "@/components/layout/quality-context";
 import {
   candidatePopulationIdentity,
-  publishedPopulationIdentity,
+  publishedComparisonIdentities,
   resolveComparison,
-  resolvedReleaseId,
   type ResolvedComparison,
 } from "@/lib/microcosm/quality/identity";
 import { parseCandidateToken } from "@/lib/microcosm/quality/selection";
@@ -111,28 +110,32 @@ export function useResolvedComparison(): ResolvedComparison {
   const incumbentManifest = useQuery(
     manifestOptions(selection.country, incumbentToken),
   );
-  // The pointer names a release, not a population, so the selected side is
-  // resolved to the concrete id the picker labels it with -- from the empty
-  // default or from a written-out "latest" -- before either side is identified.
+  // Resolve Latest on either side to the concrete release before identifying
+  // it. An empty selected release is the pointer; an empty incumbent is absent.
   const latest =
     releases.data?.latest_release_id ||
     releases.data?.releases?.[0]?.release_id ||
     "";
-  const selectedRelease = selected ? "" : resolvedReleaseId(release, latest);
+  const published = publishedComparisonIdentities(
+    selection.country,
+    release,
+    selection.incumbent,
+    latest,
+  );
   return resolveComparison({
     requested: requestedIncumbent,
     incumbent: selection.incumbent,
     selected: selected
       ? candidatePopulationIdentity(selection.country, selectedManifest.data)
-      : publishedPopulationIdentity(selection.country, selectedRelease),
+      : published.selected,
     against: incumbentToken
       ? candidatePopulationIdentity(selection.country, incumbentManifest.data)
-      : publishedPopulationIdentity(selection.country, selection.incumbent),
+      : published.incumbent,
     resolving:
       Boolean(requestedIncumbent) &&
       (selectedManifest.isLoading ||
         incumbentManifest.isLoading ||
-        (!selected && !selectedRelease && releases.isLoading)),
+        (published.needsPointer && releases.isLoading)),
   });
 }
 

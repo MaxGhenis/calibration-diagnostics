@@ -1,5 +1,15 @@
 # Resolved-population identity guard (D1)
 
+September 5 follow-up: the narrative below records the frozen `266e2674` work.
+Independent Fable review requested two further fixes: published identity must
+use its resolved storage address, and Latest must resolve on the incumbent side
+too. The local `candidate-quality-pointer-symmetry-20260905` successor applies
+both, with 390 tests, typecheck and production build passing. WebKit reproduces
+the original alias mismatch and verifies the corrected shared explanation and
+empty incumbent. Actual development-candidate national/CD views and mobile
+focus checks pass; independent successor review is pending. Nothing is pushed
+or deployed. This supersedes the earlier completion wording for review status.
+
 Branch `candidate-quality-resolved-identity-20260905`, branch base
 `14552168cad50f963c3064a4cb73adfcc605231e`, predecessor head
 `e868a320257d187f122ac8d1fa4c201ee4c6cf60` (branch
