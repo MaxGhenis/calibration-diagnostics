@@ -60,6 +60,8 @@ const SOURCE_FIELD_ALLOWLIST = [
   "nodes.*.receipt.phase",
   "nodes.*.receipt.outcome",
   "nodes.*.receipt.scope",
+  "nodes.*.receipt.rejected",
+  "nodes.*.receipt.execution.{schema,state,blocked_by,unavailable_artifacts}",
   "nodes.*.receipt.evidence.passed",
   "nodes.*.receipt.evidence.gates.*.{passed,failures,details}",
   "nodes.*.receipt.crosswalk_sha256",
@@ -71,9 +73,16 @@ const SOURCE_FIELD_ALLOWLIST = [
   "nodes.*.receipt.mass.{before,after,policy}",
   "nodes.*.receipt.assembly.{sample_fraction,sample_seed,mass_anchor_channel,household_mass_shares}",
   "nodes.*.receipt.preparation.{schema,stacked_manifest_version,sampling.survey_samples.*.counts}",
-  "decisions",
+  "decisions (counted, never listed)",
   "known_failures",
 ];
+
+/** The executor's own exceptional-outcome record, from
+ * `microcosm.graph.availability`. Anything else under `receipt.execution` is a
+ * producer's free-form diagnostic and is left uninterpreted. */
+const EXECUTION_SCHEMA = "microcosm.graph.execution.v1";
+/** `microcosm.graph.decl.GATE_OUTCOMES`. */
+const GATE_OUTCOMES = ["pass", "fail", "evidence_absent", "not_applicable", "unreached"];
 
 /** Plain renderings of the native node ids. Nothing here adds meaning the
  * receipts do not carry: each label is shown next to its native id, and a node
@@ -258,9 +267,26 @@ function typedArtifact(name, entry, withProducer) {
   };
 }
 
-function projectNode(id, node, failedIds, blockedIds) {
+/** The executor records an unreached or gate-exception node under
+ * `receipt.execution`, keyed by its own schema. A receipt without that exact
+ * schema carries no executor claim, so nothing is inferred from it. */
+function executionRecord(receipt) {
+  const execution = receipt.execution;
+  if (!execution || execution.schema !== EXECUTION_SCHEMA) return null;
+  const blockers = execution.blocked_by ?? {};
+  return {
+    state: typeof execution.state === "string" ? execution.state : null,
+    blocked_by: Object.entries(blockers).map(([node, key]) => ({ node, key })),
+    unavailable_artifacts: Array.isArray(execution.unavailable_artifacts)
+      ? execution.unavailable_artifacts.map(String)
+      : [],
+  };
+}
+
+function projectNode(id, node, failedIds) {
   const receipt = node.receipt ?? {};
   const capabilities = node.capabilities ?? {};
+  const execution = executionRecord(receipt);
   const counts = {};
   for (const artifact of node.artifacts ?? [])
     counts[artifact.entity] = (counts[artifact.entity] ?? 0) + 1;
@@ -279,11 +305,16 @@ function projectNode(id, node, failedIds, blockedIds) {
     if (typeof value === "string") pins.push({ key: evidenceKey, label, sha256: value });
   }
 
+  // A gate record belongs to a gate-role receipt. `receipt.outcome` also
+  // appears on an unreached node of any role, so the role is what decides.
   let gate = null;
-  if (capabilities.role === "gate" || receipt.outcome !== undefined) {
+  if (capabilities.role === "gate") {
     const gates = at(receipt, "evidence.gates") ?? {};
+    const outcome = receipt.outcome ?? null;
+    if (outcome !== null && !GATE_OUTCOMES.includes(outcome))
+      fail(`${id} records gate outcome ${outcome}, which is not a declared outcome`);
     gate = {
-      outcome: receipt.outcome ?? null,
+      outcome,
       scope: receipt.scope ?? null,
       passed: at(receipt, "evidence.passed") ?? null,
       checks: Object.entries(gates).map(([name, value]) => ({
@@ -311,8 +342,13 @@ function projectNode(id, node, failedIds, blockedIds) {
     group_label: GROUP_LABELS[group(id)] ?? group(id),
     role: capabilities.role ?? null,
     receipt_present: true,
-    failed: failedIds.includes(id),
-    blocked: blockedIds.includes(id),
+    // `known_failures` is the manifest's own derivation: a gate whose outcome
+    // is not certifying, or a node the run rejected.
+    failed: failedIds.includes(id) || receipt.rejected === true,
+    blocked: execution?.state === "unreached",
+    gate_exception: execution?.state === "gate_exception",
+    execution_record: execution,
+    receipt_outcome: capabilities.role === "gate" ? null : (receipt.outcome ?? null),
     cache: node.hit === true ? "hit" : "computed",
     node_key: node.key ?? null,
     kernel_ref: node.kernel_ref ?? null,
@@ -399,16 +435,14 @@ async function main() {
       fail("the two executions do not share one computation content key");
     contentKey = manifest.key;
 
-    const failedIds = (manifest.known_failures ?? []).map((entry) =>
-      typeof entry === "string" ? entry : (entry?.node ?? entry?.id ?? ""),
-    );
-    const blockedIds = (manifest.decisions ?? [])
-      .filter((entry) => entry?.blocked_by || entry?.gate_exception)
-      .map((entry) => entry?.node ?? entry?.id ?? "");
+    // `known_failures` is derived by the manifest itself from gate outcomes and
+    // explicit rejections, and re-derived when it is loaded, so it is taken as
+    // recorded rather than recomputed here.
+    const failedIds = (manifest.known_failures ?? []).map(String);
 
     const nodes = Object.entries(manifest.nodes ?? {})
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([id, node]) => projectNode(id, node, failedIds, blockedIds));
+      .map(([id, node]) => projectNode(id, node, failedIds));
     if (!nodes.length) fail(`${execution.mode} manifest records no node receipts`);
 
     const computed = nodes.filter((node) => node.cache === "computed").length;
@@ -438,7 +472,12 @@ async function main() {
       computed_count: computed,
       cache_hit_count: nodes.length - computed,
       failed_node_ids: failedIds.filter(Boolean),
-      blocked_node_ids: blockedIds.filter(Boolean),
+      blocked_node_ids: nodes.filter((node) => node.blocked).map((node) => node.id),
+      gate_exception_node_ids: nodes
+        .filter((node) => node.gate_exception)
+        .map((node) => node.id),
+      release_tier: manifest.tier ?? null,
+      decision_count: (manifest.decisions ?? []).length,
       nodes,
     });
   }
@@ -456,7 +495,7 @@ async function main() {
       basis: "run_manifest_typed_artifacts",
       complete: false,
       reason:
-        "The preserved run manifests record typed artifact inputs and outputs receipt by receipt, not the compiled structural declaration of the graph. A receipt that declares neither cannot be connected to any other, so this graph is a partial view of the run.",
+        "The preserved run manifests record typed artifact inputs and outputs receipt by receipt, not the compiled structural declaration of the graph. Column-level data flow, population-version and base relationships, source edges, the canonical order and column ownership are all part of the compiled graph and none of them are serialized into a run manifest. A receipt that declares no typed artifact therefore cannot be connected to any other, so this is a partial view of the run.",
     },
     source_field_allowlist: SOURCE_FIELD_ALLOWLIST,
     country: candidate.country,
@@ -468,7 +507,7 @@ async function main() {
     kernel_impl_hash: implementation,
     computation_content_key: contentKey,
     content_key_note:
-      "One content key identifies the computation and its outputs. It deliberately excludes cache hits and timing, so it does not identify an execution; the executions below are distinguished by the byte digest of each recorded run manifest.",
+      "One content key identifies the computation and its outputs. It is taken over the node payloads with the run-level fields removed \u2014 whether each node was a cache hit, and how long it took \u2014 so two executions of the same computation share it and it does not identify an execution. The executions below are told apart by the byte digest of each recorded run manifest.",
     executions,
   };
 
