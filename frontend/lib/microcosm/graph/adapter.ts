@@ -898,6 +898,29 @@ export function publishedToleranceColumns(
   return [...columns].sort();
 }
 
+/** A published descriptor is not a loaded artifact or a node-level mapping. */
+function attachmentMapping(
+  manifest: CandidateQualityManifest,
+  name: string,
+  label: string,
+): Pick<MappingAxis, "state" | "reason"> {
+  const attachment = manifest.attachments[name];
+  if (!attachment || attachment.status === "missing")
+    return {
+      state: "missing",
+      reason: attachment?.reason ?? "The selected candidate publishes no evidence of this kind.",
+    };
+  if (attachment.status === "available")
+    return {
+      state: "unresolved",
+      reason: `The candidate manifest declares an available ${label} attachment. This graph view has not loaded its contents or mapped it to steps.`,
+    };
+  return {
+    state: "unresolved",
+    reason: `The candidate manifest records this attachment as ${attachment.status}. ${attachment.reason ?? "No graph mapping has been established."}`,
+  };
+}
+
 /**
  * Build the payload the view draws. Callers must have verified the binding
  * first; this function assumes it and does not re-derive identity.
@@ -1019,10 +1042,6 @@ export function buildReceiptGraph(
     ),
   ];
 
-  const missingReason = (name: string) =>
-    manifest.attachments[name]?.reason ??
-    "The selected candidate publishes no evidence of this kind.";
-
   // Everything the sentences below state about this run, read from the run.
   // Each of these was a literal until it was derived, and each was true only
   // of the one projection registered at the time.
@@ -1041,35 +1060,33 @@ export function buildReceiptGraph(
     {
       key: "calibration",
       label: "Calibration diagnostic",
-      state: "missing",
-      reason: missingReason("calibration_diagnostics"),
+      ...attachmentMapping(manifest, "calibration_diagnostics", "calibration diagnostic"),
     },
     {
       key: "target_binding",
       label: "Target and measurement binding",
       state: "unresolved",
       reason:
-        "No target surface is bound to this run, so no step here can be named as the producer or consumer of a calibration target.",
+        "This graph view records no link from a calibration target or measurement to a step; it has not inspected calibration attachment contents.",
     },
     {
       key: "chronicle_fact",
       label: "Chronicle published fact",
       state: "unresolved",
       reason:
-        "No published fact is attached to this run. Nothing here is ingested into, or asserted by, Chronicle.",
+        "This graph view records no link from a step to a Chronicle fact and has not inspected attachment contents for fact metadata. Nothing here is ingested into Chronicle.",
     },
     {
       key: "concept_alignment",
       label: "Semantic concept alignment",
       state: "unresolved",
       reason:
-        "No concept alignment is recorded for this run, so no encoded legal rule can be linked from it.",
+        "This graph view records no semantic concept alignment; it does not infer one from an attachment or a stage name.",
     },
     {
       key: "cross_dataset",
       label: "Cross-dataset evaluation",
-      state: "missing",
-      reason: missingReason("cross_dataset"),
+      ...attachmentMapping(manifest, "cross_dataset", "cross-dataset evaluation"),
     },
   ];
 
@@ -1099,10 +1116,10 @@ export function buildReceiptGraph(
     // manifest digest is the shared content key, so it pins no byte digest.
     // The closing clause names source digests only where receipts declared a
     // source pin for that binding to have happened to.
-    `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "the two share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
+    `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "they share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
     ...(divergentPins.length
       ? [
-          `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
+          `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. All readings are kept.`,
         ]
       : []),
     ...dropped,

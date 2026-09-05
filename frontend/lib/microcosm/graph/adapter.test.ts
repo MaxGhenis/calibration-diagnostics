@@ -270,7 +270,7 @@ describe("receipt consistency regressions from the independent probes", () => {
         if (passed === true) {
           expect(verifyCandidate).toThrow(ReceiptGraphUnavailableError);
         } else {
-          const result = buildReceiptGraph(p, manifest(), verifyCandidate());
+          const result = buildReceiptGraph(p, manifest(), e, verifyCandidate());
           expect(result.nodes.find(n => n.role === "gate")!.states
             .every(state => state.gate === outcome)).toBe(true);
         }
@@ -959,6 +959,76 @@ describe("same computation, two executions", () => {
 /* --------------------------------------------------------- what is absent */
 
 describe("what this run is not connected to", () => {
+  for (const [name, key] of [
+    ["calibration_diagnostics", "calibration"],
+    ["cross_dataset", "cross_dataset"],
+  ] as const) {
+    test(`published ${name} is available evidence, not a verified graph mapping`, async () => {
+      const { createHash } = await import("node:crypto");
+      const { CandidateQualityReader } = await import("../quality/artifact");
+      const candidate = manifest();
+      // An invented available descriptor: its bytes are deliberately not read,
+      // interpreted as diagnostics, or asserted scientifically valid here.
+      candidate.attachments[name] = { ...candidate.attachments.support };
+      const bytes = Buffer.from(JSON.stringify(candidate));
+      const digest = createHash("sha256").update(bytes).digest("hex");
+      const reads: string[] = [];
+      const reader = new CandidateQualityReader({ country: "us", readBytes: async path => {
+        reads.push(path);
+        expect(path).toBe(`manifests/${digest}.json`);
+        return bytes;
+      } });
+      const checked = await reader.manifest(candidate.candidate_release_id, digest);
+      const p = projection();
+      p.candidate_manifest_sha256 = digest;
+      const e = evidence();
+      const payload = buildReceiptGraph(p, checked, e, verifyProjectionBinding(p, checked, digest, e));
+      const mapping = payload.mappings.find(m => m.key === key)!;
+      expect(mapping.state).toBe("unresolved");
+      expect(mapping.reason).toContain("declares an available");
+      expect(mapping.reason).toContain("has not loaded");
+      expect(mapping.reason).not.toContain("publishes no evidence");
+      expect(payload.edges).toEqual(graph().edges);
+      expect(payload.candidate.release_eligibility).toEqual(candidate.release_eligibility);
+      expect(payload.mappings.find(m => m.key === "target_binding")!.reason).not.toContain("No target surface is bound to this run");
+      expect(reads).toEqual([`manifests/${digest}.json`]);
+    });
+
+    for (const status of ["pending", "failed"] as const) {
+      test(`${name} keeps its ${status} descriptor distinct from missing evidence`, () => {
+        const candidate = manifest();
+        candidate.attachments[name] = { status, reason: "Publisher's diagnostic reason." };
+        const payload = buildReceiptGraph(projection(), candidate, evidence(), verify());
+        const mapping = payload.mappings.find(m => m.key === key)!;
+        expect(mapping.state).toBe("unresolved");
+        expect(mapping.reason).toContain(status);
+        expect(mapping.reason).toContain("Publisher's diagnostic reason.");
+      });
+    }
+
+    test(`missing ${name} preserves the published reason`, () => {
+      const mapping = graph().mappings.find(m => m.key === key)!;
+      expect(mapping.state).toBe("missing");
+      expect(mapping.reason).toBe(manifest().attachments[name].reason!);
+    });
+  }
+
+  test("a third verified execution never borrows a two-execution caption", () => {
+    const p = projection();
+    const e = evidence();
+    const third = clone(p.executions[0]);
+    third.mode = "third";
+    third.label = "Invented third execution";
+    third.evidence_key = "third";
+    third.manifest_sha256 = "e".repeat(64);
+    p.executions.push(third);
+    evidenceChecks(e).third = clone(evidenceChecks(e).cold);
+    const payload = buildReceiptGraph(p, manifest(), e, verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, e));
+    expect(payload.executions).toHaveLength(3);
+    expect(payload.limits.join(" ")).toContain("three executions");
+    expect(payload.limits.join(" ")).not.toContain("the two share");
+  });
+
   test("keeps calibration, targets, facts and alignment unavailable with the producer's reason", () => {
     const payload = graph();
     const byKey = Object.fromEntries(
