@@ -310,3 +310,7 @@ shape `selectionUrl` already returned for the candidate selector.
 - State: adapter correction green for graph/route/view; review tightened ambiguous typed-input slots (supplemental red: 111 pass / 1 fail).
 - Done: enforce execution/receipt uniqueness, content-key and published summary consistency, required receipt implementation/source pins, full published gate evidence agreement and typed producer declarations. Preserve generator cache-count semantics independently of failed/blocked states, prior labels/mobile behavior and projection-asserted execution byte digests. No generator/artifact/type/presentation/dependency changes.
 - Validation: TypeScript passed. Broader relevant run: 245 pass / 3 local-HTTP setup failures; sandbox denies socket binds (`Operation not permitted`), preventing private-port WebKit too. Next: final review, one full suite, frozen hashes and reports with explicit environment limits.
+
+- State: follow-up consistency review complete.
+- Done: refuse contradictory known-failure lists, blocked/gate-exception summaries and executor flags without deriving producer failures; keep explicit rejection and blocked-over-failure semantics. Dropped typed inputs cannot leave coverage marked complete. Red state/coverage tests: 115 pass / 18 fail; green: 133/133 pass.
+- Next: final checks and freeze. Requested review-directory writes also return `Operation not permitted`; reports will be staged in the temporary log directory for collection. Subfleet owns the final author-report capture.

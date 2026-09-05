@@ -150,6 +150,28 @@ function requireUnique(values: string[], description: string) {
     refuse(`The stored projection has missing or duplicate ${description}.`);
 }
 
+/** Check the generator's duplicated state fields without re-deriving the
+ * producer's known_failures list. An explicit rejection can set `failed`
+ * without being in that list; an executor's unreached record still wins. */
+function verifyExecutionStates(execution: ProjectionExecution) {
+  const nodes = new Map(execution.nodes.map(node => [node.id, node]));
+  for (const [field, ids] of [
+    ["failed", execution.failed_node_ids],
+    ["blocked", execution.blocked_node_ids],
+    ["gate_exception", execution.gate_exception_node_ids],
+  ] as const) {
+    requireUnique(ids, `${execution.mode} ${field} node ids`);
+    if (ids.some(id => !nodes.get(id)?.[field]) ||
+        (field !== "failed" && execution.nodes.some(node => node[field] && !ids.includes(node.id))))
+      refuse(`The ${execution.mode} ${field} summary contradicts its node records.`);
+  }
+  for (const node of execution.nodes) {
+    if (node.blocked !== (node.execution_record?.state === "unreached") ||
+        node.gate_exception !== (node.execution_record?.state === "gate_exception"))
+      refuse(`The ${execution.mode} execution flags for ${node.id} contradict its executor record.`);
+  }
+}
+
 /** Mirror the generator's reduced gate fields, using only published evidence.
  * Null/empty here mean no recorded verdict/detail, never an inferred pass. */
 function publishedGateRecord(gate: NonNullable<BuildEvidenceCheck["gate"]>): GateRecord {
@@ -361,6 +383,7 @@ export function verifyProjectionBinding(
     if (!execution.nodes.some(node => node.receipt_present))
       refuse(`The ${execution.mode} execution records no node receipts.`);
     requireUnique(execution.nodes.map(node => node.id), `${execution.mode} node ids`);
+    verifyExecutionStates(execution);
     // These are the generator's recorded cache categories, independent of
     // success, known failures or blocking. Do not reinterpret them as counts
     // of successful work or rewrite the publisher's kernel-call summary.
@@ -959,7 +982,7 @@ export function buildReceiptGraph(
       },
     ],
     coverage: {
-      complete: projection.coverage.complete,
+      complete: projection.coverage.complete && dropped.length === 0,
       basis: projection.coverage.basis,
       reason: projection.coverage.reason,
       connected_nodes: nodes.filter((node) => !node.unconnected).length,

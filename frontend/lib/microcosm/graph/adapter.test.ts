@@ -194,6 +194,113 @@ describe("receipt consistency regressions from the independent probes", () => {
   });
 });
 
+describe("recorded failure and executor summaries agree with their receipts", () => {
+  const lists = ["failed_node_ids", "blocked_node_ids", "gate_exception_node_ids"] as const;
+  const exceptionalStates = [
+    { list: "blocked_node_ids", flag: "blocked", state: "unreached", display: "blocked" },
+    { list: "gate_exception_node_ids", flag: "gate_exception", state: "gate_exception", display: "failed" },
+  ] as const;
+
+  test("refuses a known failure whose receipt does not record failure", () => {
+    expect(() => verify(({ projection: p }) => {
+      const execution = p.executions[0];
+      execution.failed_node_ids = [execution.nodes[0].id];
+    })).toThrow(ReceiptGraphUnavailableError);
+  });
+
+  for (const list of lists) {
+    test(`refuses an unknown id in ${list}`, () => {
+      expect(() => verify(({ projection: p }) => {
+        p.executions[0][list] = ["unrecorded_node"];
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`refuses a duplicate id in ${list}`, () => {
+      expect(() => verify(({ projection: p }) => {
+        const execution = p.executions[0];
+        const node = execution.nodes[0];
+        if (list === "failed_node_ids") node.failed = true;
+        else {
+          const exceptional = exceptionalStates.find(entry => entry.list === list)!;
+          node[exceptional.flag] = true;
+          node.execution_record = { state: exceptional.state, blocked_by: [], unavailable_artifacts: [] };
+        }
+        execution[list] = [node.id, node.id];
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+  }
+
+  for (const exceptional of exceptionalStates) {
+    test(`refuses ${exceptional.list} without the corresponding flag`, () => {
+      expect(() => verify(({ projection: p }) => {
+        const execution = p.executions[0];
+        const node = execution.nodes[0];
+        node.execution_record = { state: exceptional.state, blocked_by: [], unavailable_artifacts: [] };
+        execution[exceptional.list] = [node.id];
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`refuses an omitted ${exceptional.list} entry`, () => {
+      expect(() => verify(({ projection: p }) => {
+        const node = p.executions[0].nodes[0];
+        node[exceptional.flag] = true;
+        node.execution_record = { state: exceptional.state, blocked_by: [], unavailable_artifacts: [] };
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`refuses ${exceptional.flag} without an executor record`, () => {
+      expect(() => verify(({ projection: p }) => {
+        const execution = p.executions[0];
+        const node = execution.nodes[0];
+        node[exceptional.flag] = true;
+        execution[exceptional.list] = [node.id];
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`refuses ${exceptional.flag} with a different executor state`, () => {
+      expect(() => verify(({ projection: p }) => {
+        const execution = p.executions[0];
+        const node = execution.nodes[0];
+        node[exceptional.flag] = true;
+        node.execution_record = { state: "blocked", blocked_by: [], unavailable_artifacts: [] };
+        execution[exceptional.list] = [node.id];
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`refuses an executor ${exceptional.state} record hidden by both summaries`, () => {
+      expect(() => verify(({ projection: p }) => {
+        p.executions[0].nodes[0].execution_record = {
+          state: exceptional.state, blocked_by: [], unavailable_artifacts: [],
+        };
+      })).toThrow(ReceiptGraphUnavailableError);
+    });
+    test(`preserves a coherent ${exceptional.state} record alongside known failure`, () => {
+      const p = projection();
+      const execution = p.executions[0];
+      const node = execution.nodes[0];
+      node.failed = true;
+      node[exceptional.flag] = true;
+      node.execution_record = { state: exceptional.state, blocked_by: [], unavailable_artifacts: [] };
+      execution.failed_node_ids = [node.id];
+      execution[exceptional.list] = [node.id];
+      const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
+      const result = buildReceiptGraph(p, manifest(), checks);
+      const state = result.nodes.find(entry => entry.id === node.id)!.states.find(entry => entry.mode === "cold")!;
+      expect(state.execution).toBe(exceptional.display);
+      expect(state.outputs_usable).toBe(false);
+      expect(result.executions.map(entry => [entry.computed_count, entry.cache_hit_count])).toEqual([[4, 2], [0, 6]]);
+    });
+  }
+
+  test("preserves an explicit receipt rejection outside the known-failure list", () => {
+    const p = projection();
+    const node = p.executions[0].nodes[0];
+    // The generator also sets failed from receipt.rejected, independently of
+    // the run's known_failures list; the implication is only list -> flag.
+    node.failed = true;
+    const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
+    const result = buildReceiptGraph(p, manifest(), checks);
+    const state = result.nodes.find(entry => entry.id === node.id)!.states.find(entry => entry.mode === "cold")!;
+    expect(state.execution).toBe("failed");
+    expect(state.outputs_usable).toBe(false);
+  });
+});
+
 describe("a typed input must resolve its producer's declared output", () => {
   type Mutate = (input: ProjectionNode["typed_inputs"][number], producer: ProjectionNode) => void;
   const cases: [string, Mutate][] = [
@@ -245,6 +352,17 @@ describe("a typed input must resolve its producer's declared output", () => {
     const result = buildReceiptGraph(p, manifest(), verify());
     expect(result.edges.some(e => e.to === "assemble_stacked_spine")).toBe(false);
     expect(result.limits.join(" ")).toMatch(/ambiguous input/);
+  });
+
+  test("a dropped typed input overrides a projection claim of complete coverage", () => {
+    const p = projection();
+    p.coverage.complete = true;
+    delete p.executions[0].nodes.find(node => node.id === "assemble_stacked_spine")!
+      .typed_inputs[0].producer_key;
+    const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
+    const result = buildReceiptGraph(p, manifest(), checks);
+    expect(result.coverage.complete).toBe(false);
+    expect(result.limits.join(" ")).toMatch(/recorded no key/);
   });
 });
 
