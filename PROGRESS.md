@@ -208,7 +208,7 @@ the sections above.
 
 | Command | Result |
 | --- | --- |
-| `bun test` (frontend) | 546 pass, 0 fail, 2029 assertions, 58 files |
+| `bun test` (frontend) | 546 pass, 0 fail, 2007 assertions, 58 files |
 | `bun run lint` (`tsc --noEmit`) | clean, exit 0 |
 | `bun run build` | compiled, 21/21 static pages, exit 0 |
 | WebKit, playwright-core 1.58.0, port 4483 | 48/48 |
