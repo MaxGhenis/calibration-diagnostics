@@ -53,7 +53,7 @@ export interface PopulationDistributions extends PopulationAggregateIdentity {
 /** Weighted shares are routinely tiny but meaningful, so they are rendered with
  * significant digits rather than a fixed decimal place: a 0.0437% bin must not
  * read as 0%. Every share goes through these two, so a chart tooltip and the
- * label beside it cannot disagree. `percentShare` takes a fraction of one;
+ * labels beside it round by one rule. `percentShare` takes a fraction of one;
  * `percentPoints` takes the percentage points a chart plots. */
 export function percentShare(value: number | null | undefined): string {
   return value == null
@@ -64,6 +64,12 @@ export function percentShare(value: number | null | undefined): string {
       });
 }
 export function percentPoints(value: number | null | undefined): string {
+  // Charts carry shares pre-multiplied into percentage points, so this divides
+  // back. That round trip loses an ulp, so a share sitting exactly on a
+  // three-significant-digit rounding boundary can render one unit apart from
+  // the same share formatted directly (0.01005 -> "1%" here, "1.01%" there).
+  // Nothing displays one number both ways, and the alternative -- plotting
+  // fractions -- would move the axis ticks the reader is used to.
   return percentShare(value == null ? null : value / 100);
 }
 

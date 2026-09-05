@@ -181,14 +181,18 @@ test("overflowing mass cannot pass distribution reconciliation", () => {
   ).toThrow("account for total weight");
 });
 
-test("a chart tooltip reports a small positive share exactly as its label does", () => {
+test("a chart tooltip reports a small positive share with the precision its labels use", () => {
   // The chart plots percentage points; the labels beside it take fractions.
-  // Both must resolve a positive 0.04% bin to the same visible share.
-  for (const share of [0.0004, 0.000437, 0.038, 0.5]) {
-    expect(percentPoints(share * 100)).toBe(percentShare(share));
-    expect(percentPoints(share * 100)).not.toBe("0%");
+  // A positive bin must never read as an empty one on either path.
+  for (const [share, shown] of [
+    [0.0004, "0.04%"],
+    [0.000437, "0.0437%"],
+    [0.038, "3.8%"],
+    [0.5, "50%"],
+  ] as const) {
+    expect(percentShare(share)).toBe(shown);
+    expect(percentPoints(share * 100)).toBe(shown);
   }
-  expect(percentShare(0.000437)).toBe("0.0437%");
   expect(percentShare(null)).toBe("\u2014");
   expect(percentPoints(null)).toBe("\u2014");
 });
