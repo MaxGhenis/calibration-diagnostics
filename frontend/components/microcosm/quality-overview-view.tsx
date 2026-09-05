@@ -59,7 +59,12 @@ const fmt = (value: number | null | undefined, digits = 1) =>
     ? "—"
     : value.toLocaleString("en-US", { maximumFractionDigits: digits });
 const percent = (value: number | null | undefined) =>
-  value == null ? "—" : `${fmt(value * 100)}%`;
+  value == null
+    ? "—"
+    : value.toLocaleString("en-US", {
+        style: "percent",
+        maximumSignificantDigits: 3,
+      });
 
 export function CandidateCatalog() {
   const context = useQualityContext();
