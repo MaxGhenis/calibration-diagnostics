@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ExplorerState } from "./calibration-explorer";
+import { geographyKey } from "./geography-identity";
 import {
   applyExplorerFilters,
   buildCalibrationTree,
@@ -268,7 +269,7 @@ describe("source, geography, and declared-dimension hierarchy", () => {
     expect(overview.currentLevel).toEqual({ kind: "geography", label: "Geography" });
     expect(overview.groups).toHaveLength(1);
     expect(overview.groups[0].label).toBe("Geography");
-    expect(overview.groups[0].nodes.map((node) => [node.id, node.metrics.nTargets])).toEqual([
+    expect(overview.groups[0].nodes.map((node) => [node.label, node.metrics.nTargets])).toEqual([
       ["CA", 8],
       ["United States", 2],
       ["NY", 1],
@@ -303,11 +304,11 @@ describe("source, geography, and declared-dimension hierarchy", () => {
     );
 
     expect(tree.currentLevel).toEqual({ kind: "geography", label: "Geography" });
-    expect(tree.groups[0].nodes.map((node) => [node.id, node.metrics.nTargets])).toEqual([
+    expect(tree.groups[0].nodes.map((node) => [node.label, node.metrics.nTargets])).toEqual([
       ["CA", 2],
       ["United States", 2],
     ]);
-    expect(tree.groups[0].nodes[0].selection).toEqual({ kind: "geography", value: "CA" });
+    expect(tree.groups[0].nodes[0].selection).toEqual({ kind: "geography", value: geographyKey({ geography: "CA", level: "state" }) });
   });
 
   test("shows CTC targets immediately because its declared dimensions are constant", () => {
@@ -707,6 +708,6 @@ describe("calibration tree metrics and filters", () => {
     expect(tree.filterOptions.geographyLevels).not.toContain("__missing__");
     expect(tree.filterOptions.geographies).not.toContain("__missing__");
     expect(tree.filterOptions.geographyLevels).toContain("national");
-    expect(tree.filterOptions.geographies).toContain("United States");
+    expect(Object.values(tree.filterOptions.geographyLabels ?? {})).toContain("United States");
   });
 });

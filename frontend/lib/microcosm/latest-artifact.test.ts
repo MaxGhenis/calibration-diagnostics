@@ -1045,7 +1045,7 @@ test("legacy geography and income metadata drive the explorer hierarchy", () => 
   });
 
   expect(program.currentLevel).toEqual({ kind: "geography", label: "Geography" });
-  expect(program.groups[0].nodes.map((node) => node.id)).toEqual(["AK", "CA"]);
+  expect(program.groups[0].nodes.map((node) => node.label)).toEqual(["AK", "CA"]);
 
   const alaska = buildCalibrationTree(cal.rows, {
     breakdown: "program",

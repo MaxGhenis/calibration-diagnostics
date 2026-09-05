@@ -55,14 +55,14 @@ export interface ExplorerBreadcrumb {
 
 export function explorerBreadcrumbs(
   state: ExplorerState,
-  pathLabels: { source?: string; program?: string } = {},
+  pathLabels: { source?: string; program?: string; geography?: string } = {},
 ): ExplorerBreadcrumb[] {
   const crumbs: ExplorerBreadcrumb[] = [
     { label: "All targets", path: { dimensions: [] } },
   ];
   if (state.breakdown === "geography" && state.path.geography) {
     crumbs.push({
-      label: geographyLabel(state.path.geography),
+      label: pathLabels.geography ?? geographyLabel(state.path.geography),
       path: { geography: state.path.geography, dimensions: [] },
     });
   }
@@ -93,7 +93,7 @@ export function explorerBreadcrumbs(
     state.path.geography
   ) {
     crumbs.push({
-      label: geographyLabel(state.path.geography),
+      label: pathLabels.geography ?? geographyLabel(state.path.geography),
       path: {
         source: state.path.source,
         program: state.path.program,

@@ -1,4 +1,5 @@
 import type { Calibration } from "./latest-artifact";
+import type { GeographyRow } from "./geography-identity";
 import {
   matchTargetSurfaces,
   type TargetMatchingSummary,
@@ -22,7 +23,7 @@ export interface TargetChangeSide {
   contribution: number;
 }
 
-export interface TargetChangeRow extends Record<string, unknown> {
+export interface TargetChangeRow extends Record<string, unknown>, GeographyRow {
   name: string;
   base_name: string;
   comparison_id: string;
@@ -91,11 +92,15 @@ function hierarchyFields(row: TargetRow): Record<string, unknown> {
     source: row.source ?? null,
     source_label: row.source_label ?? null,
     variable: row.variable ?? null,
+    variable_label: row.variable_label ?? null,
     variable_key: row.variable_key ?? null,
     measure: row.measure ?? null,
     source_measure_id: row.source_measure_id ?? null,
     level: row.level ?? null,
     geography: row.geography ?? null,
+    geography_id: row.geography_id ?? null,
+    geography_dimension_id: row.geography_dimension_id ?? null,
+    geography_rank: row.geography_rank ?? null,
     family: row.family ?? null,
     breakdown: row.breakdown ?? null,
     dims: row.dims ?? null,

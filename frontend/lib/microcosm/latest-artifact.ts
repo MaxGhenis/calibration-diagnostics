@@ -6,6 +6,7 @@
 import { sourceAuthorityLabel } from "@/lib/source-labels";
 
 import { normalizeChronicleMetadata } from "./chronicle-metadata";
+import { AmbiguousGeographyError } from "./geography-identity";
 import {
   chroniclePublisherFromMetadata,
   qualifyingChildrenFromRecordSet,
@@ -123,7 +124,8 @@ export function assertSafeReleaseId(id: string, label = "release"): string {
 export function classifyApiError(error: unknown): { status: number; body: { detail: string } } {
   if (
     error instanceof InvalidReleaseIdError ||
-    error instanceof SelfComparisonError
+    error instanceof SelfComparisonError ||
+    error instanceof AmbiguousGeographyError
   ) {
     return { status: 400, body: { detail: error.message } };
   }
