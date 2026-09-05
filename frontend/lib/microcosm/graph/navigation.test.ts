@@ -57,9 +57,7 @@ describe("a link that carries a reading", () => {
 });
 
 describe("writing the reading back into the URL", () => {
-  // The dashboard is served under a base path, and the router prepends it, so
-  // what goes back to the router has to keep its origin rather than be reduced
-  // to a pathname that would end up doubled.
+  // Inspector selection uses the history API and retains the mounted URL.
   const current =
     "http://dashboard.test/calibration/dashboard/microcosm/pipeline?country=us&candidate=us-graph-f001-geography-20260905-v1&manifest_sha256=ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885&incumbent=candidate%3Aother%3Aabc";
 
@@ -85,7 +83,7 @@ describe("writing the reading back into the URL", () => {
     );
   });
 
-  test("keeps the base path the router will prepend to", () => {
+  test("keeps the mounted base path exactly once", () => {
     const next = graphSelectionUrl(current, { execution: "replay" });
     expect(next).toStartWith(
       "http://dashboard.test/calibration/dashboard/microcosm/pipeline?",

@@ -70,9 +70,8 @@ export function resolveGraphSelection(
 /** Add or drop the view's own keys, leaving every other parameter — country,
  * candidate, manifest digest, incumbent — exactly as it was.
  *
- * The result keeps its origin, and so its path keeps the app's base path. The
- * router prepends that base path to a relative href, so handing it a bare
- * pathname would send the reader to a doubled path and a 404. This is the same
+ * The history API receives the complete URL, preserving the app's base path
+ * and fragment without navigating to a different route. This is the same
  * shape `selectionUrl` returns for the candidate selector. */
 export function graphSelectionUrl(
   current: string,

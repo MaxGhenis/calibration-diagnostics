@@ -13,7 +13,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { useQualityContext } from "@/components/layout/quality-context";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -774,7 +774,6 @@ function useReducedMotion() {
 export function ReceiptGraphView() {
   const { selection } = useQualityContext();
   const search = useSearchParams();
-  const router = useRouter();
   const reducedMotion = useReducedMotion();
   const { data, isPending, error } = useReceiptGraph();
 
@@ -783,11 +782,16 @@ export function ReceiptGraphView() {
   // and changing population already clears view-local keys.
   const patch = useCallback(
     (values: Partial<Record<"execution" | "node", string>>) => {
-      router.replace(graphSelectionUrl(window.location.href, values), {
-        scroll: false,
-      });
+      // Only client-side inspector state changes. Next's history integration
+      // updates useSearchParams without reusing a prefetched static route whose
+      // canonical URL can discard these query parameters in production.
+      window.history.replaceState(
+        null,
+        "",
+        graphSelectionUrl(window.location.href, values),
+      );
     },
-    [router],
+    [],
   );
 
   const payload = data && data.available ? data : undefined;
