@@ -302,14 +302,19 @@ export function verifyProjectionBinding(
 /** Execution, cache and gate are three separate readings of one receipt.
  * Failure, blocking and absence all outrank the presence of an output.
  *
- * Blocking is read before failure, and the order matters. `failed` comes from
- * the run manifest's `known_failures`, which is an umbrella the manifest
- * derives for itself: it collects every gate whose outcome is not certifying,
- * and `unreached` is one of those. `blocked` comes from the executor's own
- * per-node record of what happened, where `unreached` means the step never
- * ran. When both are set the narrower, direct record is the true one, so a step
- * the run never reached reads as never reached rather than as failed. A gate
- * exception is the executor's record too, and that one is a real failure. */
+ * Blocking is read before failure, and the order matters. `blocked` comes from
+ * the executor's own per-node record, `receipt.execution.state === "unreached"`
+ * — a statement about this node. `failed` comes from the run manifest's
+ * `known_failures`, a run-level list carried through as recorded; its
+ * derivation belongs to the producer and is not defined here. Where the two
+ * disagree about one node, the direct per-node record is the one shown, so a
+ * step the executor recorded as never reached reads that way rather than as
+ * failed. A gate exception is the executor's per-node record too, and that one
+ * is a real failure.
+ *
+ * Both manifests this dashboard ships record an empty `known_failures`, so the
+ * order is not exercised by the shipped candidate. It is the reading rule, and
+ * it is tested against a node carrying both flags. */
 export function executionState(node: ProjectionNode | undefined): ExecutionState {
   if (!node || !node.receipt_present) return "not_evidenced";
   if (node.gate_exception) return "failed";

@@ -686,11 +686,12 @@ describe("what the executor recorded outranks what the manifest collected", () =
   };
 
   test("a gate the run never reached reads as never reached, not as failed", () => {
-    // `known_failures` is the manifest's own umbrella derivation: it collects
-    // every gate whose outcome is not certifying, and `unreached` is one of
-    // those. The executor separately records that same node's state as
-    // `unreached` under `receipt.execution`. The narrower, direct record is
-    // what the reader is shown.
+    // Two independent sources can name the same node: the run-level
+    // `known_failures` list, whose derivation belongs to the producer, and the
+    // executor's own per-node `receipt.execution.state`. Where they disagree,
+    // the direct per-node record is what the reader is shown. Neither shipped
+    // manifest exercises this, so the case is built here rather than taken from
+    // one of them.
     const node: ProjectionNode = {
       ...base,
       failed: true,

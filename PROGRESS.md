@@ -39,14 +39,23 @@ Baseline on the new branch first reproduced the original figures: `bun test`
 Fifteen assertions and two unloadable modules were committed failing at
 `25e042d` before any fix, and pass at `0691785`:
 
-- **Finding 4, precedence.** `known_failures` is the run manifest's own umbrella
-  and collects every gate whose outcome is not certifying, `unreached` among
-  them. The executor separately records the same node's state under
-  `receipt.execution`. `executionState` now reads the executor's `blocked`
-  before the umbrella's `failed`, so a step the run never reached reads
-  "Never reached" rather than "Failed". A gate exception is still a failure,
-  because that too is the executor's own record. Not triggered by the shipped
-  candidate; covered by a test built from the real manifest semantics.
+- **Finding 4, precedence.** Two independent sources in the projection can name
+  the same node: the run-level `known_failures` list, and the executor's own
+  per-node `receipt.execution.state`. `executionState` now reads the executor's
+  `blocked` before the run-level `failed`, so a node the executor recorded as
+  unreached reads "Never reached" rather than "Failed". A gate exception is
+  still a failure, because that too is the executor's per-node record. Both
+  shipped manifests record an empty `known_failures`, so nothing here is
+  triggered by this candidate; the case is built in a test.
+
+  *Not verified this session:* the review attributed the collision to
+  `known_failures` sweeping in gates whose outcome is `unreached`, citing
+  `manifest.py:583-595`. That file was not found in any repository reachable
+  from here, and the derivation of `known_failures` is not defined in this
+  repository — the generator carries the list through as recorded. The fix
+  therefore rests on the narrower premise that a per-node record from the
+  executor is more direct than a run-level list, which is true whatever
+  populates the list. Comments and tests were rewritten to claim only that.
 - **Finding 4, `not_applicable`.** A gate outcome of `not_applicable` had been
   folded into the passing state. It is its own `GateState` now, worded "Gate not
   applicable", neutral tone, and it withholds nothing — it certified nothing and

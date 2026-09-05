@@ -342,12 +342,12 @@ function projectNode(id, node, failedIds) {
     group_label: GROUP_LABELS[group(id)] ?? group(id),
     role: capabilities.role ?? null,
     receipt_present: true,
-    // `known_failures` is the manifest's own derivation and an umbrella: it
-    // collects every gate whose outcome is not certifying, `unreached` among
-    // them, as well as nodes the run rejected. It is carried through as-is and
-    // is deliberately not the last word — `blocked` below is the executor's own
-    // narrower record of the same node, and the adapter reads that one first so
-    // a step the run never reached is not reported as one that failed.
+    // `known_failures` is a run-level list the manifest records; its derivation
+    // belongs to the producer and is carried through as recorded rather than
+    // recomputed or interpreted here. It is deliberately not the last word:
+    // `blocked` below is the executor's own per-node record of the same node,
+    // and the adapter reads that one first, so a node the executor recorded as
+    // unreached is not reported as one that failed.
     failed: failedIds.includes(id) || receipt.rejected === true,
     blocked: execution?.state === "unreached",
     gate_exception: execution?.state === "gate_exception",
