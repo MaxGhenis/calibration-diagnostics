@@ -36,8 +36,25 @@ browser pass used 4483.
 Baseline on the new branch first reproduced the original figures: `bun test`
 507 pass / 0 fail / 1851 assertions.
 
-Fifteen assertions and two unloadable modules were committed failing at
-`25e042d` before any fix, and pass at `0691785`:
+Thirteen assertions and two unloadable test modules were committed failing at
+`25e042d` before any fix, and pass at `0691785`. `bun test` reports that as
+"15 fail, 2 errors" — the two modules that could not load are counted inside the
+fifteen, not alongside it, so the number of failing assertions is thirteen.
+(Corrected here: this line previously said "fifteen assertions", which read
+bun's total as if it were all assertions. The full-suite figure at `25e042d` is
+480 pass / 15 fail / 2 errors / 495 run across 58 files; the two unloadable
+modules are why 495 ran there and 534 run at head.)
+
+The same red was re-demonstrated at head: with the eight implementation files
+reverted to `ce1a559` and every test left at `5627aac`, the suite reports 480
+pass / 16 fail / 2 errors — fourteen failing assertions, plus
+`navigation.test.ts` and `presentation.test.ts` unable to load at all
+(`Export named 'graphSelectionReadiness' not found`, `Export named
+'selectionNotice' not found`). One assertion more than at `25e042d`, because
+`5627aac` rewrote what the precedence test claims about the producer. The files
+were restored in the same command and the tree verified clean afterwards.
+
+What each fix is, and what it is red against:
 
 - **Finding 4, precedence.** Two independent sources in the projection can name
   the same node: the run-level `known_failures` list, and the executor's own
@@ -119,16 +136,35 @@ now. No edge was added, and the immutable candidate was not touched.
 
 ### Verified
 
+Every row below was run at head `5627aac`, not at an earlier commit and then
+carried forward.
+
 | Command | Result |
 | --- | --- |
 | `bun test` (frontend) | 534 pass, 0 fail, 1953 assertions, 58 files |
-| `bun run lint` (`tsc --noEmit`) | clean |
-| `bun run build` | compiled, 21/21 pages |
+| `bun run lint` (`tsc --noEmit`) | clean, exit 0 |
+| `bun run build` | compiled, 21/21 static pages, exit 0 |
 | WebKit, playwright-core 1.58.0, port 4483 | 43/43 |
+| red at head: implementation reverted to `ce1a559`, tests at head | 480 pass, 16 fail, 2 errors |
+| projection regenerated from the preserved evidence | byte-identical to the checked-in file |
 
 The browser pass ran real WebKit through `playwright-core`, never Chrome and
 never CDP, against `bun run dev` with `MICROCOSM_QUALITY_US_DIR` on the real
-quality directory.
+quality directory. The version is read at runtime from the harness's own
+`playwright-core/package.json`, which resolves to 1.58.0, matching the 1.58.0
+its `bun.lock` pins; the script prints the resolved version with its results
+rather than naming one.
+
+The regeneration wrote to `/tmp`, not into the evidence tree, and produced
+`c28f3a88b16ad01bd7ae64e1c6a73de88a0cd4660333168c50a3ef0730c8c3f2` — `cmp`
+against `lib/microcosm/graph/receipts/us-graph-f001-geography-20260905-v1.json`
+reports no difference. The only change `5627aac` made to the generator is a
+comment, so this is a check that the comment change altered nothing, and that
+the projection at head still derives from the bytes it names.
+
+`graph.json` beside the run evidence was re-hashed in this pass and is
+`7d4e1502a89475726f3bc87f47f310e855e850343b6cd8da73c174a842ab94ac`, the digest
+recorded in the correction below. Nothing reads it at runtime or in a test.
 
 ### Found while testing, not fixed here
 
