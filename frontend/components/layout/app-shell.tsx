@@ -8,6 +8,7 @@ import { useCountry } from "./country-context";
 import { NavSidebar } from "./nav-sidebar";
 import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
+import { navCloseFocusTarget } from "./nav-focus";
 import { QualityStrip } from "./quality-strip";
 import { useQualityContext } from "./quality-context";
 
@@ -35,13 +36,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const navToggleRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
-  // The dialog's own close paths -- Escape, the Close button, following a nav
-  // link -- return focus to the Menu button that opened it, which is what a
-  // modal should do. A close forced by the viewport crossing into desktop
-  // cannot: at that width the Menu button is `lg:hidden`, so focusing it would
-  // silently drop focus to <body>. Those closes hand focus to the main
-  // landmark, which is visible at every width, instead.
-  const closedByViewport = useRef(false);
 
   // The dialog only exists below `lg`; leave it closed for the next route
   // rather than carrying an open modal across navigations. close() on an
@@ -58,9 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1024px)");
     const onChange = (event: MediaQueryListEvent) => {
-      if (!event.matches || !dialogRef.current?.open) return;
-      closedByViewport.current = true;
-      dialogRef.current.close();
+      if (event.matches) dialogRef.current?.close();
     };
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
@@ -80,13 +72,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <dialog
           ref={dialogRef}
           aria-labelledby="nav-drawer-title"
-          onClose={() => {
-            const restore = closedByViewport.current
-              ? mainRef.current
-              : navToggleRef.current;
-            closedByViewport.current = false;
-            restore?.focus({ preventScroll: true });
-          }}
+          // Escape, the Close button and a nav link all return focus to the
+          // Menu button that opened the drawer. A close forced by the viewport
+          // crossing into desktop cannot: that button is `lg:hidden` by then,
+          // so focus falls through to the main landmark, which is visible at
+          // every width. preventScroll keeps the reader's place, since <main>
+          // is the scroll container.
+          onClose={() =>
+            navCloseFocusTarget(
+              navToggleRef.current,
+              mainRef.current,
+            )?.focus({ preventScroll: true })
+          }
           onClick={(event) => {
             if (event.target === dialogRef.current) closeNav();
           }}
