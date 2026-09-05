@@ -182,4 +182,40 @@ describe("whether the view has enough of a selection to ask anything", () => {
     });
     expect(receiptGraphIdentity(selection("us-graph-f001", ""))).toBeUndefined();
   });
+
+  test("the query runs exactly when the view calls the selection ready", () => {
+    // The bug was two conditions for one question: the hook decided whether to
+    // fetch, the view decided what to say, and a selection the hook refused
+    // could still read as one the view was waiting on. They are one function
+    // now. This holds them to that — `enabled: Boolean(identity)` in
+    // `useReceiptGraph` and `readiness !== "ready"` in `ReceiptGraphView` have
+    // to answer alike for every selection, or the permanent-pending state comes
+    // back by a different route.
+    const digest = "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885";
+    const cases = [
+      ["", ""],
+      ["", digest],
+      ["us-graph-f001-geography-20260905-v1", ""],
+      ["us-graph-f001-geography-20260905-v1", " "],
+      ["us-graph-f001-geography-20260905-v1", "not-a-digest"],
+      ["us-graph-f001-geography-20260905-v1", "ff2f231b"],
+      ["us-graph-f001-geography-20260905-v1", digest.toUpperCase()],
+      ["us-graph-f001-geography-20260905-v1", `${digest}0`],
+      ["us-graph-f001-geography-20260905-v1", ` ${digest}`],
+      ["candidate:with:colons", digest],
+      ["us-graph-f001-geography-20260905-v1", digest],
+    ] as const;
+    for (const [candidate, manifest] of cases) {
+      const selected = selection(candidate, manifest);
+      expect(
+        `${candidate}/${manifest}: ${graphSelectionReadiness(selected) === "ready"}`,
+      ).toBe(
+        `${candidate}/${manifest}: ${Boolean(receiptGraphIdentity(selected))}`,
+      );
+    }
+    // And the matrix is not vacuous in either direction.
+    expect(
+      cases.filter(([c, m]) => graphSelectionReadiness(selection(c, m)) === "ready"),
+    ).toHaveLength(1);
+  });
 });
