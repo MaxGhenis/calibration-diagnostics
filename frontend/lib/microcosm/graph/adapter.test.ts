@@ -835,6 +835,47 @@ describe("the limits distinguish what is bound from what the projection asserts"
     );
   });
 
+  test("does not understate the evidence the publisher does bind", () => {
+    // Read from the attached build evidence itself: `checks.cold` and
+    // `checks.resume` are two blocks with different kernel-call counts, 4 and
+    // 0, and different start times. That there were two executions is
+    // therefore the publisher's own record, not this projection's claim. What
+    // the projection asserts is narrower: which recorded manifest bytes belong
+    // to which mode. The evidence's own `manifest_sha256` is the shared content
+    // key for both modes, so it pins neither byte digest.
+    const evidence = RAW_EVIDENCE.checks as Record<string, { kernel_calls: number; manifest_sha256: string }>;
+    expect(evidence.cold.kernel_calls).toBe(4);
+    expect(evidence.resume.kernel_calls).toBe(0);
+    expect(evidence.cold.manifest_sha256).toBe(evidence.resume.manifest_sha256);
+
+    const payload = graph();
+    const note = `${payload.comparison.execution_note} ${payload.limits.join(" ")}`;
+    expect(note).toMatch(/kernel/i);
+    expect(note).not.toMatch(
+      /that separation is asserted by this projection|the two executions are asserted by this projection/i,
+    );
+    expect(note).toMatch(/which .{0,40}bytes belong to which|pairing/i);
+  });
+
+  test("names the one slice of column ownership the publisher does pin", () => {
+    // `checks.<mode>.gate.capabilities.tolerance_writers` lists, for the four
+    // household columns inside the gate's declared tolerance scope, which steps
+    // wrote them. That is publisher-bound column ownership, and the limits say
+    // the column-level flow lives only in the unpinned declaration. It is still
+    // not drawn — it covers one gate's scope, not the graph — but the limits
+    // must not claim it does not exist.
+    const writers = (
+      (RAW_EVIDENCE.checks as Record<string, Record<string, Record<string, Record<string, unknown>>>>)
+        .cold.gate.capabilities.tolerance_writers
+    ) as Record<string, string[]>;
+    expect(Object.keys(writers)).toHaveLength(4);
+    expect(Object.keys(writers).every((column) => column.startsWith("household."))).toBe(true);
+
+    const limits = graph().limits.join(" ");
+    expect(limits).toMatch(/tolerance scope|the gate's declared/i);
+    expect(limits).toMatch(/four household columns/i);
+  });
+
   test("still separates that from the digests the publisher's evidence does bind", () => {
     const payload = graph();
     const bound = payload.binding.checks.map((check) => check.detail).join(" ");
