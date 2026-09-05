@@ -45,10 +45,11 @@ function publish(mutate: (x: ReturnType<typeof inventedGraph>) => void = () => {
       sha256: graphSha,
       path: `artifacts/${graphSha}.json`
     });
-  Object.assign(x.manifest.attachments.build_manifest, {
-    sha256: buildSha,
-    path: `artifacts/${buildSha}.json`
-  });
+  if (x.manifest.attachments.build_manifest?.status === "available")
+    Object.assign(x.manifest.attachments.build_manifest, {
+      sha256: buildSha,
+      path: `artifacts/${buildSha}.json`
+    });
   for (const [sha, value] of [[graphSha, x.graph], [buildSha, x.build]] as const)
     writeFileSync(join(directory, "artifacts", `${sha}.json`), JSON.stringify(value));
   const manifestSha = digestOf(x.manifest);
@@ -114,6 +115,12 @@ for (const mutate of [
   },
   (x: ReturnType<typeof inventedGraph>) => {
     x.manifest.attachments.calibration_diagnostics.reason = "host.local";
+  },
+  (x: ReturnType<typeof inventedGraph>) => {
+    x.manifest.attachments.build_manifest = {
+      status: "failed",
+      reason: "host.local unsafe/path"
+    };
   }
 ])
   test("malformed present evidence refuses with no registry or publisher text leak", async () => {
@@ -191,4 +198,64 @@ test("bounds exact attachment bytes including JSON whitespace before decoding", 
   const r = await ask(x), p = await r.json();
   expect(r.status).toBe(200);
   expect(p.available).toBe(false);
+});
+
+// A present graph attachment whose run-scoped build summary is not published is
+// an unavailable candidate, not a server condition. Root's frozen head answered
+// these with a 503 from the reader's partial_artifact.
+for (const status of ["pending", "missing", "failed"] as const)
+  test(`present graph receipts with ${status} build summary is unavailable, never 503 or registry`, async () => {
+    const x = publish(x => {
+      x.manifest.attachments.build_manifest = {
+        status,
+        reason: `Build summary ${status}.`
+      };
+    });
+    const spy = spyOn(registry, "receiptProjectionFor");
+    try {
+      const r = await ask(x), p = await r.json();
+      expect(r.status).toBe(200);
+      expect(p).toMatchObject({
+        available: false,
+        reason: `Build summary ${status}.`
+      });
+      expect(p.artifact_error).toBeUndefined();
+      expect(spy).not.toHaveBeenCalled();
+    }
+    finally {
+      spy.mockRestore();
+    }
+  });
+test("present graph receipts with no build summary at all is unavailable, never 503 or registry", async () => {
+  const x = publish(x => {
+    delete (x.manifest.attachments as Record<string, unknown>).build_manifest;
+  });
+  const spy = spyOn(registry, "receiptProjectionFor");
+  try {
+    const r = await ask(x), p = await r.json();
+    expect(r.status).toBe(200);
+    expect(p.available).toBe(false);
+    expect(p.reason).toContain("without the run-scoped build summary");
+    expect(p.artifact_error).toBeUndefined();
+    expect(spy).not.toHaveBeenCalled();
+  }
+  finally {
+    spy.mockRestore();
+  }
+});
+test("an available build summary that cannot be read keeps the sanitized 503", async () => {
+  const x = publish();
+  rmSync(join(directory, "artifacts", `${digestOf(x.build)}.json`));
+  const spy = spyOn(registry, "receiptProjectionFor");
+  try {
+    const r = await ask(x), p = await r.json();
+    expect(r.status).toBe(503);
+    expect(p.artifact_error).toBe("partial_artifact");
+    expect(JSON.stringify(p)).not.toContain(directory);
+    expect(JSON.stringify(p)).not.toContain("ENOENT");
+    expect(spy).not.toHaveBeenCalled();
+  }
+  finally {
+    spy.mockRestore();
+  }
 });

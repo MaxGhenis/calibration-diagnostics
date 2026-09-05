@@ -54,6 +54,18 @@ export async function GET(request: Request) {
       const attachment = source.manifest.attachments.graph_receipts;
       if (attachment.status !== "available")
         return unavailable(safePublisherReason(attachment.reason));
+      // The aggregate graph is only presentable together with the run-scoped
+      // build summary that binds it. A candidate that publishes one without the
+      // other is unavailable for the same reason a pending graph attachment is,
+      // not a server condition, and still never reaches the legacy registry.
+      // Only an actual transport or read failure below is answered with a 503.
+      const buildAttachment = source.manifest.attachments.build_manifest;
+      if (!buildAttachment || buildAttachment.status !== "available")
+        return unavailable(
+          buildAttachment?.reason !== undefined
+            ? safePublisherReason(buildAttachment.reason)
+            : "The selected candidate publishes aggregate graph receipts without the run-scoped build summary that binds them to this run, so nothing is shown.",
+        );
       const reader = boundedGraphReader(country, source.readBytes);
       const graph = await reader.attachment(source.manifest, "graph_receipts");
       const build = await reader.attachment(source.manifest, "build_manifest");
