@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  graphSelectionReadiness,
   graphSelectionUrl,
   nextStep,
+  receiptGraphIdentity,
   resolveGraphSelection,
 } from "./navigation";
 
@@ -122,5 +124,62 @@ describe("moving through the list from the keyboard", () => {
 
   test("has nowhere to go in an empty list", () => {
     expect(nextStep([], "a", 1)).toBeUndefined();
+  });
+});
+
+/* ------------------------------------------------- what may be asked for */
+
+describe("whether the view has enough of a selection to ask anything", () => {
+  const selection = (candidate: string, manifest_sha256: string) =>
+    ({
+      country: "us" as const,
+      candidate,
+      manifest_sha256,
+      release: "",
+      incumbent: "",
+    });
+
+  test("no candidate is no request", () => {
+    expect(graphSelectionReadiness(selection("", ""))).toBe("no_candidate");
+  });
+
+  test("a candidate without a usable manifest digest is incomplete, not pending", () => {
+    // The request needs both halves of the immutable identity. A URL that
+    // carries only the candidate leaves the query disabled, so the view has to
+    // say the selection is incomplete rather than read as though a fetch were
+    // still running.
+    for (const digest of ["", "not-a-digest", "ff2f231b", "F".repeat(64)])
+      expect(
+        graphSelectionReadiness(
+          selection("us-graph-f001-geography-20260905-v1", digest),
+        ),
+      ).toBe("incomplete_identity");
+  });
+
+  test("a candidate with its digest is a request", () => {
+    expect(
+      graphSelectionReadiness(
+        selection(
+          "us-graph-f001-geography-20260905-v1",
+          "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885",
+        ),
+      ),
+    ).toBe("ready");
+  });
+
+  test("the identity handed to the request is the one the selection spells", () => {
+    expect(
+      receiptGraphIdentity(
+        selection(
+          "us-graph-f001-geography-20260905-v1",
+          "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885",
+        ),
+      ),
+    ).toEqual({
+      candidate: "us-graph-f001-geography-20260905-v1",
+      manifest_sha256:
+        "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885",
+    });
+    expect(receiptGraphIdentity(selection("us-graph-f001", ""))).toBeUndefined();
   });
 });

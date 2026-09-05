@@ -10,6 +10,8 @@ import {
   layoutReceiptGraph,
   neighbours,
   outputReading,
+  releaseEligibilityReading,
+  selectionNotice,
   shortDigest,
   stateFor,
 } from "./presentation";
@@ -96,17 +98,50 @@ describe("each axis is worded as its own reading", () => {
   test("only a gate that passed reads as success", () => {
     expect(gateReading("pass").tone).toBe("success");
     expect(gateReading("pass").help).toMatch(/declared scope/);
-    for (const state of ["fail", "evidence_absent", "unreached"] as const)
+    for (const state of [
+      "fail",
+      "evidence_absent",
+      "unreached",
+      "not_applicable",
+    ] as const)
       expect(gateReading(state).tone).not.toBe("success");
   });
 
-  test("outputs carry the receipt's own reason either way", () => {
+  test("a gate that did not apply is not a gate that passed", () => {
+    const reading = gateReading("not_applicable");
+    expect(reading.label).not.toBe(gateReading("pass").label);
+    expect(reading.label).not.toMatch(/passed/i);
+    expect(reading.help).toMatch(/did not apply/i);
+  });
+
+  test("outputs carry the receipt's own reason in all three readings", () => {
     const usable = {
+      outputs: "usable",
       outputs_usable: true,
       outputs_reason: "because the receipt says so",
     } as NodeExecutionState;
     expect(outputReading(usable).help).toBe("because the receipt says so");
-    expect(outputReading({ ...usable, outputs_usable: false }).tone).toBe("warning");
+    expect(outputReading(usable).tone).toBe("info");
+
+    // A receipt that recorded no typed or opaque artifact is not a receipt
+    // whose outputs were withheld. It gets its own neutral reading, so a step
+    // that succeeded is never rendered in the warning tone.
+    const none = {
+      ...usable,
+      outputs: "no_typed_artifact",
+      outputs_usable: false,
+    } as NodeExecutionState;
+    expect(outputReading(none).tone).toBe("neutral");
+    expect(outputReading(none).label).toMatch(/no typed artifact output/i);
+    expect(outputReading(none).label).not.toMatch(/not usable|fail/i);
+
+    const withheld = {
+      ...usable,
+      outputs: "not_usable",
+      outputs_usable: false,
+    } as NodeExecutionState;
+    expect(outputReading(withheld).tone).toBe("warning");
+    expect(outputReading(withheld).label).toMatch(/not usable/i);
   });
 });
 
@@ -128,6 +163,32 @@ describe("reading one execution off a node", () => {
     expect(empty.execution).toBe("not_evidenced");
     expect(empty.gate).toBe("unreached");
     expect(empty.outputs_usable).toBe(false);
+    expect(empty.outputs).toBe("not_usable");
+  });
+
+  test("the fallback carries every field the contract promises", () => {
+    // A partial fallback compiles only while the value it stands in for is
+    // typed non-nullable. Anything reading `frame_key` off it would find
+    // `undefined` where the payload promises a value or an explicit null.
+    const empty = stateFor(node("a"), "cold");
+    for (const field of [
+      "mode",
+      "execution",
+      "cache",
+      "gate",
+      "gate_record",
+      "outputs",
+      "outputs_usable",
+      "outputs_reason",
+      "node_key",
+      "output_keys",
+      "frame_key",
+      "weight_key",
+      "wall_time_seconds",
+    ] as (keyof NodeExecutionState)[])
+      expect(Object.hasOwn(empty, field)).toBe(true);
+    expect(empty.frame_key).toBeNull();
+    expect(empty.weight_key).toBeNull();
   });
 });
 
@@ -215,5 +276,32 @@ describe("formatting", () => {
   test("shortens a digest without pretending one is present", () => {
     expect(shortDigest("ff2f231bbe96267bbb230264cece5131")).toBe("ff2f231bbe96…");
     expect(shortDigest(null)).toBe("—");
+  });
+});
+
+describe("wording that has to survive a status this run does not use", () => {
+  test("reads the two eligibility statuses this evidence carries as sentences", () => {
+    expect(releaseEligibilityReading("excluded")).toBe("Excluded from release");
+    expect(releaseEligibilityReading("eligible")).toBe("Eligible for release");
+  });
+
+  test("renders an unfamiliar status without inventing grammar around it", () => {
+    expect(releaseEligibilityReading("pending_review")).toBe(
+      "Release eligibility: pending review",
+    );
+    expect(releaseEligibilityReading("")).toBe("Release eligibility not stated");
+  });
+});
+
+describe("what the reader is told before a request is even possible", () => {
+  test("an incomplete selection is stated as incomplete, not as loading", () => {
+    const notice = selectionNotice("incomplete_identity");
+    expect(notice.title).toMatch(/incomplete/i);
+    expect(notice.title).not.toMatch(/reading|loading|…/i);
+    expect(notice.description).toMatch(/manifest digest/i);
+  });
+
+  test("no candidate is still its own message", () => {
+    expect(selectionNotice("no_candidate").title).toMatch(/no candidate/i);
   });
 });

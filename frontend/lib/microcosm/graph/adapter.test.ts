@@ -677,3 +677,170 @@ describe("nothing that must not reach a browser reaches it", () => {
     expect(payload.projection.label_basis).toMatch(/native node ids/i);
   });
 });
+
+/* --------------------------------- the executor's record beats the umbrella */
+
+describe("what the executor recorded outranks what the manifest collected", () => {
+  const base: ProjectionNode = {
+    ...(projection().executions[0].nodes[0] as ProjectionNode),
+  };
+
+  test("a gate the run never reached reads as never reached, not as failed", () => {
+    // `known_failures` is the manifest's own umbrella derivation: it collects
+    // every gate whose outcome is not certifying, and `unreached` is one of
+    // those. The executor separately records that same node's state as
+    // `unreached` under `receipt.execution`. The narrower, direct record is
+    // what the reader is shown.
+    const node: ProjectionNode = {
+      ...base,
+      failed: true,
+      blocked: true,
+      gate: {
+        outcome: "unreached",
+        scope: "geography_assignment_integrity",
+        passed: null,
+        checks: [],
+      },
+      execution_record: {
+        state: "unreached",
+        blocked_by: [
+          { node: "assign_us_puma_ladder.boundary", key: "a".repeat(64) },
+        ],
+        unavailable_artifacts: [],
+      },
+    };
+    expect(executionState(node)).toBe("blocked");
+    expect(gateState(node)).toBe("unreached");
+    expect(outputAvailability(node).state).toBe("not_usable");
+    expect(outputAvailability(node).reason).toContain(
+      "assign_us_puma_ladder.boundary",
+    );
+  });
+
+  test("a gate exception is still a failure, because that is what the executor recorded", () => {
+    expect(executionState({ ...base, failed: true, gate_exception: true })).toBe(
+      "failed",
+    );
+    expect(executionState({ ...base, gate_exception: true })).toBe("failed");
+  });
+
+  test("a rejection with no executor state of its own is still a failure", () => {
+    expect(executionState({ ...base, failed: true })).toBe("failed");
+  });
+});
+
+describe("a gate that did not apply is not a gate that passed", () => {
+  const base: ProjectionNode = {
+    ...(projection().executions[0].nodes[0] as ProjectionNode),
+  };
+  const notApplicable: ProjectionNode = {
+    ...base,
+    gate: {
+      outcome: "not_applicable",
+      scope: "geography_assignment_integrity",
+      passed: null,
+      checks: [],
+    },
+  };
+
+  test("keeps its own state rather than borrowing the passing one", () => {
+    expect(gateState(notApplicable)).toBe("not_applicable");
+    expect(gateState(notApplicable)).not.toBe("pass");
+  });
+
+  test("withholds nothing this receipt recorded, because it declared no failure", () => {
+    expect(outputAvailability(notApplicable).state).toBe("usable");
+  });
+});
+
+/* ------------------------------- no typed output is not a withheld output */
+
+describe("a receipt that recorded no typed artifact is not a warning", () => {
+  test("the boundary receipt is neutral and says what it did record", () => {
+    const payload = graph();
+    const boundary = payload.nodes.find(
+      (node) => node.id === "assign_us_puma_ladder.boundary",
+    )!;
+    expect(boundary.column_artifact_total).toBe(248);
+    for (const state of boundary.states) {
+      expect(state.execution).toBe("recorded");
+      expect(state.outputs).toBe("no_typed_artifact");
+      expect(state.outputs_usable).toBe(false);
+      expect(state.outputs_reason).toMatch(/no typed or opaque artifact/i);
+      expect(state.outputs_reason).toContain("248");
+      expect(state.outputs_reason).not.toMatch(/no artifact output|not usable/i);
+    }
+  });
+
+  test("the gate receipt is neutral too, without claiming it recorded nothing", () => {
+    const payload = graph();
+    const gate = payload.nodes.find(
+      (node) => node.id === "assign_us_puma_ladder.gate",
+    )!;
+    for (const state of gate.states) {
+      expect(state.execution).toBe("recorded");
+      expect(state.gate).toBe("pass");
+      expect(state.outputs).toBe("no_typed_artifact");
+      expect(state.outputs_reason).toMatch(/no typed or opaque artifact/i);
+    }
+  });
+
+  test("a receipt that did record one still reads as usable", () => {
+    const payload = graph();
+    for (const id of [
+      "assemble_stacked_spine",
+      "assemble_stacked_spine.prepare",
+      "assign_us_puma_ladder",
+      "assign_us_puma_ladder.lookup",
+    ]) {
+      const node = payload.nodes.find((entry) => entry.id === id)!;
+      for (const state of node.states) expect(state.outputs).toBe("usable");
+    }
+  });
+
+  test("a failure still outranks the absence of a typed output", () => {
+    const source = projection();
+    const boundary = source.executions[0].nodes.find(
+      (node) => node.id === "assign_us_puma_ladder.boundary",
+    )!;
+    boundary.failed = true;
+    const payload = buildReceiptGraph(source, manifest(), verify());
+    const state = payload.nodes
+      .find((node) => node.id === "assign_us_puma_ladder.boundary")!
+      .states.find((entry) => entry.mode === "cold")!;
+    expect(state.outputs).toBe("not_usable");
+    expect(state.execution).toBe("failed");
+  });
+});
+
+/* ------------------------------------ what the published evidence does not pin */
+
+describe("the limits distinguish what is bound from what the projection asserts", () => {
+  test("names the compiled structural declaration as unpinned rather than absent", () => {
+    const limits = graph().limits.join(" ");
+    expect(limits).toMatch(/compiled structural declaration/i);
+    expect(limits).toMatch(/no publisher attachment pins/i);
+    expect(limits).not.toMatch(/never serialised|never serialized|does not exist/i);
+  });
+
+  test("marks the two-execution reading as projection-asserted, not publisher-bound", () => {
+    const payload = graph();
+    expect(payload.comparison.execution_note).toMatch(
+      /asserted by this projection/i,
+    );
+    expect(payload.limits.join(" ")).toMatch(
+      /neither manifest byte digest is pinned by anything the publisher attached/i,
+    );
+  });
+
+  test("still separates that from the digests the publisher's evidence does bind", () => {
+    const payload = graph();
+    const bound = payload.binding.checks.map((check) => check.detail).join(" ");
+    expect(bound.length).toBeGreaterThan(0);
+    // The content key is published in the build evidence and is checked; the
+    // per-execution manifest byte digests are not, and the payload says so.
+    expect(payload.binding.computation_content_key).toMatch(/^[a-f0-9]{64}$/);
+    for (const execution of payload.executions)
+      expect(bound).not.toContain(execution.manifest_sha256);
+  });
+});

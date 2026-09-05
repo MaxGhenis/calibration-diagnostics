@@ -190,7 +190,7 @@ describe("what the run is not connected to", () => {
 
   test("shows completed execution and release exclusion side by side", () => {
     expect(markup).toContain("completed execution");
-    expect(markup).toContain("excluded from");
+    expect(markup).toContain("Excluded from release");
   });
 });
 
@@ -219,5 +219,40 @@ describe("provenance stays with the run it describes", () => {
     const markup = render({ selectedId: "assemble_stacked_spine" });
     for (const forbidden of ["MacBook", "/Users/", "_buildo-runtime", "peak_rss"])
       expect(markup).not.toContain(forbidden);
+  });
+});
+
+describe("a step that succeeded without a typed artifact is not warned about", () => {
+  test("the boundary receipt reads neutrally and says what it did record", () => {
+    const markup = render({
+      selectedId: "assign_us_puma_ladder.boundary",
+      mode: "cold",
+    });
+    expect(markup).toContain("No typed artifact output");
+    expect(markup).not.toContain("Outputs not usable");
+    expect(markup).toContain("Receipt recorded");
+    expect(markup).toContain("248");
+  });
+
+  test("the gate receipt says the same thing about its own outputs", () => {
+    const markup = render({
+      selectedId: "assign_us_puma_ladder.gate",
+      mode: "cold",
+    });
+    expect(markup).toContain("No typed artifact output");
+    expect(markup).not.toContain("Outputs not usable");
+  });
+
+  test("a step that did record one still reads as recorded outputs", () => {
+    expect(render({ selectedId: "assign_us_puma_ladder", mode: "cold" })).toContain(
+      "Outputs recorded",
+    );
+  });
+});
+
+describe("the reader is told what the evidence does not pin", () => {
+  test("the two-execution reading is offered as the projection's own assertion", () => {
+    const markup = render();
+    expect(markup).toContain("asserted by this projection");
   });
 });
