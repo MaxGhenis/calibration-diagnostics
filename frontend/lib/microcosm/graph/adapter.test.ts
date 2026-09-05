@@ -193,6 +193,44 @@ describe("receipt consistency regressions from the independent probes", () => {
       evidenceChecks(e).cold.gate.evidence.passed = false;
     })).toThrow(ReceiptGraphUnavailableError);
   });
+
+  // The graph producer validates the closed outcome set, but permits diagnostic
+  // evidence on an unevaluated/inapplicable gate. These are invented variants;
+  // no publisher fixture or registered candidate is changed.
+  for (const outcome of ["not_applicable", "unreached", "evidence_absent"]) {
+    for (const passed of [null, false, true]) {
+      test(`${outcome} retains diagnostic checks with passed=${passed}`, () => {
+        const p = projection();
+        const e = evidence();
+        for (const execution of p.executions) {
+          const node = execution.nodes.find(n => n.gate)!;
+          node.gate = {
+            outcome, scope: node.gate!.scope, passed,
+            checks: [{ name: "source_coverage", passed: false,
+              failures: ["required observation unavailable"],
+              details: [{ key: "observed_rows", value: 0 }] }],
+          };
+          evidenceChecks(e)[execution.evidence_key].gate = {
+            outcome, scope: node.gate.scope,
+            evidence: { passed, gates: { source_coverage: {
+              passed: false, failures: ["required observation unavailable"],
+              details: { observed_rows: 0 },
+            } } },
+          };
+        }
+        const verifyCandidate = () => verifyProjectionBinding(
+          p, manifest(), CANDIDATE_MANIFEST_SHA, e,
+        );
+        if (passed === true) {
+          expect(verifyCandidate).toThrow(ReceiptGraphUnavailableError);
+        } else {
+          const result = buildReceiptGraph(p, manifest(), verifyCandidate());
+          expect(result.nodes.find(n => n.role === "gate")!.states
+            .every(state => state.gate === outcome)).toBe(true);
+        }
+      });
+    }
+  }
 });
 
 describe("recorded failure and executor summaries agree with their receipts", () => {
