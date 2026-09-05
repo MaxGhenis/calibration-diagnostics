@@ -287,3 +287,73 @@ test("preserves zero and nullable gate details without inventing a pass", () => 
     (x.graph as any).period = 2024;
   });
 });
+
+// The frozen head accepted every one of these typed dependency claims and drew
+// three edges for the three-node cycle. Nothing hung; the order was arbitrary
+// and the drawn graph was one no execution can have produced.
+describe("invented typed dependency cycles", () => {
+  const feedback = (x: ReturnType<typeof inventedGraph>, from: number, to: number) => {
+    for (const e of x.graph.executions) {
+      const producer = e.nodes[from];
+      e.nodes[to].typed_inputs = [{
+          ...producer.typed_outputs[0],
+          name: "feedback",
+          producer: producer.id,
+          producer_key: producer.node_key
+        }];
+    }
+  };
+  test("refuses the three-node cycle a to b to c to a", () => {
+    refusal(x => feedback(x, 2, 0));
+  });
+  test("refuses the two-node cycle a to b to a", () => {
+    refusal(x => feedback(x, 1, 0));
+  });
+  test("keeps a legitimate non-chain directed acyclic graph", () => {
+    const x = inventedGraph();
+    // c consumes a directly instead of b, so a is consumed twice and b becomes
+    // a terminal. This is the shape the genuine four-node export also has.
+    for (const e of x.graph.executions)
+      e.nodes[2].typed_inputs = [{
+          ...e.nodes[0].typed_outputs[0],
+          name: "input",
+          producer: e.nodes[0].id,
+          producer_key: e.nodes[0].node_key
+        }];
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.edges.map(e => [e.from, e.to]).sort()).toEqual([["a", "b"], ["a", "c"]]);
+    expect(p.nodes.every(n => !n.unconnected)).toBe(true);
+  });
+  test("keeps receipts that declare no typed input at all", () => {
+    const x = inventedGraph();
+    for (const e of x.graph.executions)
+      for (const n of e.nodes)
+        n.typed_inputs = [];
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.edges).toHaveLength(0);
+    expect(p.nodes.every(n => n.unconnected)).toBe(true);
+  });
+  test("keeps a failed and unreached execution whose remaining dependencies are acyclic", () => {
+    const x = inventedGraph();
+    x.manifest.execution_status = "failed";
+    for (const e of x.graph.executions) {
+      const n = e.nodes[2];
+      n.failed = true;
+      n.blocked = true;
+      n.execution_record = {
+        state: "unreached",
+        blocked_by: [{
+            node: "b",
+            key: h("2")
+          }],
+        unavailable_artifacts: ["result"]
+      };
+      (e.failed_node_ids as string[]).push(n.id);
+      (e.blocked_node_ids as string[]).push(n.id);
+      (x.build.checks as any)[e.mode].direct_real_engine_array_parity = false;
+    }
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.nodes.find(n => n.id === "c")!.states.every(s => s.execution === "blocked")).toBe(true);
+    expect(p.edges.map(e => [e.from, e.to])).toEqual([["a", "b"], ["b", "c"]]);
+  });
+});

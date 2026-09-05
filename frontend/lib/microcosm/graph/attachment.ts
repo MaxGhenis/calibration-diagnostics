@@ -104,6 +104,31 @@ function shape(value: unknown, fields: Record<string, Check>): RecordValue {
 }
 
 const unique = (values: unknown[]) => assert(new Set(values).size === values.length);
+/** Typed inputs name a producer recorded in the same execution, so what they
+ * declare is a directed graph. The exporter emits its nodes in a strict
+ * topological order, but nothing in the wire contract required one, and a
+ * cycle was accepted and drawn. The shared renderer is cycle-safe and does not
+ * hang; it just picks an arbitrary order for a dependency claim no execution
+ * can have produced, so the attachment is refused instead of drawn.
+ *
+ * The union across executions is checked, because the canvas unions their
+ * edges into one graph. Nodes with no typed inputs, nodes nothing consumes and
+ * disconnected nodes are all acyclic and unaffected, as are failed, unreached
+ * and receipt-absent nodes; none of those readings implies an edge. */
+function assertAcyclic(dependencies: Map<string, Set<string>>): void {
+  const remaining = new Map([...dependencies].map(([node, producers]) => [node, new Set(producers)]));
+  for (let settled = true; settled;) {
+    settled = false;
+    for (const [node, producers] of remaining)
+      if (producers.size === 0) {
+        remaining.delete(node);
+        for (const rest of remaining.values())
+          rest.delete(node);
+        settled = true;
+      }
+  }
+  assert(remaining.size === 0);
+}
 const equal = (a: unknown, b: unknown) => assert(a === b);
 const sourceMap: Check = value => {
   const o = object(value);
@@ -515,6 +540,7 @@ export function normalizeGraphAttachment(
     }
   ];
   let exceptional = false;
+  const dependencies = new Map<string, Set<string>>(expectedIds.map(nodeId => [nodeId, new Set<string>()]));
   for (const e of executions) {
     const c = build.checks[e.mode];
     executionCheck(c);
@@ -553,6 +579,7 @@ export function normalizeGraphAttachment(
         equal(o.artifact_key, a.artifact_key);
         equal(o.type, a.type);
         equal(o.type_version, a.type_version);
+        dependencies.get(n.id)!.add(a.producer as string);
       }
     }
     checks.push({
@@ -560,6 +587,7 @@ export function normalizeGraphAttachment(
       detail: `${computed} computed and ${hits} served from cache; ${e.source_preparation_calls} source preparation calls are counted separately. Exact execution-manifest byte digest and computation content key agree with the build summary. Source pins agree with the bound aggregate source map.`
     });
   }
+  assertAcyclic(dependencies);
   assert(exceptional ? ["completed", "failed"].includes(manifest.execution_status) : manifest.execution_status === "completed");
   return {
     projection: {
