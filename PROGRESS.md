@@ -20,8 +20,9 @@ cache, gate and mapping state on separate axes.
 
 ## State
 
-Original build complete and frozen at `ce1a559`. Review fixes in progress on the
-dependent branch; see the review-fix section below.
+Original build complete and frozen at `ce1a559`. The review fixes are complete
+and frozen on the dependent branch; see the review-fix section below. Nothing on
+either branch is pushed.
 
 ## Review fixes (branch `candidate-receipt-graph-review-20260905`)
 
