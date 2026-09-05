@@ -825,13 +825,14 @@ describe("the limits distinguish what is bound from what the projection asserts"
     expect(limits).not.toMatch(/never serialised|never serialized|does not exist/i);
   });
 
-  test("marks the two-execution reading as projection-asserted, not publisher-bound", () => {
+  test("marks the pairing as this projection's and the executions as published", () => {
     const payload = graph();
     expect(payload.comparison.execution_note).toMatch(
-      /asserted by this projection/i,
+      /paired by this projection/i,
     );
+    expect(payload.limits.join(" ")).toMatch(/paired by this projection/i);
     expect(payload.limits.join(" ")).toMatch(
-      /neither manifest byte digest is pinned by anything the publisher attached/i,
+      /does not pin either recorded run manifest's byte digest/i,
     );
   });
 

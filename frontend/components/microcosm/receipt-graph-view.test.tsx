@@ -251,18 +251,23 @@ describe("a step that succeeded without a typed artifact is not warned about", (
 });
 
 describe("the reader is told what the evidence does not pin", () => {
-  test("the two-execution reading is offered as the projection's own assertion", () => {
+  test("only the pairing is offered as the projection's own", () => {
     const markup = render();
-    expect(markup).toContain("asserted by this projection");
+    // Not "these are two executions, and we say so": the publisher's build
+    // evidence carries a check for each. What is this projection's is which
+    // recorded manifest bytes belong to which of them.
+    expect(markup).toContain("paired by this projection");
+    expect(markup).toContain("computing four kernel calls and one computing none");
+    expect(markup).not.toContain("that separation is asserted by this projection");
   });
 
   test("that qualification sits beside the claim, not only in the folded limits", () => {
     const markup = render();
     // The comparison card is where the two manifest digests are shown as what
-    // tells the executions apart, so it is where the reader has to be told that
-    // nothing the publisher attached pins them. It is said twice: once there,
-    // once in the limits behind the fold.
-    const phrase = "asserted by this projection";
+    // tells the executions apart, so it is where the reader has to be told what
+    // pins them and what does not. It is said twice: once there, once in the
+    // limits behind the fold.
+    const phrase = "paired by this projection";
     expect(markup.split(phrase)).toHaveLength(3);
     expect(markup.indexOf(phrase)).toBeLessThan(
       markup.indexOf("What was checked before any of this was drawn"),

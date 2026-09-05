@@ -793,14 +793,18 @@ export function buildReceiptGraph(
     // this run does have — the boundary step's base and the gate step's
     // population — are absent from the canvas.
     "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
+    "One narrow slice of column ownership is published: the build evidence names, for the four household columns inside the gate's declared tolerance scope, which steps wrote each of them. It is not drawn either, because it describes that gate's scope rather than the graph.",
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
     "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
-    // Everything else in the binding block is re-derived from bytes the
-    // publisher attached. This one is not, and the difference is worth stating
-    // rather than letting the two sit side by side as if equally evidenced.
-    "Two executions are told apart here by the byte digest of each recorded run manifest. Neither manifest byte digest is pinned by anything the publisher attached, so that separation is asserted by this projection. The population, implementation, content-key and source digests checked above are bound by the publisher's own build evidence.",
+    // Precise in both directions. That there were two executions is the
+    // publisher's own record — two check blocks, one computing four kernel
+    // calls and one computing none. What this projection asserts is only the
+    // pairing: which recorded manifest bytes belong to which of them. The
+    // evidence's own manifest digest is the shared content key, so it pins
+    // neither byte digest.
+    "The publisher's build evidence records two executions of this run, one computing four kernel calls and one computing none. It does not pin either recorded run manifest's byte digest — its own manifest digest is the content key the two share — so which bytes shown here belong to which execution is paired by this projection, not published. The population, implementation, content-key and source digests checked above are bound by that same build evidence.",
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
@@ -880,7 +884,7 @@ export function buildReceiptGraph(
         new Set(executions.map((execution) => execution.manifest_sha256)).size ===
         executions.length,
       execution_note:
-        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. The digests themselves are asserted by this projection: the publisher's build evidence pins the shared content key, not either manifest's bytes.",
+        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. That there were two is also the publisher's own record — its build evidence carries a check for each, one computing four kernel calls and one computing none. What it does not pin is either manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.",
       output_identity: comparison,
       cache_differences: cacheDifferences,
     },
