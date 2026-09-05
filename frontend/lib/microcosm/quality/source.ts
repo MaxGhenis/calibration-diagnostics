@@ -128,11 +128,30 @@ export function configuredQualitySource(
       return Buffer.concat(chunks);
     };
   }
+  // A transport failure must describe the artifact, never the server. These
+  // readers are reached from every route that accepts a candidate release token
+  // -- calibration, targets, compare, cross-dataset and staging all resolve one
+  // through loadRelease -- and most of those routes report a raw error message,
+  // so an ENOENT naming the configured directory has to be contained here
+  // rather than at each of them. The relative path is safe to name: it comes
+  // from the manifest, through safeArtifactPath.
+  const guarded: QualitySource["readBytes"] = async (relativePath) => {
+    try {
+      return await readBytes(relativePath);
+    } catch (error) {
+      if (error instanceof ArtifactError) throw error;
+      console.error(`Candidate evidence read failed: ${relativePath}`, error);
+      throw new ArtifactError(
+        "partial_artifact",
+        `Candidate evidence could not be read: ${relativePath}.`,
+      );
+    }
+  };
   const readText: QualitySource["readText"] = async (relativePath) =>
-    decodeArtifactText(await readBytes(relativePath));
+    decodeArtifactText(await guarded(relativePath));
   return {
-    reader: new CandidateQualityReader({ country, readBytes }),
-    readBytes,
+    reader: new CandidateQualityReader({ country, readBytes: guarded }),
+    readBytes: guarded,
     readText,
   };
 }

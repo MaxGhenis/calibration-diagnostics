@@ -18,6 +18,7 @@ import {
 } from "./source";
 import { loadRelease } from "../latest-artifact";
 import { GET } from "../../../app/api/microcosm/quality/route";
+import { GET as microcosmGET } from "../../../app/api/microcosm/route";
 
 const roots: string[] = [];
 const previous = {
@@ -435,4 +436,24 @@ test("the digest covers the artifact's exact bytes, identically over both transp
   } finally {
     await server.stop(true);
   }
+});
+
+test("a candidate token cannot report the configured directory through any route", async () => {
+  // Every calibration route resolves a candidate token through loadRelease, and
+  // most report a raw error message, so the containment has to hold at the
+  // evidence reader rather than at one route.
+  const f = await bundle();
+  const absent = "c".repeat(64);
+  const response = await microcosmGET(
+    new Request(
+      `http://localhost/api/microcosm?country=us&release=candidate:fixture-only:${absent}`,
+    ),
+  );
+  expect(response.status).toBe(502);
+  const { detail } = await response.json();
+  expect(detail).not.toInclude(f.root);
+  expect(detail).not.toInclude("ENOENT");
+  expect(detail).toBe(
+    `Candidate evidence could not be read: manifests/${absent}.json.`,
+  );
 });
