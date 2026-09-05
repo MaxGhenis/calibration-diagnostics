@@ -296,3 +296,9 @@ shape `selectionUrl` already returned for the candidate selector.
 ## Next (original build, completed)
 
 1. Author report and patch.
+
+## Receipt consistency correction — 2026-09-05
+
+- State: bounded correction on dependent base `5627aac7d8f68662c1dc85eb5e31cc879648559c`; underlying work is not root-approved.
+- Done: read repository guidance, native and ROOT successor probes, adapter/types, publisher fixture and generator. Confirmed clean requested branch/base; artifacts and existing servers preserved.
+- Next: commit failing regression tests, fix verification and typed-edge consistency, run graph/quality/route tests, TypeScript and one green full suite; freeze commits and write review receipts.
