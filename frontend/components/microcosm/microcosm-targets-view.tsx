@@ -41,7 +41,7 @@ interface Column {
   label: string;
   numeric?: boolean;
   sortable?: boolean;
-  render: (row: MicrocosmTargetRow) => React.ReactNode;
+  render: (row: MicrocosmTargetRow, geographyLabels: Record<string, string>) => React.ReactNode;
 }
 
 interface VariableMeasureOption {
@@ -197,9 +197,9 @@ const OVERVIEW_COLUMNS: Column[] = [
     key: "geography",
     label: "Geography",
     sortable: true,
-    render: (row) => (
-      <span className="whitespace-nowrap" title={row.chronicle?.geography_id ?? undefined}>
-        {row.geography || "—"}
+    render: (row, geographyLabels) => (
+      <span className="whitespace-nowrap" title={row.geography_id ?? row.chronicle?.geography_id ?? undefined}>
+        {(row.geography_key && geographyLabels[row.geography_key]) || row.geography || "—"}
       </span>
     ),
   },
@@ -236,14 +236,20 @@ function dimensionColumns(dimensions: MicrocosmTargetDimension[]): Column[] {
     label: dim.label,
     sortable: true,
     render: (row: MicrocosmTargetRow) => {
-      const value = rowFacetValue(row, dim.key);
+      const value = dim.key === "geography"
+        ? row.geography_key ?? row.geography
+        : rowFacetValue(row, dim.key);
       return value ? (
-        <span className="whitespace-nowrap">{value.replace(/^AGI in /, "")}</span>
+        <span className="whitespace-nowrap">{dimensionValueLabel(dim, value)}</span>
       ) : (
         <span className="text-muted-foreground">—</span>
       );
     },
   }));
+}
+
+function dimensionValueLabel(dimension: MicrocosmTargetDimension, value: string): string {
+  return (dimension.value_labels?.[value] ?? value).replace(/^AGI in /, "");
 }
 
 function measureLabel(measure: string | null | undefined): string {
@@ -632,6 +638,7 @@ export function MicrocosmTargetsView({
   const sources = data?.sources ?? [];
   const levels = data?.levels ?? [];
   const geographies = data?.geographies ?? [];
+  const geographyLabels = data?.geography_labels ?? {};
   const dimensions = data?.dimensions ?? [];
   const variableGroupCount = useMemo(() => groupVariables(variables).length, [variables]);
   const health = useMemo(
@@ -649,13 +656,13 @@ export function MicrocosmTargetsView({
       dimensions
         .map((d) => ({
           ...d,
-          values: d.values.filter((v) => v && v !== "All" && v !== "Total"),
+          values: d.values.filter((v) => v && dimensionValueLabel(d, v) !== "All" && dimensionValueLabel(d, v) !== "Total"),
         }))
         .filter((d) => d.values.length > 0),
     [dimensions],
   );
   type RefineQuestion =
-    | { kind: "dim"; key: string; label: string; values: string[] }
+    | ({ kind: "dim" } & MicrocosmTargetDimension)
     | { kind: "fit"; key: "fit"; label: string };
   const refineQuestions: RefineQuestion[] = [
     ...usableDimensions.map((d) => ({
@@ -663,6 +670,7 @@ export function MicrocosmTargetsView({
       key: d.key,
       label: d.label,
       values: d.values,
+      value_labels: d.value_labels,
     })),
     { kind: "fit", key: "fit", label: "Fit quality" },
   ];
@@ -750,7 +758,7 @@ export function MicrocosmTargetsView({
                   { value: "", label: "Any" },
                   ...dim.values.map((value) => ({
                     value,
-                    label: value.replace(/^AGI in /, ""),
+                    label: dimensionValueLabel(dim, value),
                   })),
                 ]}
                 className="w-full"
@@ -799,7 +807,7 @@ export function MicrocosmTargetsView({
                 }}
                 options={[
                   { value: "", label: "Any" },
-                  ...geographies.map((value) => ({ value, label: value })),
+                  ...geographies.map((value) => ({ value, label: geographyLabels[value] ?? value })),
                 ]}
                 className="w-full"
                 layout="stacked"
@@ -869,7 +877,7 @@ export function MicrocosmTargetsView({
             onChange={(value) => setFacet(dim.key, value)}
             options={[
               { value: "", label: "Any" },
-              ...dim.values.map((value) => ({ value, label: value.replace(/^AGI in /, "") })),
+              ...dim.values.map((value) => ({ value, label: dimensionValueLabel(dim, value) })),
             ]}
             layout="stacked"
           />
@@ -959,7 +967,7 @@ export function MicrocosmTargetsView({
                     key={column.key}
                     className={`px-3 py-1.5 tabular-nums ${column.numeric ? "text-right" : ""}`}
                   >
-                    {column.render(row)}
+                    {column.render(row, geographyLabels)}
                   </td>
                 ))}
               </tr>
@@ -1066,7 +1074,7 @@ export function MicrocosmTargetsView({
                     ]
                   : [
                       { value: "", label: `Any ${q.label.toLowerCase()}` },
-                      ...q.values.map((v) => ({ value: v, label: v.replace(/^AGI in /, "") })),
+                      ...q.values.map((v) => ({ value: v, label: dimensionValueLabel(q, v) })),
                     ];
               const setValue = (value: string) => {
                 if (q.kind === "fit") setWithinTolerance(value);
@@ -1225,6 +1233,7 @@ export function MicrocosmTargetsView({
           {selected && (
             <MicrocosmTargetDetail
               row={selected}
+              geographyLabel={selected.geography_key ? geographyLabels[selected.geography_key] : undefined}
               dimensions={dimensions}
               onClose={() => setSelected(null)}
             />

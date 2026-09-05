@@ -161,9 +161,26 @@ describe("synthetic third-country conformance", () => {
       returned: 3,
     });
     expect(page.dimensions).toEqual([
-      { key: "geography", label: "Region", values: ["North", "South"] },
+      {
+        key: "geography",
+        label: "Region",
+        values: [
+          `geo:v1:${encodeURIComponent(JSON.stringify(["legacy_label", "region", "North"]))}`,
+          `geo:v1:${encodeURIComponent(JSON.stringify(["legacy_label", "region", "South"]))}`,
+        ],
+        value_labels: {
+          [`geo:v1:${encodeURIComponent(JSON.stringify(["legacy_label", "region", "North"]))}`]:
+            "North",
+          [`geo:v1:${encodeURIComponent(JSON.stringify(["legacy_label", "region", "South"]))}`]:
+            "South",
+        },
+      },
       { key: "bd_sex", label: "Sex", values: ["Female", "Male"] },
-      { key: "bd_age_band", label: "Age band", values: ["0–17", "18–64", "65+"] },
+      {
+        key: "bd_age_band",
+        label: "Age band",
+        values: ["0–17", "18–64", "65+"],
+      },
     ]);
     expect(page.targets).toEqual(
       expect.arrayContaining([
@@ -305,9 +322,26 @@ describe("synthetic third-country conformance", () => {
       );
 
       expect(page.dimensions).toEqual([
-        { key: "geography", label: "Region", values: ["North", "South"] },
+        {
+          key: "geography",
+          label: "Region",
+          values: [
+            `geo:v1:${encodeURIComponent(JSON.stringify(["dimension", "region", "north"]))}`,
+            `geo:v1:${encodeURIComponent(JSON.stringify(["dimension", "region", "south"]))}`,
+          ],
+          value_labels: {
+            [`geo:v1:${encodeURIComponent(JSON.stringify(["dimension", "region", "north"]))}`]:
+              "North",
+            [`geo:v1:${encodeURIComponent(JSON.stringify(["dimension", "region", "south"]))}`]:
+              "South",
+          },
+        },
         { key: "bd_sex", label: "Sex", values: ["Female", "Male"] },
-        { key: "bd_age_band", label: "Age band", values: ["0–17", "18–64", "65+"] },
+        {
+          key: "bd_age_band",
+          label: "Age band",
+          values: ["0–17", "18–64", "65+"],
+        },
       ]);
     },
   );

@@ -19,6 +19,8 @@ import {
 import { loadRelease } from "../latest-artifact";
 import { GET } from "../../../app/api/microcosm/quality/route";
 import { GET as microcosmGET } from "../../../app/api/microcosm/route";
+import { GET as targetTreeGET } from "../../../app/api/microcosm/target-tree/route";
+import { GET as targetDiagnosticsGET } from "../../../app/api/microcosm/target-diagnostics/route";
 
 const roots: string[] = [];
 const previous = {
@@ -114,6 +116,44 @@ test("candidate calibration uses existing readers without a latest or staging po
   expect(calibration.quality_manifest?.release_eligibility.status).toBe(
     "excluded",
   );
+});
+
+test("candidate tree resolves exact geography identities and refuses an ambiguous old label", async () => {
+  const f = await bundle();
+  await f.attach("calibration_diagnostics", {
+    schema_version: 7, release_id: "fixture-only",
+    dimensions: { region: { role: "geography", label: "Region", level: "region", values: { north: "Shared", south: "Shared" } } },
+    targets: ["north", "south"].map((id) => ({
+      name: `invented.${id}@2024`, source: { id: "invented" }, variable: { id: "population", measure: "count" },
+      dimensions: { region: id }, target: 100, initial_estimate: 90, final_estimate: 100,
+    })),
+  });
+  const digest = await f.save();
+  const url = new URL("http://example.test/api/microcosm/target-tree");
+  const release = `candidate:fixture-only:${digest}`;
+  url.searchParams.set("release", release);
+  url.searchParams.set("breakdown", "geography");
+  const overview = await targetTreeGET(new Request(url));
+  expect(overview.status).toBe(200);
+  const nodes = (await overview.json()).groups[0].nodes;
+  expect(nodes).toHaveLength(2);
+  for (const node of nodes) {
+    url.searchParams.set("path_geography", node.id);
+    const selected = await targetTreeGET(new Request(url));
+    expect(selected.status).toBe(200);
+    const body = await selected.json();
+    expect(body.filteredMetrics.nTargets).toBe(1);
+    expect(body.path.geography).toBe(node.id);
+    expect(body.releaseId).toBe("fixture-only");
+  }
+  url.searchParams.set("path_geography", "Shared");
+  const ambiguous = await targetTreeGET(new Request(url));
+  expect(ambiguous.status).toBe(400);
+  expect((await ambiguous.json()).detail).toContain("more than one geographic identity");
+  expect(url.searchParams.get("release")).toBe(release);
+  const candidate = await loadCandidate("us", "fixture-only", digest);
+  expect(candidate.manifest.population?.sha256).toBe("a".repeat(64));
+  expect(candidate.manifest.release_eligibility.status).toBe("excluded");
 });
 
 test("embedded diagnostics from another release are refused even with matching descriptor hash", async () => {
@@ -456,4 +496,77 @@ test("a candidate token cannot report the configured directory through any route
   expect(detail).toBe(
     `Candidate evidence could not be read: manifests/${absent}.json.`,
   );
+});
+
+test("candidate target diagnostics preserves geography identities and immutable release binding", async () => {
+  const f = await bundle();
+  await f.attach("calibration_diagnostics", {
+    schema_version: 7,
+    release_id: "fixture-only",
+    dimensions: {
+      region: {
+        role: "geography",
+        label: "Region",
+        level: "region",
+        values: { north: "Shared", south: "Shared" },
+        order: ["south", "north"],
+      },
+    },
+    targets: ["north", "south"].map((id) => ({
+      name: `invented.${id}@2024`,
+      source: { id: "invented" },
+      variable: { id: "population", measure: "count" },
+      dimensions: { region: id },
+      target: 100,
+      initial_estimate: 90,
+      final_estimate: 100,
+    })),
+  });
+  const digest = await f.save();
+  const token = `candidate:fixture-only:${digest}`;
+  const request = async (query: Record<string, string | undefined>) =>
+    targetDiagnosticsGET(
+      new Request(
+        `http://example.test/api/microcosm/target-diagnostics?${new URLSearchParams(Object.entries({ country: "us", release: token, ...query }).filter((entry): entry is [string, string] => entry[1] !== undefined))}`,
+      ),
+    );
+  const response = await request({});
+  expect(response.status).toBe(200);
+  const overview = await response.json();
+  expect(overview.geographies).toHaveLength(2);
+  expect(Object.values(overview.geography_labels)).toEqual([
+    "Shared (region / south)",
+    "Shared (region / north)",
+  ]);
+  for (const key of overview.geographies) {
+    for (const query of [{ geography: key }, { facet: `geography:${key}` }]) {
+      const selected = await request(query);
+      expect(selected.status).toBe(200);
+      const body = await selected.json();
+      expect(body.filtered_total).toBe(1);
+      expect(body.targets[0].geography_key).toBe(key);
+      expect(body.targets[0].geography_dimension_id).toBe("region");
+      expect(body.release_id).toBe("fixture-only");
+    }
+  }
+  for (const query of [
+    { geography: "Shared", source: "missing" },
+    { facet: "geography:Shared", scope: "healthcare" },
+  ]) {
+    const ambiguous = await request(query);
+    expect(ambiguous.status).toBe(400);
+    expect((await ambiguous.json()).detail).toContain(
+      "more than one geographic identity",
+    );
+  }
+  expect(
+    (await (await request({ geography: "unknown" })).json()).filtered_total,
+  ).toBe(0);
+  expect(
+    (await request({ release: `candidate:fixture-only:${"b".repeat(64)}` }))
+      .status,
+  ).not.toBe(200);
+  const unchanged = await loadCandidate("us", "fixture-only", digest);
+  expect(unchanged.manifest.population?.sha256).toBe("a".repeat(64));
+  expect(unchanged.manifest.release_eligibility.status).toBe("excluded");
 });

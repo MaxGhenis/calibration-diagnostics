@@ -7,6 +7,12 @@ import { sourceAuthorityLabel } from "@/lib/source-labels";
 
 import { normalizeChronicleMetadata } from "./chronicle-metadata";
 import {
+  AmbiguousGeographyError,
+  geographyKey,
+  geographyOptions,
+  resolveGeographySelection,
+} from "./geography-identity";
+import {
   chroniclePublisherFromMetadata,
   qualifyingChildrenFromRecordSet,
   readLegacyTarget,
@@ -123,7 +129,8 @@ export function assertSafeReleaseId(id: string, label = "release"): string {
 export function classifyApiError(error: unknown): { status: number; body: { detail: string } } {
   if (
     error instanceof InvalidReleaseIdError ||
-    error instanceof SelfComparisonError
+    error instanceof SelfComparisonError ||
+    error instanceof AmbiguousGeographyError
   ) {
     return { status: 400, body: { detail: error.message } };
   }
@@ -807,7 +814,7 @@ function sortDimensionValues(label: string, values: string[]): string[] {
 }
 
 function rowFacetValue(row: TargetRow, key: string): string | undefined {
-  if (key === "geography") return (row.geography as string) || undefined;
+  if (key === "geography") return geographyKey(row);
   if (key === "level") return (row.level as string) || undefined;
   const targetDimensions = row.target_dimensions as TargetBreakdownDimension[] | undefined;
   const targetDimension = targetDimensions?.find((dim) => dim.key === key);
@@ -831,16 +838,18 @@ export interface TargetDimension {
   key: string;
   label: string;
   values: string[];
+  value_labels?: Record<string, string>;
 }
 
-function computeDimensions(rows: TargetRow[]): TargetDimension[] {
+function computeDimensions(
+  rows: TargetRow[],
+  geographyLabels: Record<string, string>,
+): TargetDimension[] {
   const geographyLabel =
     rows.length > 0 && rows.every((row) => row.level === "region")
       ? "Region"
       : "Geography";
-  const candidates: { key: string; label?: string }[] = [
-    { key: "geography", label: geographyLabel },
-  ];
+  const candidates: { key: string; label?: string }[] = [];
   const seenDimensionKeys = new Set<string>();
   for (const row of rows) {
     const targetDimensions = row.target_dimensions as TargetBreakdownDimension[] | undefined;
@@ -851,6 +860,17 @@ function computeDimensions(rows: TargetRow[]): TargetDimension[] {
     }
   }
   const facets: TargetDimension[] = [];
+  const geographies = geographyOptions(rows);
+  if (geographies.length > 1) {
+    facets.push({
+      key: "geography",
+      label: geographyLabel,
+      values: geographies.map((option) => option.key),
+      value_labels: Object.fromEntries(geographies.map((option) => [
+        option.key, geographyLabels[option.key] ?? option.label,
+      ])),
+    });
+  }
   for (const candidate of candidates) {
     const values = [
       ...new Set(
@@ -860,7 +880,7 @@ function computeDimensions(rows: TargetRow[]): TargetDimension[] {
     if (values.length <= 1) continue;
     const label = candidate.label ?? classifyDimension(values);
     const ranks = new Map<string, number>();
-    let everyValueRanked = candidate.key !== "geography";
+    let everyValueRanked = true;
     for (const value of values) {
       const matchingDimensions = rows.flatMap((row) =>
         ((row.target_dimensions as TargetBreakdownDimension[] | undefined) ?? [])
@@ -1107,6 +1127,10 @@ function enrichTargetRow(
       ? null
       : stateFromGeoId(stringValue(metadata.ledger_geography_id)) ?? deriveState(baseName),
     geography,
+    geography_id:
+      structuredIdentity?.geographyId ?? stringValue(metadata.ledger_geography_id),
+    geography_dimension_id: structuredIdentity?.geographyDimensionId ?? null,
+    geography_rank: structuredIdentity?.geographyRank ?? null,
     level,
     source: parsed.source,
     source_label:
@@ -1387,11 +1411,7 @@ export function microcosmTargetLevels(rows: TargetRow[]): string[] {
 }
 
 export function microcosmTargetGeographies(rows: TargetRow[]): string[] {
-  return [...new Set(rows.map((row) => String(row.geography ?? "")))]
-    .filter(Boolean)
-    .sort((a, b) =>
-      a === "United States" ? -1 : b === "United States" ? 1 : a.localeCompare(b),
-    );
+  return geographyOptions(rows).map((option) => option.key);
 }
 
 export function microcosmVariableSummary(rows: TargetRow[]) {
@@ -2298,6 +2318,10 @@ function targetResponseRow(row: TargetRow): TargetRow {
     family: row.family,
     state: row.state,
     geography: row.geography,
+    geography_key: geographyKey(row),
+    geography_id: row.geography_id,
+    geography_dimension_id: row.geography_dimension_id,
+    geography_rank: row.geography_rank,
     level: row.level,
     source: row.source,
     source_label: row.source_label,
@@ -2622,6 +2646,10 @@ export function latestMicrocosmCalibrationHighlights(cal: Calibration, limit = 1
 
 export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Calibration) {
   const rows = cal.rows;
+  // Resolve old label selections on the complete surface. A scope or variable
+  // filter must not hide another geography with the same display label.
+  const geographies = geographyOptions(rows);
+  const geographyLabels = Object.fromEntries(geographies.map((option) => [option.key, option.label]));
   const url = new URL(requestUrl);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "100") || 100, 1), 500);
   const offset = Math.max(Number(url.searchParams.get("offset") ?? "0") || 0, 0);
@@ -2633,7 +2661,10 @@ export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Ca
   const measure = stringParam(url.searchParams.get("measure"));
   const source = stringParam(url.searchParams.get("source"));
   const level = stringParam(url.searchParams.get("level"));
-  const geography = stringParam(url.searchParams.get("geography"));
+  const geographySelection = stringParam(url.searchParams.get("geography"));
+  const geography = geographySelection
+    ? resolveGeographySelection(geographySelection, geographies)
+    : null;
   const state = stringParam(url.searchParams.get("state"));
   const direction = stringParam(url.searchParams.get("direction"));
   const within = booleanParam(url.searchParams.get("within_tolerance"));
@@ -2646,7 +2677,10 @@ export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Ca
       const sep = entry.indexOf(":");
       return sep < 0 ? null : ([entry.slice(0, sep), entry.slice(sep + 1)] as const);
     })
-    .filter((v): v is readonly [string, string] => v != null);
+    .filter((v): v is readonly [string, string] => v != null)
+    .map(([key, value]) => [key, key === "geography"
+      ? resolveGeographySelection(value, geographies)
+      : value] as const);
   const scopedRows = scope === "healthcare" ? rows.filter(isHealthcareTarget) : rows;
   const metadata = targetDiagnosticsMetadata(scopedRows);
   const scopedWithin10Pct = scopedRows.filter(
@@ -2660,9 +2694,9 @@ export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Ca
   if (measure) filtered = filtered.filter((row) => row.measure === measure);
   if (source) filtered = filtered.filter((row) => row.source === source);
   if (level) filtered = filtered.filter((row) => row.level === level);
-  if (geography) filtered = filtered.filter((row) => row.geography === geography);
+  if (geography) filtered = filtered.filter((row) => geographyKey(row) === geography);
   if (state) filtered = filtered.filter((row) => row.state === state);
-  const dimensions = variable ? computeDimensions(filtered) : [];
+  const dimensions = variable ? computeDimensions(filtered, geographyLabels) : [];
   for (const [key, value] of facetFilters) {
     filtered = filtered.filter((row) => rowFacetValue(row, key) === value);
   }
@@ -2679,7 +2713,7 @@ export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Ca
   }
   if (search) filtered = filtered.filter((row) => matchesSearch(row, search));
   const sortValue = (row: TargetRow) =>
-    rowFacetValue(row, sortBy) ?? row[sortBy];
+    sortBy === "geography" ? row.geography : rowFacetValue(row, sortBy) ?? row[sortBy];
   filtered = [...filtered].sort((a, b) => {
     const aVal = sortValue(a);
     const bVal = sortValue(b);
@@ -2709,6 +2743,7 @@ export function latestMicrocosmTargetDiagnosticsPage(requestUrl: string, cal: Ca
     sources: metadata.sources,
     levels: metadata.levels,
     geographies: metadata.geographies,
+    geography_labels: geographyLabels,
     variables: metadata.variables,
     dimensions,
     scope_counts: metadata.scope_counts,

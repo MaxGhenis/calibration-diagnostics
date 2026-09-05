@@ -52,6 +52,10 @@ export interface MicrocosmTargetRow {
   state?: string | null;
   base_name?: string | null;
   geography?: string | null;
+  geography_key?: string | null;
+  geography_id?: string | null;
+  geography_dimension_id?: string | null;
+  geography_rank?: number | null;
   level?: string | null;
   source?: string | null;
   source_label?: string | null;
@@ -167,6 +171,7 @@ export interface MicrocosmTargetDimension {
   key: string;
   label: string;
   values: string[];
+  value_labels?: Record<string, string>;
 }
 
 export interface MicrocosmFamilyFitRow {
@@ -353,6 +358,7 @@ export interface MicrocosmTargetDiagnostics {
   sources?: string[];
   levels?: string[];
   geographies?: string[];
+  geography_labels?: Record<string, string>;
   variables?: MicrocosmVariableRow[];
   dimensions?: MicrocosmTargetDimension[];
   // Targets per named scope in the release (the `scope` query parameter).

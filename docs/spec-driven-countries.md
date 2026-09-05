@@ -209,16 +209,41 @@ their IDs and raw values are humanized. When an age-band value lacks an
 artifact label, range values such as `0_17` and `65_plus` become `0–17` and
 `65+`.
 
-A geography-role dimension sets `row.geography` and uses its declared `level`
-or `"region"`. Other dimensions become `target_dimensions` with `key`,
+A geography-role dimension sets `row.geography`, `row.geography_id`,
+`row.geography_dimension_id`, and `row.geography_rank`, and uses its declared
+`level` or `"region"`. A target may contain at most one populated
+geography-role dimension. Other dimensions become `target_dimensions` with `key`,
 `label`, `value`, `source_key`, `raw_value`, and an optional zero-based `rank`.
 The published dimension ID, not its display label, determines `key`. Simple
 lowercase IDs retain keys such as `bd_age_band`; IDs containing other
 characters receive a lossless query-safe encoding. Consequently, two distinct
 dimensions may share a display label without merging into one facet.
-Facet values use rank order only when every displayed value has a rank;
-otherwise the legacy facet sorter remains in force. Structured rows are also
-excluded from whole-population estimate-scope inference.
+Geography choices in the active target-results API and page use the same
+dimension/value identity keys as the calibration tree. `geographies` contains
+these keys, with display text in `geography_labels`. The geography dimension's
+`values` also contains keys, with display text in `value_labels`. Target response
+rows retain `geography_key`, `geography_id`, `geography_dimension_id`, and
+`geography_rank`; `geography` remains the published display text.
+
+Direct geography filters and geography facets accept stable keys. Old labels
+remain compatible when they identify one geography on the complete loaded
+surface. Ambiguous labels return HTTP 400 before scope, variable, source or level
+filters can hide the collision; unknown selections return no rows. Candidate
+and staging target diagnostics share this behavior. Candidate manifest and
+population attachment checks continue to run before shaping the results.
+
+Geography ranks apply only when all displayed identities have consistent ranks
+within one declared dimension. Incomplete or cross-dimension ordering uses the
+shared deterministic fallback. Other facet values use rank order only when every
+displayed value has a rank; otherwise the legacy facet sorter remains in force.
+Structured rows are also excluded from whole-population estimate-scope
+inference.
+
+The older `/api/microcosm/target-treemap` endpoint and unmounted `CalibrationMap`
+component retain label-based geography grouping. They do not support separate
+selection of equal-label geography identities. The active calibration explorer
+uses `/api/microcosm/target-tree`; the active targets page uses the identity-aware
+`/api/microcosm/target-diagnostics` endpoint described above.
 
 ### Target representation classification
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ExplorerState } from "./calibration-explorer";
+import { geographyKey } from "./geography-identity";
 import {
   applyExplorerFilters,
   buildCalibrationTree,
@@ -234,6 +235,31 @@ describe("source, geography, and declared-dimension hierarchy", () => {
     expect(tree.groups[0].label).toBe("Nova Statistics Agency");
   });
 
+  test("retains artifact source and category labels throughout the selected path", () => {
+    const tree = buildCalibrationTree(
+      [
+        target("obr-income-tax", {
+          source: "obr",
+          source_label: "Office for Budget Responsibility",
+          variable: "efo_receipts",
+          variable_label: "EFO receipts",
+          geography: "United Kingdom",
+        }),
+      ],
+      state({
+        source: "obr",
+        program: "efo_receipts",
+        dimensions: [],
+      }),
+    );
+
+    expect(tree.pathLabels).toEqual({
+      source: "Office for Budget Responsibility",
+      program: "EFO receipts",
+    });
+    expect(tree.groups[0].label).toBe("EFO receipts");
+  });
+
   test("renders geography first, then programs grouped by their source", () => {
     const overview = buildCalibrationTree(
       rows,
@@ -243,7 +269,7 @@ describe("source, geography, and declared-dimension hierarchy", () => {
     expect(overview.currentLevel).toEqual({ kind: "geography", label: "Geography" });
     expect(overview.groups).toHaveLength(1);
     expect(overview.groups[0].label).toBe("Geography");
-    expect(overview.groups[0].nodes.map((node) => [node.id, node.metrics.nTargets])).toEqual([
+    expect(overview.groups[0].nodes.map((node) => [node.label, node.metrics.nTargets])).toEqual([
       ["CA", 8],
       ["United States", 2],
       ["NY", 1],
@@ -278,11 +304,11 @@ describe("source, geography, and declared-dimension hierarchy", () => {
     );
 
     expect(tree.currentLevel).toEqual({ kind: "geography", label: "Geography" });
-    expect(tree.groups[0].nodes.map((node) => [node.id, node.metrics.nTargets])).toEqual([
+    expect(tree.groups[0].nodes.map((node) => [node.label, node.metrics.nTargets])).toEqual([
       ["CA", 2],
       ["United States", 2],
     ]);
-    expect(tree.groups[0].nodes[0].selection).toEqual({ kind: "geography", value: "CA" });
+    expect(tree.groups[0].nodes[0].selection).toEqual({ kind: "geography", value: geographyKey({ geography: "CA", level: "state" }) });
   });
 
   test("shows CTC targets immediately because its declared dimensions are constant", () => {
@@ -682,6 +708,6 @@ describe("calibration tree metrics and filters", () => {
     expect(tree.filterOptions.geographyLevels).not.toContain("__missing__");
     expect(tree.filterOptions.geographies).not.toContain("__missing__");
     expect(tree.filterOptions.geographyLevels).toContain("national");
-    expect(tree.filterOptions.geographies).toContain("United States");
+    expect(Object.values(tree.filterOptions.geographyLabels ?? {})).toContain("United States");
   });
 });

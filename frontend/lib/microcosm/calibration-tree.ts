@@ -6,9 +6,14 @@ import type {
 } from "./calibration-explorer";
 import { canonicalLabel, programLabel } from "./program-label";
 import { sourceLabel } from "./source-label";
-
-const DEFAULT_GEOGRAPHY = "United States";
-const DEFAULT_GEOGRAPHY_LEVEL = "national";
+import {
+  DEFAULT_GEOGRAPHY_LEVEL,
+  geographyKey,
+  geographyOptions,
+  resolveGeographySelection,
+  type GeographyRow,
+  type GeographyOption,
+} from "./geography-identity";
 
 export interface CalibrationTreeDimension {
   key: string;
@@ -18,7 +23,7 @@ export interface CalibrationTreeDimension {
   raw_value?: string;
 }
 
-export interface CalibrationTreeTarget {
+export interface CalibrationTreeTarget extends GeographyRow {
   name?: string | null;
   base_name?: string | null;
   comparison_id?: string | null;
@@ -85,6 +90,11 @@ export interface CalibrationTreeResponse {
   releaseId?: string;
   lossAttributionAvailable: boolean;
   path: ExplorerState["path"];
+  pathLabels: {
+    source?: string;
+    program?: string;
+    geography?: string;
+  };
   currentLevel:
     | { kind: "overview"; label: string }
     | { kind: "geography"; label: string }
@@ -96,6 +106,7 @@ export interface CalibrationTreeResponse {
   filterOptions: {
     geographyLevels: string[];
     geographies: string[];
+    geographyLabels?: Record<string, string>;
     fitBands: string[];
     calibrationStatuses: string[];
   };
@@ -137,16 +148,19 @@ export function applyExplorerFilters(
   rows: CalibrationTreeTarget[],
   filters: ExplorerState["filters"],
 ): CalibrationTreeTarget[] {
+  const options = filters.geographies.length ? geographyOptions(rows) : [];
+  const selectedGeographies = filters.geographies.map((value) =>
+    resolveGeographySelection(value, options),
+  );
   return rows.filter((row) => {
     const geographyLevel = String(row.level ?? "").trim() || DEFAULT_GEOGRAPHY_LEVEL;
-    const geography = String(row.geography ?? "").trim() || DEFAULT_GEOGRAPHY;
     const status =
       row.calibration_status === "not_materialized"
         ? "skipped"
         : row.calibration_status ?? null;
     return (
       (!filters.geographyLevels.length || filters.geographyLevels.includes(geographyLevel)) &&
-      (!filters.geographies.length || filters.geographies.includes(geography)) &&
+      (!selectedGeographies.length || selectedGeographies.includes(geographyKey(row))) &&
       (!filters.fitBands.length || filters.fitBands.includes(fitBandForTarget(row))) &&
       (!filters.calibrationStatuses.length ||
         (status != null && filters.calibrationStatuses.includes(status)))
@@ -308,10 +322,6 @@ export function orderedBreakdownDimensions(
     .map(({ key, label }) => ({ key, label }));
 }
 
-function geographyId(row: CalibrationTreeTarget): string {
-  return String(row.geography ?? "").trim() || DEFAULT_GEOGRAPHY;
-}
-
 function targetLabel(row: CalibrationTreeTarget): string {
   const sourceMeasureId = String(row.source_measure_id ?? "").trim();
   if (sourceMeasureId) return humanize(sourceMeasureId);
@@ -414,7 +424,7 @@ function sortNodes(nodes: CalibrationTreeNode[]): CalibrationTreeNode[] {
   );
 }
 
-function filterOptions(rows: CalibrationTreeTarget[]) {
+function filterOptions(rows: CalibrationTreeTarget[], geographies: GeographyOption[]) {
   const unique = (values: string[]) => [...new Set(values)].sort((left, right) =>
     left.localeCompare(right),
   );
@@ -422,9 +432,8 @@ function filterOptions(rows: CalibrationTreeTarget[]) {
     geographyLevels: unique(rows.map(
       (row) => String(row.level ?? "").trim() || DEFAULT_GEOGRAPHY_LEVEL,
     )),
-    geographies: unique(rows.map(
-      (row) => String(row.geography ?? "").trim() || DEFAULT_GEOGRAPHY,
-    )),
+    geographies: geographies.map((option) => option.key),
+    geographyLabels: Object.fromEntries(geographies.map((option) => [option.key, option.label])),
     fitBands: ["0_5", "5_10", "10_20", "20_40", "40_plus", "unscored"],
     calibrationStatuses: ["included", "skipped"],
   };
@@ -484,19 +493,55 @@ function programGroups(rows: CalibrationTreeTarget[]): CalibrationTreeGroup[] {
     );
 }
 
-function geographyNodes(rows: CalibrationTreeTarget[]): CalibrationTreeNode[] {
-  const byGeography = groupRows(rows, geographyId);
-  return sortNodes(
-    [...byGeography.entries()].map(([geography, geographyRows]) =>
-      node(
-        geography,
-        geography,
-        "geography",
-        { kind: "geography", value: geography },
-        geographyRows,
-      ),
-    ),
+function pathLabels(
+  rows: CalibrationTreeTarget[],
+  path: ExplorerState["path"],
+  geographies: GeographyOption[],
+): CalibrationTreeResponse["pathLabels"] {
+  const labels: CalibrationTreeResponse["pathLabels"] = {};
+  if (path.geography) {
+    labels.geography = geographies.find((option) => option.key === path.geography)?.label;
+  }
+  if (!path.source) return labels;
+  const sourceRows = rows.filter(
+    (row) => String(row.source ?? "other") === path.source,
   );
+  const artifactSourceLabel = sourceRows
+    .map((row) => row.source_label?.trim())
+    .find((label): label is string => Boolean(label));
+  labels.source = artifactSourceLabel ?? sourceLabel(path.source);
+  if (!path.program) return labels;
+  const programRows = sourceRows.filter((row) => programId(row) === path.program);
+  const artifactProgramLabels = [
+    ...new Set(
+      programRows
+        .map((row) => row.variable_label?.trim())
+        .filter((label): label is string => Boolean(label)),
+    ),
+  ];
+  labels.program = programLabel(
+    path.program,
+    artifactProgramLabels.length === 1 ? artifactProgramLabels[0] : null,
+  );
+  return labels;
+}
+
+function geographyNodes(rows: CalibrationTreeTarget[]): CalibrationTreeNode[] {
+  const byGeography = groupRows(rows, geographyKey);
+  const options = geographyOptions(rows);
+  const nodes = options.map((option) =>
+      node(
+        option.key,
+        option.label,
+        "geography",
+        { kind: "geography", value: option.key },
+        byGeography.get(option.key)!,
+      ),
+  );
+  const dimensions = new Set(options.map((option) => option.dimensionId));
+  return dimensions.size === 1 && !dimensions.has(null) && options.every((option) => option.rank != null)
+    ? nodes
+    : sortNodes(nodes);
 }
 
 export function buildCalibrationTree(
@@ -507,9 +552,16 @@ export function buildCalibrationTree(
     allRows.length > 0 && allRows.every((row) => finiteLossContribution(row) != null),
 ): CalibrationTreeResponse {
   const chartRows = allRows.map(normalizeChartCalibrationStatus);
-  const { path } = state;
-  const options = filterOptions(chartRows);
-  const filteredRows = applyExplorerFilters(chartRows, state.filters);
+  const geographies = geographyOptions(chartRows);
+  const path = { ...state.path };
+  if (path.geography) path.geography = resolveGeographySelection(path.geography, geographies);
+  const filters = {
+    ...state.filters,
+    geographies: state.filters.geographies.map((value) => resolveGeographySelection(value, geographies)),
+  };
+  const selectedPathLabels = pathLabels(chartRows, path, geographies);
+  const options = filterOptions(chartRows, geographies);
+  const filteredRows = applyExplorerFilters(chartRows, filters);
 
   if (state.breakdown === "geography" && !path.geography) {
     const nodes = geographyNodes(filteredRows);
@@ -517,6 +569,7 @@ export function buildCalibrationTree(
       releaseId,
       lossAttributionAvailable,
       path,
+      pathLabels: selectedPathLabels,
       currentLevel: { kind: "geography", label: "Geography" },
       groups: [{
         id: "geography",
@@ -532,16 +585,17 @@ export function buildCalibrationTree(
 
   if (state.breakdown === "geography" && (!path.source || !path.program)) {
     const geographyRows = chartRows.filter(
-      (row) => geographyId(row) === path.geography,
+      (row) => geographyKey(row) === path.geography,
     );
     const filteredGeographyRows = applyExplorerFilters(
       geographyRows,
-      state.filters,
+      filters,
     );
     return {
       releaseId,
       lossAttributionAvailable,
       path,
+      pathLabels: selectedPathLabels,
       currentLevel: { kind: "overview", label: "Programs" },
       groups: programGroups(filteredGeographyRows),
       dimensionOrder: [],
@@ -555,6 +609,7 @@ export function buildCalibrationTree(
       releaseId,
       lossAttributionAvailable,
       path,
+      pathLabels: selectedPathLabels,
       currentLevel: { kind: "overview", label: "Programs" },
       groups: programGroups(filteredRows),
       dimensionOrder: [],
@@ -568,17 +623,18 @@ export function buildCalibrationTree(
       String(row.source ?? "other") === path.source &&
       programId(row) === path.program,
   );
-  const filteredProgramRows = applyExplorerFilters(programRows, state.filters);
+  const filteredProgramRows = applyExplorerFilters(programRows, filters);
   if (!path.geography) {
     const nodes = geographyNodes(filteredProgramRows);
     return {
       releaseId,
       lossAttributionAvailable,
       path,
+      pathLabels: selectedPathLabels,
       currentLevel: { kind: "geography", label: "Geography" },
       groups: [{
         id: path.program,
-        label: path.program,
+        label: selectedPathLabels.program ?? programLabel(path.program),
         nodes,
         metrics: calibrationTreeMetrics(filteredProgramRows),
       }],
@@ -589,7 +645,7 @@ export function buildCalibrationTree(
   }
 
   const geographyRows = path.geography
-    ? programRows.filter((row) => geographyId(row) === path.geography)
+    ? programRows.filter((row) => geographyKey(row) === path.geography)
     : programRows;
   const dimensionOrder = orderedBreakdownDimensions(geographyRows);
   let scopedRows = geographyRows;
@@ -607,7 +663,7 @@ export function buildCalibrationTree(
     );
     selectedKeys.add(selection.key);
   }
-  const filteredScopedRows = applyExplorerFilters(scopedRows, state.filters);
+  const filteredScopedRows = applyExplorerFilters(scopedRows, filters);
   const visibleRows = new Set(filteredScopedRows);
   const partition = partitionRowsByDimension(scopedRows, selectedKeys);
 
@@ -677,6 +733,7 @@ export function buildCalibrationTree(
     releaseId,
     lossAttributionAvailable,
     path,
+    pathLabels: selectedPathLabels,
     currentLevel,
     groups,
     dimensionOrder,

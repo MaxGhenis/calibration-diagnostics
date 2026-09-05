@@ -158,3 +158,16 @@ describe("MicrocosmTargetDetail", () => {
     expect(markup).not.toContain("Technical identifiers and lineage");
   });
 });
+
+test("target details use the selected geography label without exposing its transport key", () => {
+  const row = { ...TARGET, geography: "Shared", geography_key: "geo:v1:invented-north" };
+  const markup = renderToStaticMarkup(createElement(MicrocosmTargetDetail, {
+    row,
+    geographyLabel: "Shared (region / north)",
+    dimensions: [],
+    onClose: () => undefined,
+  }));
+  expect(markup.match(/Shared \(region \/ north\)/g)).toHaveLength(2);
+  expect(markup).not.toContain("geo:v1:");
+  expect(row.geography).toBe("Shared");
+});

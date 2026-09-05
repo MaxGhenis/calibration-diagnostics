@@ -7,6 +7,7 @@ import {
 import type { Calibration } from "./latest-artifact";
 import { buildTargetChangeDataset } from "./target-change";
 import { buildTargetChangeTree } from "./target-change-tree";
+import { geographyKey } from "./geography-identity";
 
 interface RowInput {
   name: string;
@@ -79,6 +80,35 @@ function programState(): ExplorerState {
 }
 
 describe("target change hierarchy", () => {
+  test("preserves structured geography identity and labels through comparison projection", () => {
+    const make = (release: string) => {
+      const cal = calibration(release, [
+        { name: "north", contribution: 0.05, share: 0.5, error: 0.1, geography: "Shared" },
+        { name: "south", contribution: 0.05, share: 0.5, error: 0.1, geography: "Shared" },
+      ]);
+      cal.rows.forEach((row, index) => Object.assign(row, {
+        geography_dimension_id: "region", geography_id: index ? "south" : "north",
+        geography_rank: index, variable_label: "Published benefits", source_label: "Published tax source",
+      }));
+      return cal;
+    };
+    const dataset = buildTargetChangeDataset(make("current"), make("candidate"));
+    const state = { ...createExplorerState(), breakdown: "geography" as const };
+    const tree = buildTargetChangeTree(dataset, state, "reported");
+    expect(tree.groups[0].nodes).toHaveLength(2);
+    const selected = programState();
+    selected.path.geography = geographyKey(dataset.rows[0]);
+    selected.filters.geographies = [selected.path.geography];
+    selected.path.target = dataset.rows[1].comparison_id;
+    const detail = buildTargetChangeTree(dataset, selected, "reported");
+    expect(detail.filteredMetrics.nTargets).toBe(1);
+    expect(detail.selectedTarget).toBeNull();
+    expect(detail.pathLabels.program).toBe("Published benefits");
+    expect(detail.pathLabels.source).toBe("Published tax source");
+    selected.path.target = dataset.rows[0].comparison_id;
+    expect(buildTargetChangeTree(dataset, selected, "reported").selectedTarget?.comparison_id).toBe(dataset.rows[0].comparison_id);
+  });
+
   test("keeps increases and reductions separate inside a net-zero category", () => {
     const tree = buildTargetChangeTree(fixture(), createExplorerState(), "reported");
     const benefits = tree.groups
@@ -98,7 +128,7 @@ describe("target change hierarchy", () => {
     const geographyState = createExplorerState();
     geographyState.breakdown = "geography";
     const geographyTree = buildTargetChangeTree(fixture(), geographyState, "reported");
-    expect(geographyTree.groups[0].nodes.map((node) => node.id).sort()).toEqual([
+    expect(geographyTree.groups[0].nodes.map((node) => node.label).sort()).toEqual([
       "CA",
       "NY",
       "TX",
@@ -106,7 +136,7 @@ describe("target change hierarchy", () => {
 
     const programTree = buildTargetChangeTree(fixture(), programState(), "reported");
     expect(programTree.currentLevel.kind).toBe("geography");
-    expect(programTree.groups[0].nodes.map((node) => node.id).sort()).toEqual([
+    expect(programTree.groups[0].nodes.map((node) => node.label).sort()).toEqual([
       "CA",
       "NY",
     ]);

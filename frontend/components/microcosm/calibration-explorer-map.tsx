@@ -355,9 +355,10 @@ function FilterBar({
 }) {
   const filter = <K extends keyof ExplorerFilters>(key: K, values: ExplorerFilters[K]) =>
     onFilters({ ...state.filters, [key]: values });
+  const geographyLabel = (value: string) => data.filterOptions.geographyLabels?.[value] ?? displayValue(value);
   const active = [
     ...state.filters.geographyLevels.map((value) => ({ key: "geographyLevels" as const, value, label: `Level: ${explorerGeographyLevelLabel(value)}` })),
-    ...state.filters.geographies.map((value) => ({ key: "geographies" as const, value, label: `Place: ${displayValue(value)}` })),
+    ...state.filters.geographies.map((value) => ({ key: "geographies" as const, value, label: `Place: ${geographyLabel(value)}` })),
     ...state.filters.fitBands.map((value) => ({ key: "fitBands" as const, value, label: `Fit: ${FIT_LABELS[value]}` })),
     ...state.filters.calibrationStatuses.map((value) => ({ key: "calibrationStatuses" as const, value, label: `Status: ${STATUS_LABELS[value]}` })),
   ];
@@ -376,6 +377,7 @@ function FilterBar({
           label="Geography"
           options={data.filterOptions.geographies}
           selected={state.filters.geographies}
+          labelOf={geographyLabel}
           onChange={(values) => filter("geographies", values)}
         />
         <MultiSelectFilter
@@ -632,7 +634,7 @@ export function CalibrationExplorerMap({
   const upLabel = expandedView
     ? `Up to all ${data.currentLevel.label.toLowerCase()}`
     : explorerUpLabel(state);
-  const breadcrumbs = explorerBreadcrumbs(state);
+  const breadcrumbs = explorerBreadcrumbs(state, data.pathLabels);
   const selectedTarget = data.groups
     .flatMap((group) => group.nodes)
     .find((item) => item.kind === "target" && item.id === state.path.target)?.target;

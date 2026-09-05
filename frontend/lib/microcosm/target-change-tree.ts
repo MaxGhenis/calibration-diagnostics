@@ -61,7 +61,9 @@ export function buildTargetChangeTree(
     dataset.candidate.releaseId,
     dataset.available,
   );
-  const selectedTarget = state.path.target
+  const visibleTargetIds = new Set(tree.groups.flatMap((group) => group.nodes)
+    .filter((node) => node.kind === "target").map((node) => node.id));
+  const selectedTarget = state.path.target && visibleTargetIds.has(state.path.target)
     ? dataset.rows.find((row) => {
         if (row.comparison_id !== state.path.target) return false;
         return mode === "reported" || row.comparison_status === "shared";
