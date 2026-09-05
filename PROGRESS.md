@@ -27,15 +27,114 @@ dependent branch; see the review-fix section below.
 
 ### State
 
-Started. Baseline on the new branch reproduces the original figures: `bun test`
+All four findings and every smaller note addressed, red-then-green. Frozen
+clean. Nothing pushed. Ports 4397 and 4398 were left running throughout; the
+browser pass used 4483.
+
+### Done
+
+Baseline on the new branch first reproduced the original figures: `bun test`
 507 pass / 0 fail / 1851 assertions.
+
+Fifteen assertions and two unloadable modules were committed failing at
+`25e042d` before any fix, and pass at `0691785`:
+
+- **Finding 4, precedence.** `known_failures` is the run manifest's own umbrella
+  and collects every gate whose outcome is not certifying, `unreached` among
+  them. The executor separately records the same node's state under
+  `receipt.execution`. `executionState` now reads the executor's `blocked`
+  before the umbrella's `failed`, so a step the run never reached reads
+  "Never reached" rather than "Failed". A gate exception is still a failure,
+  because that too is the executor's own record. Not triggered by the shipped
+  candidate; covered by a test built from the real manifest semantics.
+- **Finding 4, `not_applicable`.** A gate outcome of `not_applicable` had been
+  folded into the passing state. It is its own `GateState` now, worded "Gate not
+  applicable", neutral tone, and it withholds nothing — it certified nothing and
+  refused nothing.
+- **Finding 2, outputs.** `outputs_usable` was a boolean, so a receipt that
+  recorded no typed or opaque artifact was told to the reader in the same
+  warning words as one whose outputs were withheld. Two of the six receipts on
+  the only shipped candidate are the first kind, one of them after recording 248
+  per-column artifacts. There is a third `OutputState` now,
+  `no_typed_artifact`, rendered neutrally, and its sentence says what the
+  receipt did record. Failure, blocking and absence still outrank all of it.
+- **Finding 3, incomplete selection.** A URL carrying a candidate and no usable
+  manifest digest left the query disabled and `isPending` true forever, so the
+  view read "Reading the candidate's build receipts…" and never stopped. One
+  pure function, `graphSelectionReadiness`, now decides both whether the query
+  runs and what the view says when it does not, and that state reads
+  "Incomplete candidate selection".
+- **Finding 1, scope.** See the correction below. The limits now name the
+  compiled structural declaration as unpinned rather than as nonexistent.
+- **Note, what the publisher binds.** The two run-manifest byte digests that
+  tell the executions apart are pinned by nothing the publisher attached, unlike
+  the population, implementation, content-key and source digests. The payload's
+  `execution_note` says so and is now rendered directly under the content-key
+  note in the comparison card, not only in the folded limits.
+- **Note, canvas accessibility.** `role="img"` hid a subtree that still held the
+  three zoom buttons and the attribution link. The container is a labelled
+  `role="group"` now, so those controls stay addressable and named.
+- **Note, the absent-state fallback.** It omitted `frame_key` and `weight_key`
+  and compiled only because the value it stood in for is typed non-nullable. It
+  is an annotated constant now; deleting either field is a compile error
+  (verified by deleting them and reading TS2739, then restoring).
+- **Note, release status grammar.** "{status} from release" read oddly for
+  anything but `excluded`. `releaseEligibilityReading` words the two statuses
+  this evidence uses and names any other as a status.
+
+Generator, adapter, presentation, types and tests were checked against each
+other. No model status was invented: `not_applicable` is already a declared
+outcome in the generator's `GATE_OUTCOMES`, and the generator's comment now
+says why its `known_failures` is not the last word. The checked-in projection is
+byte-unchanged and still regenerates to
+`c28f3a88b16ad01bd7ae64e1c6a73de88a0cd4660333168c50a3ef0730c8c3f2`; nothing
+under `_buildo-runtime` was written to.
+
+### Correction: the compiled structural declaration is unpinned, not absent
+
+The original author report said the compiled structural declaration "was never
+serialised" and that "no amount of work here closes that". That is wrong, and
+this record repeats the mistake by omission. `graph.json`
+(`7d4e1502a89475726f3bc87f47f310e855e850343b6cd8da73c174a842ab94ac`) sits beside
+the preserved run evidence and holds the full declaration: bases, populations,
+column inputs and outputs, sources and artifact producers. It names two
+relationships the run manifests cannot support and this viewer therefore does
+not draw — `assign_us_puma_ladder.boundary` has `base:
+assemble_stacked_spine`, and `assign_us_puma_ladder.gate` has `population:
+assign_us_puma_ladder.boundary`.
+
+Not drawing from it remains correct: no publisher attachment pins its bytes, so
+nothing re-verifies that it belongs to this candidate. The accurate statement is
+"unpinned, so unused", not "does not exist", and that is what the limits say
+now. No edge was added, and the immutable candidate was not touched.
+
+### Verified
+
+| Command | Result |
+| --- | --- |
+| `bun test` (frontend) | 534 pass, 0 fail, 1953 assertions, 58 files |
+| `bun run lint` (`tsc --noEmit`) | clean |
+| `bun run build` | compiled, 21/21 pages |
+| WebKit, playwright-core 1.58.0, port 4483 | 43/43 |
+
+The browser pass ran real WebKit through `playwright-core`, never Chrome and
+never CDP, against `bun run dev` with `MICROCOSM_QUALITY_US_DIR` on the real
+quality directory.
+
+### Found while testing, not fixed here
+
+With a candidate and no usable manifest digest, `useQualityManifest` still
+issues `/api/microcosm/quality?view=manifest&…&manifest_sha256=` and the route
+answers 503. That hook and that route are byte-identical to the base commit, and
+the same request 503s for any unresolvable candidate, so it predates this branch
+and is outside the paths this work owns. The receipt-graph route answers 400 for
+the same input and never errors during the browser pass. Reported rather than
+touched.
 
 ### Next
 
-1. Red tests for the four review findings and the smaller notes.
-2. Fixes, then green.
-3. `tsc --noEmit`, `next build`, WebKit checks on a free local port.
-4. Detail receipt and JSON receipt in the review directory; frozen commit.
+Nothing outstanding on this branch. Root's independent review of the frozen
+commit.
 
 ## Done (original build, branch `candidate-receipt-graph-20260905`)
 
@@ -95,6 +194,12 @@ From `typed_artifacts.inputs`, identical in both executions, with each
 `assign_us_puma_ladder.boundary` and `assign_us_puma_ladder.gate` record no
 typed inputs or outputs at all, so the saved manifests cannot support any edge
 to or from them. Coverage is partial and has to say so.
+
+> Corrected on the review branch: the compiled structural declaration does
+> exist, in `graph.json` beside the run evidence, and it does name relationships
+> for both of these receipts. It is unpinned by any publisher attachment, which
+> is why nothing here is drawn from it. See "Correction: the compiled structural
+> declaration is unpinned, not absent" above.
 
 ### Things the evidence does not support and that must stay unavailable
 
@@ -161,7 +266,10 @@ through `QualityLink`, so the candidate travels with the reader.
 
 ### Exercised in a real browser
 
-WebKit (Playwright 1.56, `p.webkit`), against `bun run dev` on port 4471 with
+WebKit (playwright-core 1.58.0, `p.webkit`; corrected on the review branch from
+the 1.56 written here — the harness's `bun.lock` pins `playwright-core@1.58.0`,
+its `node_modules` copy was installed before this pass, and a run today reports
+1.58.0 at runtime), against `bun run dev` on port 4471 with
 `MICROCOSM_QUALITY_US_DIR` pointed at the real quality directory. Ports 4397 and
 4398 were left alone. 26 of 26 checks pass: six receipts listed and six cards
 drawn with three edges; partial coverage stated; Enter, ArrowUp/Down, Home/End,
@@ -176,6 +284,6 @@ pathname, and the router prepends the app's base path, so selecting a step
 navigated to a doubled path and a 404. It returns an absolute URL now, the same
 shape `selectionUrl` already returned for the candidate selector.
 
-## Next
+## Next (original build, completed)
 
 1. Author report and patch.
