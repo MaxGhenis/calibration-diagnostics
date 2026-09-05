@@ -209,7 +209,8 @@ describe("receipt consistency regressions from the independent probes", () => {
         const node = execution.nodes.find(n => n.gate)!;
         const passed = outcome === "fail" ? false : null;
         node.gate = { outcome, scope: node.gate!.scope, passed, checks: [] };
-        evidenceChecks(e)[execution.evidence_key].gate = {
+        // This registered legacy fixture carries its published evidence key.
+        evidenceChecks(e)[execution.evidence_key!].gate = {
           outcome, scope: node.gate.scope, evidence: { passed, gates: {} },
         };
         // known_failures is an independent recorded umbrella. Its presence
@@ -256,7 +257,7 @@ describe("receipt consistency regressions from the independent probes", () => {
               failures: ["required observation unavailable"],
               details: [{ key: "observed_rows", value: 0 }] }],
           };
-          evidenceChecks(e)[execution.evidence_key].gate = {
+          evidenceChecks(e)[execution.evidence_key!].gate = {
             outcome, scope: node.gate.scope,
             evidence: { passed, gates: { source_coverage: {
               passed: false, failures: ["required observation unavailable"],

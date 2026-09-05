@@ -22,6 +22,11 @@ Plan SHA256: 45544637213278dca2b2e126fcda78af1f8c77e849bf5bb454f69de92e088d15.
 - Focused dashboard tests:266pass,0fail across6files,819assertions. Earlier expected missing-module red run and stale-message expectation failure are retained in command log.
 - Author-side schema audit gaps (unknown executor state, non-gate gate record, inconsistent typed/opaque output keys) corrected and covered by negative tests. This is author work, not independent code approval.
 
+- Root integration passed real exported G against190 TypeScript oracle checks, actual graph route selection for G/F001, and8 real React surface cases.
+- Root full Bun suite:719pass and3fail in existing HTTP source tests because sandbox cannot listen on port0. This environmental failure is retained; no full-suite rerun was attempted.
+- Root TypeScript check identified2 legacy test indices after evidence_key became optional for attachments. Fixed the known registered-fixture test typing only; affected adapter tests174pass,0fail,477assertions and TypeScript `bun x tsc --noEmit` now pass.
+- A mistyped relative command-log wrapper path prevented the first TypeScript retry from starting; corrected working directory and reran successfully. No production build executed by component agent.
+
 ## Next
 - Agree shared ProjectionExecution/Node attachment contract.
 - Commit invented fixtures, implement pure exporter and shared dashboard verifier in parallel.
