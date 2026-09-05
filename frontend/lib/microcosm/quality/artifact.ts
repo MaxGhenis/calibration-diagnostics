@@ -9,22 +9,29 @@ import {
   type EvidenceAttachment,
   type EvidenceIdentity,
   type ExecutionStatus,
+  type EligibilityStatus,
   type ReleaseEligibility,
 } from "./types";
 
 type ObjectValue = Record<string, unknown>;
-const executionStatuses = [
+const executionStatuses: readonly ExecutionStatus[] = [
   "pending",
   "running",
   "completed",
   "failed",
   "cancelled",
 ];
-const eligibilityStatuses = [
+const eligibilityStatuses: readonly EligibilityStatus[] = [
   "not_evaluated",
   "eligible",
   "ineligible",
   "excluded",
+];
+const attachmentStatuses: readonly EvidenceAttachment["status"][] = [
+  "available",
+  "pending",
+  "missing",
+  "failed",
 ];
 
 export function object(value: unknown, field = "document"): ObjectValue {
@@ -81,20 +88,29 @@ function date(value: unknown, field: string): string {
     );
   return result;
 }
+// A status is an enumerated string, never whatever an arbitrary value stringifies
+// to: `["eligible"]` or `{}` must be refused here rather than flowing on as a
+// non-string that fails every later `===` guard and throws in the views.
+function enumerated<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  message: string,
+): T {
+  if (typeof value !== "string" || !allowed.includes(value as T))
+    throw new ArtifactError("malformed_artifact", message);
+  return value as T;
+}
 function execution(value: unknown): ExecutionStatus {
-  if (!executionStatuses.includes(String(value)))
-    throw new ArtifactError("malformed_artifact", "Unknown execution_status.");
-  return value as ExecutionStatus;
+  return enumerated(value, executionStatuses, "Unknown execution_status.");
 }
 function eligibility(value: unknown): ReleaseEligibility {
   const raw = object(value, "release_eligibility");
-  if (!eligibilityStatuses.includes(String(raw.status)))
-    throw new ArtifactError(
-      "malformed_artifact",
-      "Unknown release eligibility status.",
-    );
   return {
-    status: raw.status as ReleaseEligibility["status"],
+    status: enumerated(
+      raw.status,
+      eligibilityStatuses,
+      "Unknown release eligibility status.",
+    ),
     reason: text(raw.reason, "eligibility reason"),
   };
 }
@@ -234,18 +250,14 @@ export class CandidateQualityReader {
       object(raw.attachments, "attachments"),
     )) {
       const entry = object(value, name);
-      if (
-        !["available", "pending", "missing", "failed"].includes(
-          String(entry.status),
-        )
-      )
-        throw new ArtifactError(
-          "malformed_artifact",
-          `Unknown ${name} attachment status.`,
-        );
-      if (entry.status !== "available") {
+      const status = enumerated(
+        entry.status,
+        attachmentStatuses,
+        `Unknown ${name} attachment status.`,
+      );
+      if (status !== "available") {
         attachments[name] = {
-          status: entry.status as EvidenceAttachment["status"],
+          status,
           reason: text(entry.reason, `${name} reason`),
         };
         continue;

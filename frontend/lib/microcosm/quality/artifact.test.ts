@@ -223,3 +223,35 @@ test("eligible status cannot be attached to an incomplete population build", asy
     f.reader.manifest("candidate-26", f.digest),
   ).rejects.toMatchObject({ code: "malformed_artifact" });
 });
+
+test("statuses must be real strings, so an array cannot smuggle one past its guard", async () => {
+  for (const mutate of [
+    (m: Record<string, any>) => {
+      m.execution_status = ["completed"];
+    },
+    (m: Record<string, any>) => {
+      m.release_eligibility.status = ["excluded"];
+    },
+    (m: Record<string, any>) => {
+      m.attachments.cross_dataset.status = ["pending"];
+    },
+  ]) {
+    const f = fixture(mutate);
+    await expect(
+      f.reader.manifest("candidate-26", f.digest),
+    ).rejects.toMatchObject({ code: "malformed_artifact" });
+  }
+  // String(["eligible"]) is "eligible", but the completed-build guard compares
+  // strictly, so a coerced status would have been published as eligible on a
+  // running build with the guard silently skipped.
+  const smuggled = fixture((m: Record<string, any>) => {
+    m.execution_status = "running";
+    m.release_eligibility = {
+      status: ["eligible"],
+      reason: "Attestation that is not a status.",
+    };
+  });
+  await expect(
+    smuggled.reader.manifest("candidate-26", smuggled.digest),
+  ).rejects.toMatchObject({ code: "malformed_artifact" });
+});
