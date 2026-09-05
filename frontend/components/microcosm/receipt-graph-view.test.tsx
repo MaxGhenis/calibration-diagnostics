@@ -255,4 +255,20 @@ describe("the reader is told what the evidence does not pin", () => {
     const markup = render();
     expect(markup).toContain("asserted by this projection");
   });
+
+  test("that qualification sits beside the claim, not only in the folded limits", () => {
+    const markup = render();
+    // The comparison card is where the two manifest digests are shown as what
+    // tells the executions apart, so it is where the reader has to be told that
+    // nothing the publisher attached pins them. It is said twice: once there,
+    // once in the limits behind the fold.
+    const phrase = "asserted by this projection";
+    expect(markup.split(phrase)).toHaveLength(3);
+    expect(markup.indexOf(phrase)).toBeLessThan(
+      markup.indexOf("What was checked before any of this was drawn"),
+    );
+    expect(markup.indexOf("Same computation, two executions")).toBeLessThan(
+      markup.indexOf(phrase),
+    );
+  });
 });

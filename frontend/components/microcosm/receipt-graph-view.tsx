@@ -626,6 +626,13 @@ export function ReceiptGraphSurface({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {payload.comparison.content_key_note}
           </p>
+          {/* The two manifest digests below are what tells the executions
+              apart, and nothing the publisher attached pins either of them.
+              That qualification belongs beside the claim, not only in the
+              limits further down. */}
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            {payload.comparison.execution_note}
+          </p>
           <dl className="mt-2 divide-y divide-border/60">
             <Field label="Content key">
               <Mono>{payload.comparison.content_key}</Mono>
