@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   DEFAULT_COUNTRY,
@@ -33,7 +33,7 @@ export function countrySwitchUrl(currentUrl: string, next: Country): string {
   } else {
     // Release identifiers are repository-specific. A release selected for one
     // country must never be requested from another country's repository.
-    url.searchParams.delete("release");
+    for (const key of ["release", "candidate", "manifest_sha256", "incumbent"]) url.searchParams.delete(key);
   }
   url.searchParams.set("country", next);
   return url.toString();
@@ -66,10 +66,11 @@ const CountryContext = createContext<CountryContextValue>({
 
 export function CountryProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const search = useSearchParams();
   const [country, setCountryState] = useState<Country>(DEFAULT_COUNTRY);
 
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("country");
+    const requested = search.get("country");
     if (isCountry(requested)) {
       setCountryState(requested);
       persistCountry(requested);
@@ -77,7 +78,7 @@ export function CountryProvider({ children }: { children: ReactNode }) {
     }
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (isCountry(stored)) setCountryState(stored);
-  }, []);
+  }, [search]);
 
   const setCountry = (next: Country) => {
     if (next === country) return;

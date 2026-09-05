@@ -99,12 +99,14 @@ test("Belgium navigation keeps country-ready pages and hides pages it lacks capa
   const items = navGroupsForCountry("be").flatMap((group) => group.items);
   expect(items.map((item) => item.href)).toEqual([
     "/microcosm",
+    "/microcosm/quality",
     "/microcosm/datasets",
     "/microcosm/compare",
   ]);
   expect(items.every((item) => hasCapability("be", item.capability!))).toBe(true);
   expect(items.map((item) => navItemHref(item, "be"))).toEqual([
     "/microcosm?country=be",
+    "/microcosm/quality?country=be",
     "/microcosm/datasets?country=be",
     "/microcosm/compare?country=be",
   ]);
@@ -119,7 +121,7 @@ test("US navigation lists every page", () => {
 test("artifact-narrowed capabilities hide pages the release does not serve", () => {
   const groups = navGroupsForCountry("us", ["calibration", "targets"]);
   expect(groups.map((group) => group.label)).toEqual(["Dataset accuracy"]);
-  expect(groups[0].items.map((item) => item.href)).toEqual(["/microcosm"]);
+  expect(groups[0].items.map((item) => item.href)).toEqual(["/microcosm", "/microcosm/quality"]);
 });
 
 test("shows Cross-dataset navigation for every selectable country", () => {

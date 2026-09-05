@@ -5,6 +5,8 @@ import { useCountry } from "./country-context";
 import { NavSidebar } from "./nav-sidebar";
 import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
+import { QualityStrip } from "./quality-strip";
+import { useQualityContext } from "./quality-context";
 
 // The dashboard chrome, skinned to microcosm.institute. We deliberately do NOT use
 // ui-kit's <DashboardShell>/<Header> here: the shell paints an opaque bg-muted
@@ -14,6 +16,7 @@ import { SiteFooter } from "./site-footer";
 // footer come from the microcosm.institute-style components.
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { country } = useCountry();
+  const { release } = useQualityContext();
   return (
     <div className="flex min-h-screen flex-col text-foreground">
       <GlobalLoader />
@@ -23,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavSidebar />
         </aside>
         <main className="flex flex-1 flex-col overflow-auto">
-          <div key={country} className="flex-1 p-6 pt-0">{children}</div>
+          <div key={`${country}:${release}`} className="flex-1 p-6 pt-0"><QualityStrip />{children}</div>
           <SiteFooter />
         </main>
       </div>

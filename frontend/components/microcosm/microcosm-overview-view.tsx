@@ -11,10 +11,10 @@ import { CalibrationTargetNavigationCards } from "@/components/microcosm/calibra
 import { ArtifactDescriptionBanner } from "@/components/microcosm/artifact-description-banner";
 import { WEIGHTED_TARGET_ERROR_HELP } from "@/components/microcosm/calibration-explorer-view";
 import {
-  selectedReleaseForCountry,
   useCountry,
   type Country,
 } from "@/components/layout/country-context";
+import { useQualityContext } from "@/components/layout/quality-context";
 import { EmptyState } from "@/components/shared/empty-state";
 import { fmt, fmtCompact } from "@/components/shared/format";
 import { HelpHint } from "@/components/shared/help-hint";
@@ -68,11 +68,7 @@ export function MicrocosmOverviewView({
   initialRelease?: string;
 }) {
   const { country } = useCountry();
-  const [releaseSelection, setReleaseSelection] = useState({
-    country: initialCountry,
-    value: initialRelease,
-  });
-  const release = selectedReleaseForCountry(country, releaseSelection);
+  const { release, setSelection } = useQualityContext();
   const [pageIntroHeight, setPageIntroHeight] = useState(0);
   const { data: releaseData } = useMicrocosmReleases();
   const { data, isLoading, error } = useMicrocosm(release || undefined);
@@ -108,7 +104,8 @@ export function MicrocosmOverviewView({
     data.source_repo,
     cal.country?.repository_visibility,
   );
-  const publicationUrl = microcosmPublicationUrl(data.source_repo, data.release_id);
+  const isCandidate = data.source === "candidate_quality";
+  const publicationUrl = isCandidate ? data.source_artifacts[0]?.url : microcosmPublicationUrl(data.source_repo, data.release_id);
   const overviewIntro = microcosmOverviewIntro(country, cal.presentation);
 
   return (
@@ -119,7 +116,7 @@ export function MicrocosmOverviewView({
         title="What the data is anchored to"
         description={
           <>
-            {overviewIntro} Data is built live from{" "}
+            {overviewIntro} {isCandidate ? "Verified candidate evidence is loaded from the selected immutable manifest." : <>Data is built live from{" "}
             {sourceAttribution.href ? (
               <a
                 className="underline decoration-dotted underline-offset-2"
@@ -132,24 +129,24 @@ export function MicrocosmOverviewView({
             ) : (
               sourceAttribution.label
             )}
-            .
+            .</>}
           </>
         }
         actions={
           <>
-            <ToolbarSelect
+            {!isCandidate && <ToolbarSelect
               label="Release"
               value={release}
-              onChange={(value) => setReleaseSelection({ country, value })}
+              onChange={(value) => setSelection({ release: value })}
               options={releaseOptions}
-            />
+            />}
             <Button
               asChild
               variant="outline"
               className="border-primary bg-background text-primary hover:bg-primary/5"
             >
               <a href={publicationUrl} target="_blank" rel="noopener noreferrer">
-                View on Hugging Face
+                {isCandidate ? "View evidence manifest" : "View on Hugging Face"}
               </a>
             </Button>
           </>

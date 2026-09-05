@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/shared/empty-state";
 import { fmt, fmtCompact, humanizeName, releaseLabel } from "@/components/shared/format";
 import {
-  selectedReleaseForCountry,
   useCountry,
   type Country,
 } from "@/components/layout/country-context";
+import { useQualityContext } from "@/components/layout/quality-context";
 import { ArtifactDescriptionBanner } from "@/components/microcosm/artifact-description-banner";
 import { KpiCard } from "@/components/shared/kpi-card";
 import { LoadingBlock } from "@/components/shared/LoadingBlock";
@@ -496,10 +496,7 @@ export function MicrocosmTargetsView({
   initialRelease?: string;
   initialStep?: "pick" | "results";
 }) {
-  const [releaseSelection, setReleaseSelection] = useState({
-    country: initialCountry,
-    value: initialRelease,
-  });
+  const quality = useQualityContext();
   const [scope, setScope] = useState<TargetScope>(initialScope);
   const [variable, setVariable] = useState("");
   const [source, setSource] = useState(initialSource);
@@ -517,7 +514,7 @@ export function MicrocosmTargetsView({
   const [refineIndex, setRefineIndex] = useState(0);
 
   const { country } = useCountry();
-  const release = selectedReleaseForCountry(country, releaseSelection);
+  const release = quality.release;
   const router = useRouter();
   const { data: releaseData } = useMicrocosmReleases();
   const { data: stagingData } = useMicrocosmStagingRuns();
@@ -538,7 +535,7 @@ export function MicrocosmTargetsView({
 
   function pickRelease(value: string) {
     // A different release is a different surface — reset everything below it.
-    setReleaseSelection({ country, value });
+    quality.setSelection({ release: value });
     setVariable("");
     setFacetFilters({});
     setSource("");
@@ -570,7 +567,7 @@ export function MicrocosmTargetsView({
     resetFilters();
     const query = new URLSearchParams({ country });
     if (release) query.set("release", release);
-    router.push(`/microcosm?${query.toString()}`);
+    router.push(quality.href(`/microcosm?${query.toString()}`));
   }
 
   // Step back one level toward the statistic picker.
@@ -979,14 +976,14 @@ export function MicrocosmTargetsView({
         eyebrow="Microcosm · calibration fit"
         title="Target diagnostics"
         description="See how closely the calibrated weights reproduce each official statistic by source, measure, and breakdown."
-        actions={
+        actions={!quality.selection.candidate ? (
           <ToolbarSelect
             label="Release"
             value={release}
             onChange={pickRelease}
             options={releaseOptions}
           />
-        }
+        ) : undefined}
       />
 
       <ArtifactDescriptionBanner description={data?.description} />

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withBasePath } from "@/lib/base-path";
 
 import {
   asObject,
@@ -27,6 +28,16 @@ export async function GET(request: Request) {
     const calibration = latestMicrocosmCalibrationSummary(cal);
     const highlights = latestMicrocosmCalibrationHighlights(cal, 15);
     const prefix = `releases/${cal.release_id}`;
+    if (cal.quality_manifest) {
+      const manifestParams = new URLSearchParams({ country, view: "manifest", candidate: cal.release_id, manifest_sha256: release.split(":")[2] });
+      return NextResponse.json(scrub({
+        source_repo: "configured_candidate_evidence", repo_type: "candidate_evidence", revision: release.split(":")[2], source: "candidate_quality",
+        release_id: cal.release_id, updated_at: cal.updated_at,
+        source_artifacts: [{ name: "candidate_quality_manifest", path: `manifests/${release.split(":")[2]}.json`, url: `${withBasePath("/api/microcosm/quality")}?${manifestParams}` }],
+        limitations: ["Candidate evidence is bound to the selected manifest and population digest; it is not a published release.", "Calibration fit does not establish release eligibility or independent validation."],
+        quality_manifest: cal.quality_manifest, build_manifest: cal.build_manifest, release_manifest: cal.release_manifest, gates: asObject(cal.build_manifest.gates), calibration, highlights,
+      }), { headers: { "Cache-Control": "no-store" } });
+    }
     return NextResponse.json(
       scrub({
         source_repo: microcosmRepo(country),

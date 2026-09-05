@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import Link from "next/link";
+import { QualityLink as Link } from "@/components/layout/quality-link";
 
 import { useCountry } from "@/components/layout/country-context";
 import { fmt } from "@/components/shared/format";

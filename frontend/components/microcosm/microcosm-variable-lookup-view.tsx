@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useQualityContext } from "@/components/layout/quality-context";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { fmt, fmtCompact, fmtMoney } from "@/components/shared/format";
@@ -111,7 +112,7 @@ export function MicrocosmVariableLookupView() {
   const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState<string[]>([]);
   const [period, setPeriod] = useState("2024");
-  const [release, setRelease] = useState("");
+  const { release, selection, setSelection } = useQualityContext();
   const [search, setSearch] = useState("");
 
   const { data: catalog = [], isLoading: catalogLoading } = useVariableCatalog();
@@ -119,7 +120,7 @@ export function MicrocosmVariableLookupView() {
   const releaseOptions = useMemo(() => releaseSelectOptions(releaseData), [releaseData]);
 
   const query = useMicrocosmVariableValue({
-    variables: submitted,
+    variables: selection.candidate ? [] : submitted,
     period,
     release: release || undefined,
   });
@@ -165,6 +166,10 @@ export function MicrocosmVariableLookupView() {
   const result = query.data;
   const resultRows = result?.variables ?? [];
   const atLimit = selected.length >= MAX_SELECTED;
+
+  if (selection.candidate) {
+    return <EmptyState title="Candidate variable totals are not attached" description="Variable lookup runs against published datasets. Inspect the selected candidate's attached distributions and calibration targets in Quality evidence, or explicitly select a published population." />;
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -301,7 +306,7 @@ export function MicrocosmVariableLookupView() {
               Release
               <select
                 value={release}
-                onChange={(event) => setRelease(event.target.value)}
+                onChange={(event) => setSelection({ release: event.target.value })}
                 className="h-9 min-w-[220px] rounded-md border border-border bg-card px-3 text-sm text-foreground focus:border-primary/60 focus:outline-none"
               >
                 {releaseOptions.map((option) => (

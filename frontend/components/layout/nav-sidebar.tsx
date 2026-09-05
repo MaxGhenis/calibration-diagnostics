@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useCountry } from "@/components/layout/country-context";
+import { useQualityContext } from "./quality-context";
 import {
   isActive,
   navGroupsForCountry,
@@ -18,6 +19,7 @@ import {
 export function NavSidebar() {
   const pathname = usePathname();
   const { country, setCountry } = useCountry();
+  const quality = useQualityContext();
   const dataset = countryRegistration(country);
   const groups = navGroupsForCountry(country);
   return (
@@ -72,7 +74,7 @@ export function NavSidebar() {
                 return (
                   <Link
                     key={item.href}
-                    href={navItemHref(item, country)}
+                    href={quality.href(navItemHref(item, country))}
                     {...navLinkAttributes(item)}
                     className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[13px] leading-tight transition-colors ${
                       active

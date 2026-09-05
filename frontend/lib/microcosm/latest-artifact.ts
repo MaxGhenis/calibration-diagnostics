@@ -1687,7 +1687,8 @@ export interface TargetSchema {
 }
 
 export interface Calibration {
-  source: "huggingface_live";
+  source: "huggingface_live" | "candidate_quality";
+  quality_manifest?: import("./quality/types").CandidateQualityManifest;
   country: MicrocosmCountry;
   // Typed `release_manifest.country` merged over the registration.
   country_info: ArtifactCountry;
@@ -2207,6 +2208,25 @@ async function loadReleaseUncached(
   revalidate: number,
   country: MicrocosmCountry,
 ): Promise<Calibration> {
+  if (releaseId.startsWith("candidate:")) {
+    const { parseCandidateToken, loadCandidate, requirePopulationAttachment } = await import("./quality/source");
+    const { id, sha256 } = parseCandidateToken(releaseId);
+    const candidate = await loadCandidate(country, id, sha256);
+    requirePopulationAttachment(candidate.manifest, "calibration_diagnostics");
+    // Legacy shaping derives population coverage, calibration status and loss
+    // semantics from these files. Run/model scope remains visible in the quality
+    // manifest but cannot supply those population-specific fields.
+    const readOptional = async (name: string) => {
+      const attachment = candidate.manifest.attachments[name];
+      return attachment?.status === "available" && attachment.scope === "population"
+        ? candidate.reader.attachment(candidate.manifest, name) : {};
+    };
+    const [diag, build, release, demographics] = await Promise.all([
+      candidate.reader.attachment(candidate.manifest, "calibration_diagnostics"),
+      readOptional("build_manifest"), readOptional("release_manifest"), readOptional("demographics"),
+    ]);
+    return { ...buildCalibration(diag, id, candidate.manifest.created_at, build, release, demographics, country), source: "candidate_quality", quality_manifest: candidate.manifest };
+  }
   let id = assertSafeReleaseId(releaseId);
   let updatedAt: string | null = null;
   if (releaseId === "latest" || !releaseId) {

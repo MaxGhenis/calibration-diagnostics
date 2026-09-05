@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQualityContext } from "@/components/layout/quality-context";
+import { useQualityManifest } from "@/lib/api/hooks/use-quality";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { fmt } from "@/components/shared/format";
@@ -460,6 +462,8 @@ function ClusterPopup({
 // --- main view ----------------------------------------------------------------
 
 export function ModelCoverageView({ initialPath = "" }: { initialPath?: string }) {
+  const { selection } = useQualityContext();
+  const qualityManifest = useQualityManifest();
   const [data, setData] = useState<CoverageData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [root, setRoot] = useState<string[]>(
@@ -471,11 +475,15 @@ export function ModelCoverageView({ initialPath = "" }: { initialPath?: string }
   const [width, setWidth] = useState(1100);
 
   useEffect(() => {
-    fetch(withBasePath("/model-coverage.json"))
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setData)
-      .catch((e) => setError(String(e)));
-  }, []);
+    let active = true;
+    setData(null); setError(null);
+    const params = new URLSearchParams({ view: "validation_reach", country: selection.country, candidate: selection.candidate, manifest_sha256: selection.manifest_sha256 });
+    const url = selection.candidate ? `${withBasePath("/api/microcosm/quality")}?${params}` : withBasePath("/model-coverage.json");
+    fetch(url).then(async (response) => { const body = await response.json(); if (!response.ok) throw new Error(body.detail ?? `HTTP ${response.status}`); return body; })
+      .then((value) => { if (active) setData(value); })
+      .catch((error) => { if (active) setError(String(error)); });
+    return () => { active = false; };
+  }, [selection.country, selection.candidate, selection.manifest_sha256]);
 
   // Depends on `data`: the container only renders once loading finishes, so
   // observing on first mount would attach to nothing and the map would stay
@@ -564,6 +572,9 @@ export function ModelCoverageView({ initialPath = "" }: { initialPath?: string }
 
   return (
     <div className="flex flex-col gap-5">
+      <p className="text-xs text-muted-foreground">{selection.candidate
+        ? qualityManifest.data?.attachments.validation_reach?.scope === "population" ? "Validation reach is attached to the selected population." : "Model-level evidence: this attachment does not establish reach for the selected population."
+        : "Historical model evidence: this static map is not bound to the selected published population."} Source model: {data.source.version}.{data.release_id ? ` Recorded release: ${data.release_id}.` : " No population release identity recorded."}</p>
       <PageHeader
         eyebrow="Microcosm · rules engine"
         title="Validation reach"

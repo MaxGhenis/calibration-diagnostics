@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { QualityLink as Link } from "@/components/layout/quality-link";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -18,6 +18,8 @@ import { LoadingBlock } from "@/components/shared/LoadingBlock";
 import { PageHeader } from "@/components/shared/page-header";
 import { SectionCard } from "@/components/shared/section-card";
 import { apiGet } from "@/lib/api/client";
+import { useQualityParams } from "@/lib/api/hooks/use-quality";
+import { useQualityContext } from "@/components/layout/quality-context";
 import type {
   CrossDatasetGroupsDocument,
   CrossDatasetSummary,
@@ -49,17 +51,20 @@ interface OverviewResponse {
 }
 
 function useCrossDatasetOverview(country: Country) {
+  const quality = useQualityParams();
   return useQuery({
-    queryKey: ["cross-dataset", "overview", "v4", country],
+    queryKey: ["cross-dataset", "overview", "v4", country, quality],
     queryFn: async (): Promise<OverviewResponse> => {
       const [summary, groups] = await Promise.all([
         apiGet<CrossDatasetSummary>("/microcosm/cross-dataset", {
           view: "summary",
           country,
+          ...quality,
         }),
         apiGet<CrossDatasetGroupsDocument>("/microcosm/cross-dataset", {
           view: "groups",
           country,
+          ...quality,
         }),
       ]);
       if (summary.run_id !== groups.run_id || summary.snapshot_id !== groups.snapshot_id) {
@@ -592,17 +597,17 @@ function CrossDatasetOverviewView({ country }: { country: Country }) {
 
 export function CrossDatasetView() {
   const { country } = useCountry();
+  const { selection } = useQualityContext();
   const searchParams = useSearchParams();
   const view = searchParams.get("view");
   const search = searchParams.toString();
-  if (view === "facts") return <CrossDatasetFactsView search={search} />;
-  if (view === "fact") {
-    return (
+  const content = view === "facts" ? <CrossDatasetFactsView search={search} /> : view === "fact" ? (
       <CrossDatasetFactDetailView
         factKey={searchParams.get("fact_key")?.trim() ?? ""}
         search={search}
       />
-    );
-  }
-  return <CrossDatasetOverviewView country={country} />;
+    ) : <CrossDatasetOverviewView country={country} />;
+  return <div className="flex flex-col gap-4"><p className="text-xs text-muted-foreground">{selection.candidate
+    ? "This evaluation bundle is attached to the selected candidate. Other dataset rows retain their own recorded source identities."
+    : "This evaluation bundle has its own recorded run and snapshot. It is not bound to the selected published population."}</p>{content}</div>;
 }

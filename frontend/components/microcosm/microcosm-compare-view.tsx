@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQualityContext } from "@/components/layout/quality-context";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { ArtifactDescriptionBanner } from "@/components/microcosm/artifact-description-banner";
@@ -557,28 +558,35 @@ function LossRow({
 }
 
 export function MicrocosmCompareView() {
+  const quality = useQualityContext();
   const { data: releaseData, isLoading: releasesLoading } = useMicrocosmReleases();
   const releases = releaseData?.releases ?? [];
 
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
+  const [defaultB, setDefaultB] = useState("");
+  const a = quality.selection.incumbent;
+  const b = quality.release || defaultB;
+  const setA = (value: string) => quality.setSelection({ incumbent: value });
+  const setB = (value: string) => {
+    if (value.startsWith("candidate:")) {
+      const [, candidate, manifest_sha256] = value.split(":"); quality.setSelection({ candidate, manifest_sha256 });
+    } else quality.setSelection({ release: value });
+  };
 
-  // Default B to the latest release and A to the next one down.
+  // Resolve the global Latest selection without inventing an incumbent.
   useEffect(() => {
     if (!releases.length) return;
-    if (!b) setB(releaseData?.latest_release_id || releases[0].release_id);
-    if (!a && releases[1]) setA(releases[1].release_id);
-  }, [releases, releaseData, a, b]);
+    if (!b) setDefaultB(releaseData?.latest_release_id || releases[0].release_id);
+  }, [releases, releaseData, b]);
 
   const { data, isLoading, error } = useMicrocosmCompare(a, b);
 
   const options = useMemo(
-    () => releases.map((r) => ({ value: r.release_id, label: releaseLabel(r.release_id, r.date) })),
-    [releases],
+    () => [...releases.map((r) => ({ value: r.release_id, label: releaseLabel(r.release_id, r.date) })), ...[...new Set([a, b])].filter((value) => value.startsWith("candidate:")).map((value) => ({ value, label: value.split(":")[1] }))],
+    [releases, a, b],
   );
   const dateOf = (id: string) => {
     const r = releases.find((x) => x.release_id === id);
-    return r ? releaseLabel(r.release_id, r.date) : id;
+    return r ? releaseLabel(r.release_id, r.date) : id.startsWith("candidate:") ? id.split(":")[1] : id;
   };
 
   const improvements = useMemo(
@@ -630,7 +638,7 @@ export function MicrocosmCompareView() {
       <PageHeader
         eyebrow="Microcosm · release comparison"
         title="Compare versions"
-        description="Diff two published Microcosm releases for the selected country. Targets are matched by name; common targets get a fit change (negative = release B fits it better), and targets present in only one release are counted as added/removed."
+        description="Compare the selected population (B) with its chosen incumbent (A). Shared targets use the existing target identity matching; negative fit change means B is closer. Targets present on only one side are counted as added or removed."
       />
 
       {[
@@ -649,10 +657,10 @@ export function MicrocosmCompareView() {
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <ToolbarSelect
-              label="Release A"
+              label="Incumbent (A)"
               value={a}
               onChange={setA}
-              options={options}
+              options={[{ value: "", label: "Select an incumbent" }, ...options]}
             />
             <span className="text-muted-foreground">→</span>
             <ToolbarSelect label="B (compare)" value={b} onChange={setB} options={options} />

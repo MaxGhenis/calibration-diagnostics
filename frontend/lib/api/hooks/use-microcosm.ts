@@ -934,13 +934,14 @@ export function useMicrocosmTargetDiagnostics(params: {
   facet?: string[];
   sort_by?: string;
   sort_dir?: string;
-}) {
+}, enabled = true) {
   const { country } = useCountry();
   return useQuery({
     queryKey: ["microcosm", "target-diagnostics", country, params],
     queryFn: () =>
       apiGet<MicrocosmTargetDiagnostics>("/microcosm/target-diagnostics", { ...params, country }),
     placeholderData: keepPreviousData,
+    enabled,
     staleTime: 15 * 60 * 1000,
   });
 }

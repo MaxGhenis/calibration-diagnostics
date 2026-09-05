@@ -4,16 +4,20 @@ import { ArtifactError } from "@/lib/cross-dataset/artifact";
 import { crossDatasetApiResponse } from "@/lib/cross-dataset/query";
 import { configuredCrossDatasetReader } from "@/lib/cross-dataset/source";
 import { parseCountry } from "@/lib/microcosm/latest-artifact";
+import { candidateCrossDatasetReader } from "@/lib/microcosm/quality/source";
 
 export const revalidate = 300;
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const country = parseCountry(new URL(request.url).searchParams.get("country"));
+  const params = new URL(request.url).searchParams;
+  const country = parseCountry(params.get("country"));
   try {
     const response = await crossDatasetApiResponse(
       request.url,
-      configuredCrossDatasetReader(country),
+      params.get("candidate")
+        ? await candidateCrossDatasetReader(country, params.get("candidate")!, params.get("manifest_sha256") ?? "")
+        : configuredCrossDatasetReader(country),
     );
     return NextResponse.json(response.body, { status: response.status });
   } catch (error) {

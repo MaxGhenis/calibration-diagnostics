@@ -38,6 +38,11 @@ test("a release selection is used only by the country that supplied it", () => {
   expect(selectedReleaseForCountry("be", selection)).toBe("");
 });
 
+test("country switching clears candidate, incumbent and immutable digest together", () => {
+  const switched = new URL(countrySwitchUrl("https://example.test/microcosm/quality?country=us&candidate=c26&manifest_sha256=abc&incumbent=old", "uk"));
+  expect(switched.searchParams.toString()).toBe("country=uk");
+});
+
 test("the client country parser accepts every registered country and nothing else", () => {
   expect(isCountry("us")).toBe(true);
   expect(isCountry("uk")).toBe(true);

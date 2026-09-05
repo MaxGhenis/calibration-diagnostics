@@ -24,6 +24,7 @@ export const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "Dataset accuracy",
     items: [
       { href: "/microcosm", label: "Calibration fit", capability: "calibration" },
+      { href: "/microcosm/quality", label: "Quality evidence", capability: "calibration" },
       {
         href: "/microcosm/model-coverage",
         label: "Validation reach",

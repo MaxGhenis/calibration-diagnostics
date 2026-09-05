@@ -1,8 +1,10 @@
 "use client";
+import { CandidateCatalog, QualityOverviewView } from "./quality-overview-view";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCountry } from "@/components/layout/country-context";
+import { useQualityContext } from "@/components/layout/quality-context";
 import { StagingTargetChangeMap } from "@/components/microcosm/staging-target-change-map";
 import { EmptyState } from "@/components/shared/empty-state";
 import {
@@ -770,6 +772,9 @@ function ScoreRow({
 
 export function MicrocosmStagingView() {
   const { country } = useCountry();
+  const { selection } = useQualityContext();
+
+  if (selection.candidate) return <QualityOverviewView />;
 
   if (!hasCapability(country, "staging")) {
     return (
@@ -783,7 +788,7 @@ export function MicrocosmStagingView() {
     );
   }
 
-  return <MicrocosmStagingRunsView />;
+  return <div className="flex flex-col gap-6"><CandidateCatalog /><p className="text-sm text-muted-foreground">The telemetry below has its own run selection and recorded comparison. It is not evidence for the population selected above unless their identities match.</p><MicrocosmStagingRunsView /></div>;
 }
 
 function MicrocosmStagingRunsView() {

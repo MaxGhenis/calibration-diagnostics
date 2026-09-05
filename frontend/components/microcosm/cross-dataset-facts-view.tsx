@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { QualityLink as Link } from "@/components/layout/quality-link";
+import { useQualityContext } from "@/components/layout/quality-context";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -15,6 +16,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusPill } from "@/components/shared/status-pill";
 import { apiGet } from "@/lib/api/client";
+import { useQualityParams } from "@/lib/api/hooks/use-quality";
 import type {
   CrossDatasetFact,
   CrossDatasetSummary,
@@ -79,15 +81,17 @@ function apiFactParams(params: FactCatalogParams): Record<string, string | numbe
 }
 
 function useFactCatalog(params: FactCatalogParams) {
+  const quality = useQualityParams();
   return useQuery({
-    queryKey: ["cross-dataset", "facts", params.country, params],
+    queryKey: ["cross-dataset", "facts", params.country, params, quality],
     queryFn: async (): Promise<CatalogResponse> => {
       const [summary, page] = await Promise.all([
         apiGet<CrossDatasetSummary>("/microcosm/cross-dataset", {
           view: "summary",
           country: params.country,
+          ...quality,
         }),
-        apiGet<FactsPage>("/microcosm/cross-dataset", apiFactParams(params)),
+        apiGet<FactsPage>("/microcosm/cross-dataset", { ...apiFactParams(params), ...quality }),
       ]);
       if (summary.run_id !== page.run_id || summary.snapshot_id !== page.snapshot_id) {
         throw new Error("Cross-dataset catalog and summary belong to different runs.");
@@ -164,6 +168,7 @@ function sourceTone(supported: boolean): "success" | "neutral" {
 
 export function CrossDatasetFactsView({ search }: { search: string }) {
   const router = useRouter();
+  const quality = useQualityContext();
   const { country } = useCountry();
   const params = useMemo(
     () => parseFactCatalogParams(new URLSearchParams(search), country),
@@ -175,7 +180,7 @@ export function CrossDatasetFactsView({ search }: { search: string }) {
   useEffect(() => setSearchInput(params.search), [params.search]);
 
   const navigate = (patch: Partial<FactCatalogParams>) => {
-    router.push(factCatalogHref(params, { ...patch, page: patch.page ?? 1 }));
+    router.push(quality.href(factCatalogHref(params, { ...patch, page: patch.page ?? 1 })));
   };
 
   if (query.isLoading && !query.data) {
@@ -491,18 +496,21 @@ function FieldList({ fields, empty }: { fields: DisplayField[]; empty: string })
 }
 
 function useFactDetail(factKey: string, country: Country) {
+  const quality = useQualityParams();
   return useQuery({
-    queryKey: ["cross-dataset", "fact", country, factKey],
+    queryKey: ["cross-dataset", "fact", country, factKey, quality],
     queryFn: async () => {
       const [summary, response] = await Promise.all([
         apiGet<CrossDatasetSummary>("/microcosm/cross-dataset", {
           view: "summary",
           country,
+          ...quality,
         }),
         apiGet<FactResponse>("/microcosm/cross-dataset", {
           view: "fact",
           fact_key: factKey,
           country,
+          ...quality,
         }),
       ]);
       return { summary, fact: response.fact };
