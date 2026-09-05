@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { CandidateQualityManifest } from "../quality/types";
 import {
+  COUNT_WORDS,
   PAIR_SEPARATOR,
   ReceiptGraphUnavailableError,
   buildReceiptGraph,
@@ -25,6 +26,7 @@ import {
   type ReceiptProjection,
 } from "./adapter";
 import projectionJson from "./receipts/us-graph-f001-geography-20260905-v1.json";
+import { RECEIPT_PROJECTION_SCHEMA } from "./types";
 
 const FIXTURES = fileURLToPath(new URL("./fixtures/us-graph-launch-quality/", import.meta.url));
 const CANDIDATE_MANIFEST_SHA =
@@ -89,13 +91,57 @@ function graph() {
     CANDIDATE_MANIFEST_SHA,
     built.evidence,
   );
-  return buildReceiptGraph(built.projection, built.manifest, checks);
+  return buildReceiptGraph(
+    built.projection,
+    built.manifest,
+    built.evidence,
+    checks,
+  );
+}
+
+/** The same payload, built from a mutated copy of the shipped inputs. The
+ * authored sentences have to follow what the mutation changed; that is the
+ * whole point of the prose tests below. */
+function graphWith(
+  mutate: (input: {
+    projection: ReceiptProjection;
+    manifest: CandidateQualityManifest;
+    evidence: Record<string, unknown>;
+  }) => void,
+) {
+  const built = {
+    projection: projection(),
+    manifest: manifest(),
+    evidence: evidence(),
+  };
+  mutate(built);
+  const checks = verifyProjectionBinding(
+    built.projection,
+    built.manifest,
+    CANDIDATE_MANIFEST_SHA,
+    built.evidence,
+  );
+  return buildReceiptGraph(
+    built.projection,
+    built.manifest,
+    built.evidence,
+    checks,
+  );
 }
 
 // Mutations below are local projections / aggregate evidence copies, never
 // changes to the publisher fixtures or claims about another real execution.
 function evidenceChecks(value: Record<string, unknown>) {
   return value.checks as Record<string, Record<string, any>>;
+}
+
+/** The publisher's own column-ownership block for one execution, read straight
+ * out of the attached build evidence. */
+function toleranceWriters(
+  value: Record<string, unknown>,
+  mode: string,
+): Record<string, string[]> {
+  return evidenceChecks(value)[mode].gate.capabilities.tolerance_writers;
 }
 
 describe("receipt consistency regressions from the independent probes", () => {
@@ -141,7 +187,7 @@ describe("receipt consistency regressions from the independent probes", () => {
     const p = projection();
     p.executions[0].manifest_sha256 = "e".repeat(64);
     const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
-    const result = buildReceiptGraph(p, manifest(), checks);
+    const result = buildReceiptGraph(p, manifest(), evidence(), checks);
     expect(result.executions[0].manifest_sha256).toBe("e".repeat(64));
     expect(result.comparison.execution_note).toMatch(/paired by this projection/);
     expect(result.limits.join(" ")).toMatch(/does not pin either recorded run manifest/i);
@@ -177,7 +223,7 @@ describe("receipt consistency regressions from the independent probes", () => {
         }
       }
       const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, e);
-      const result = buildReceiptGraph(p, manifest(), checks);
+      const result = buildReceiptGraph(p, manifest(), e, checks);
       const states = result.nodes.find(n => n.role === "gate")!.states;
       expect(states.every(s => s.gate === outcome)).toBe(true);
       expect(states.every(s => s.execution === (outcome === "unreached" ? "blocked" : outcome === "fail" ? "failed" : "recorded"))).toBe(true);
@@ -280,7 +326,7 @@ describe("recorded failure and executor summaries agree with their receipts", ()
       execution.failed_node_ids = [node.id];
       execution[exceptional.list] = [node.id];
       const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
-      const result = buildReceiptGraph(p, manifest(), checks);
+      const result = buildReceiptGraph(p, manifest(), evidence(), checks);
       const state = result.nodes.find(entry => entry.id === node.id)!.states.find(entry => entry.mode === "cold")!;
       expect(state.execution).toBe(exceptional.display);
       expect(state.outputs_usable).toBe(false);
@@ -295,7 +341,7 @@ describe("recorded failure and executor summaries agree with their receipts", ()
     // the run's known_failures list; the implication is only list -> flag.
     node.failed = true;
     const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
-    const result = buildReceiptGraph(p, manifest(), checks);
+    const result = buildReceiptGraph(p, manifest(), evidence(), checks);
     const state = result.nodes.find(entry => entry.id === node.id)!.states.find(entry => entry.mode === "cold")!;
     expect(state.execution).toBe("failed");
     expect(state.outputs_usable).toBe(false);
@@ -329,7 +375,7 @@ describe("a typed input must resolve its producer's declared output", () => {
         const producer = execution.nodes.find(n => n.id === "assemble_stacked_spine.prepare")!;
         mutate(consumer.typed_inputs[0], producer);
       }
-      const result = buildReceiptGraph(p, manifest(), verify());
+      const result = buildReceiptGraph(p, manifest(), evidence(), verify());
       const edge = result.edges.find(e => e.to === "assemble_stacked_spine");
       expect(edge?.artifacts.some(a => a.name === "frame_context") ?? false).toBe(false);
       expect(result.coverage.complete).toBe(false);
@@ -340,7 +386,7 @@ describe("a typed input must resolve its producer's declared output", () => {
     const p = projection();
     for (const execution of p.executions)
       execution.nodes.find(n => n.id === "assemble_stacked_spine")!.typed_inputs[0].name = "local_frame";
-    const result = buildReceiptGraph(p, manifest(), verify());
+    const result = buildReceiptGraph(p, manifest(), evidence(), verify());
     expect(result.edges.find(e => e.to === "assemble_stacked_spine")!.artifacts.some(a => a.name === "local_frame")).toBe(true);
   });
 
@@ -350,7 +396,7 @@ describe("a typed input must resolve its producer's declared output", () => {
       const inputs = execution.nodes.find(n => n.id === "assemble_stacked_spine")!.typed_inputs;
       inputs[1].name = inputs[0].name;
     }
-    const result = buildReceiptGraph(p, manifest(), verify());
+    const result = buildReceiptGraph(p, manifest(), evidence(), verify());
     expect(result.edges.some(e => e.to === "assemble_stacked_spine")).toBe(false);
     expect(result.limits.join(" ")).toMatch(/ambiguous input/);
   });
@@ -361,7 +407,7 @@ describe("a typed input must resolve its producer's declared output", () => {
     delete p.executions[0].nodes.find(node => node.id === "assemble_stacked_spine")!
       .typed_inputs[0].producer_key;
     const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, evidence());
-    const result = buildReceiptGraph(p, manifest(), checks);
+    const result = buildReceiptGraph(p, manifest(), evidence(), checks);
     expect(result.coverage.complete).toBe(false);
     expect(result.limits.join(" ")).toMatch(/recorded no key/);
   });
@@ -636,6 +682,7 @@ describe("recorded dependencies", () => {
     const payload = buildReceiptGraph(
       source,
       manifest(),
+      evidence(),
       verify(),
     );
     expect(payload.edges).toHaveLength(3);
@@ -658,7 +705,7 @@ describe("recorded dependencies", () => {
         (node) => node.id === "assign_us_puma_ladder",
       )!.typed_inputs)
         input.producer_key = "9".repeat(64);
-    const payload = buildReceiptGraph(source, manifest(), verify());
+    const payload = buildReceiptGraph(source, manifest(), evidence(), verify());
     expect(payload.edges.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([
       "assemble_stacked_spine.prepare -> assemble_stacked_spine",
     ]);
@@ -835,7 +882,7 @@ describe("same computation, two executions", () => {
     source.executions[1].nodes.find(
       (node) => node.id === "assemble_stacked_spine",
     )!.typed_outputs[0].artifact_key = "7".repeat(64);
-    const payload = buildReceiptGraph(source, manifest(), verify());
+    const payload = buildReceiptGraph(source, manifest(), evidence(), verify());
     expect(payload.comparison.output_identity.identical).toBe(false);
     const difference = payload.comparison.output_identity.differences[0];
     expect(difference.id).toBe("assemble_stacked_spine");
@@ -855,7 +902,7 @@ describe("same computation, two executions", () => {
     expect(
       pinDifferences(source, ["assemble_stacked_spine", "assign_us_puma_ladder"]),
     ).toEqual(["assemble_stacked_spine"]);
-    const payload = buildReceiptGraph(source, manifest(), verify());
+    const payload = buildReceiptGraph(source, manifest(), evidence(), verify());
     expect(payload.comparison.output_identity.identical).toBe(true);
     expect(
       payload.nodes.find((node) => node.id === "assemble_stacked_spine")!
@@ -1081,7 +1128,7 @@ describe("a receipt that recorded no typed artifact is not a warning", () => {
       (node) => node.id === "assign_us_puma_ladder.boundary",
     )!;
     boundary.failed = true;
-    const payload = buildReceiptGraph(source, manifest(), verify());
+    const payload = buildReceiptGraph(source, manifest(), evidence(), verify());
     const state = payload.nodes
       .find((node) => node.id === "assign_us_puma_ladder.boundary")!
       .states.find((entry) => entry.mode === "cold")!;
@@ -1134,22 +1181,26 @@ describe("the limits distinguish what is bound from what the projection asserts"
   });
 
   test("names the one slice of column ownership the publisher does pin", () => {
-    // `checks.<mode>.gate.capabilities.tolerance_writers` lists, for the four
-    // household columns inside the gate's declared tolerance scope, which steps
-    // wrote them. That is publisher-bound column ownership, and the limits say
-    // the column-level flow lives only in the unpinned declaration. It is still
-    // not drawn — it covers one gate's scope, not the graph — but the limits
-    // must not claim it does not exist.
-    const writers = (
-      (RAW_EVIDENCE.checks as Record<string, Record<string, Record<string, Record<string, unknown>>>>)
-        .cold.gate.capabilities.tolerance_writers
-    ) as Record<string, string[]>;
-    expect(Object.keys(writers)).toHaveLength(4);
-    expect(Object.keys(writers).every((column) => column.startsWith("household."))).toBe(true);
+    // `checks.<mode>.gate.capabilities.tolerance_writers` lists, for the
+    // columns inside the gate's declared tolerance scope, which steps wrote
+    // them. That is publisher-bound column ownership, and the limits say the
+    // column-level flow lives only in the unpinned declaration. It is still not
+    // drawn — it covers one gate's scope, not the graph — but the limits must
+    // not claim it does not exist.
+    //
+    // The count and the entity are read out of the evidence here rather than
+    // written down, because the sentence itself is now read out of the evidence.
+    const writers = toleranceWriters(RAW_EVIDENCE, "cold");
+    const columns = Object.keys(writers);
+    const entities = new Set(columns.map((column) => column.split(".")[0]));
+    expect(columns.length).toBeGreaterThan(0);
+    expect(entities.size).toBe(1);
 
     const limits = graph().limits.join(" ");
     expect(limits).toMatch(/tolerance scope|the gate's declared/i);
-    expect(limits).toMatch(/four household columns/i);
+    expect(limits).toContain(
+      `${COUNT_WORDS[columns.length]} ${[...entities][0]} columns`,
+    );
   });
 
   test("still separates that from the digests the publisher's evidence does bind", () => {
@@ -1161,6 +1212,474 @@ describe("the limits distinguish what is bound from what the projection asserts"
     expect(payload.binding.computation_content_key).toMatch(/^[a-f0-9]{64}$/);
     for (const execution of payload.executions)
       expect(bound).not.toContain(execution.manifest_sha256);
+  });
+});
+
+/* ------------------------------------ the prose has to describe the evidence */
+
+describe("the authored prose follows the evidence rather than this candidate", () => {
+  // Four sentences under "What was checked" used to be literals: "four
+  // household columns", "this candidate completed and is excluded from
+  // release", "two executions, one computing four kernel calls and one
+  // computing none", and "One gate record". Each was true of the single
+  // projection registered today and would have become a false statement the
+  // moment a second one was registered. These tests change the evidence and
+  // read the sentence back.
+
+  test("the execution count and the kernel-call counts come from the evidence", () => {
+    // One execution instead of two. The published check for the dropped
+    // execution goes with it, or the binding refuses an omitted execution.
+    const payload = graphWith(({ projection: p, evidence: e }) => {
+      p.executions.pop();
+      delete evidenceChecks(e).resume;
+    });
+    expect(payload.executions).toHaveLength(1);
+    const prose = `${payload.comparison.execution_note} ${payload.limits.join(" ")}`;
+    expect(prose).toContain("records one execution of this run");
+    expect(prose).toContain("computing four kernel calls");
+    expect(prose).not.toMatch(/two executions|one computing none/);
+  });
+
+  test("a different published kernel-call count is what the sentence says", () => {
+    const payload = graphWith(({ projection: p, evidence: e }) => {
+      // Three of the cold run's four computed receipts become cache hits, so
+      // the publisher's kernel-call count for that execution is one.
+      for (const node of p.executions[0].nodes.slice(2, 5)) node.cache = "hit";
+      p.executions[0].computed_count = 1;
+      p.executions[0].cache_hit_count = 5;
+      p.executions[0].kernel_calls = 1;
+      evidenceChecks(e).cold.kernel_calls = 1;
+    });
+    const prose = `${payload.comparison.execution_note} ${payload.limits.join(" ")}`;
+    expect(prose).toContain("one computing one kernel call and one computing none");
+    expect(prose).not.toContain("four kernel calls");
+  });
+
+  test("the release sentence reads the manifest's own two statuses", () => {
+    const payload = graphWith(({ manifest: m }) => {
+      m.execution_status = "failed";
+      m.release_eligibility = {
+        status: "not_evaluated",
+        reason: "Not evaluated for release.",
+      };
+    });
+    const limits = payload.limits.join(" ");
+    expect(limits).toContain("execution as failed");
+    expect(limits).toContain("release eligibility as not evaluated");
+    expect(limits).not.toMatch(/this candidate completed|excluded from release/);
+  });
+
+  test("the shipped candidate's own two statuses still read correctly", () => {
+    const limits = graph().limits.join(" ");
+    expect(limits).toContain(
+      `execution as ${RAW_MANIFEST.execution_status as string}`,
+    );
+    expect(limits).toContain("release eligibility as excluded");
+  });
+
+  test("the gate note counts the gate records rather than saying one", () => {
+    const payload = graphWith(({ projection: p, evidence: e }) => {
+      // The second execution records its gate on a different receipt, so the
+      // run holds two gate-bearing node ids rather than one. Each execution
+      // still publishes exactly the one gate its own check declares.
+      const replay = p.executions[1];
+      const gate = replay.nodes.find((node) => node.id.endsWith(".gate"))!;
+      const moved = replay.nodes.find((node) => node.id === "assign_us_puma_ladder.lookup")!;
+      moved.role = "gate";
+      moved.gate = gate.gate;
+      gate.role = "compute";
+      gate.gate = null;
+      evidenceChecks(e).resume.gate = clone(evidenceChecks(e).cold.gate);
+    });
+    expect(payload.gates.records).toBe(2);
+    expect(payload.gates.note).toContain("Two gate records in this run");
+    expect(payload.gates.note).toContain("They attest to their own scopes");
+    expect(payload.gates.note).not.toContain("One gate record");
+  });
+
+  test("a gate that recorded no scope is still counted as a gate record", () => {
+    // The old note keyed its whole sentence off the declared scopes, so a gate
+    // with none produced `records: 1` beside "No gate record in this run" —
+    // the payload contradicting itself.
+    const payload = graphWith(({ projection: p, evidence: e }) => {
+      for (const execution of p.executions)
+        execution.nodes.find((node) => node.gate)!.gate!.scope = null;
+      for (const mode of ["cold", "resume"])
+        delete evidenceChecks(e)[mode].gate.scope;
+    });
+    expect(payload.gates.records).toBe(1);
+    expect(payload.gates.note).toContain("One gate record in this run");
+    expect(payload.gates.note).toContain("no declared scope");
+    expect(payload.gates.note).not.toContain("No gate record in this run");
+  });
+
+  test("the column-ownership count and entity come from the published writers", () => {
+    const payload = graphWith(({ evidence: e }) => {
+      for (const mode of ["cold", "resume"])
+        evidenceChecks(e)[mode].gate.capabilities.tolerance_writers = {
+          "person.age": ["assign_us_puma_ladder"],
+          "person.state_fips": ["assemble_stacked_spine.prepare"],
+          "person.puma": ["assign_us_puma_ladder"],
+        };
+    });
+    const limits = payload.limits.join(" ");
+    expect(limits).toContain("three person columns");
+    expect(limits).not.toContain("four household columns");
+  });
+
+  test("columns from more than one entity are counted without naming an entity", () => {
+    const payload = graphWith(({ evidence: e }) => {
+      for (const mode of ["cold", "resume"])
+        evidenceChecks(e)[mode].gate.capabilities.tolerance_writers = {
+          "person.age": ["assign_us_puma_ladder"],
+          "household.puma": ["assign_us_puma_ladder"],
+        };
+    });
+    const limits = payload.limits.join(" ");
+    expect(limits).toContain("two columns inside");
+    expect(limits).not.toMatch(/two (person|household) columns/);
+  });
+});
+
+/* ------------------------------------ prose must not claim absent evidence */
+
+describe("no sentence claims evidence the candidate did not publish", () => {
+  const withoutWriters = () =>
+    graphWith(({ evidence: e }) => {
+      for (const mode of ["cold", "resume"])
+        delete evidenceChecks(e)[mode].gate.capabilities;
+    });
+
+  test("no published column ownership means no claim that any is published", () => {
+    const limits = withoutWriters().limits.join(" ");
+    expect(limits).not.toMatch(/slice of column ownership is published/i);
+    expect(limits).toMatch(/records no writer for any column/i);
+  });
+
+  test("the unpinned structural declaration is still named either way", () => {
+    // Dropping the published slice must not drop the reason the column-level
+    // flow is missing from the canvas.
+    const limits = withoutWriters().limits.join(" ");
+    expect(limits).toMatch(/compiled structural declaration/i);
+    expect(limits).toMatch(/no publisher attachment pins/i);
+  });
+
+  test("writers with no named step are not counted as published ownership", () => {
+    // A column whose writer list is empty names no step, so there is nothing
+    // to report as ownership. The count must not include it.
+    const payload = graphWith(({ evidence: e }) => {
+      for (const mode of ["cold", "resume"])
+        evidenceChecks(e)[mode].gate.capabilities.tolerance_writers = {
+          "household.puma": [],
+          "household.county_fips": ["assign_us_puma_ladder"],
+        };
+    });
+    const limits = payload.limits.join(" ");
+    expect(limits).toContain("one household column inside");
+    expect(limits).not.toMatch(/two household columns/);
+  });
+
+  test("an unreadable writer record is left out rather than guessed at", () => {
+    const payload = graphWith(({ evidence: e }) => {
+      for (const mode of ["cold", "resume"])
+        evidenceChecks(e)[mode].gate.capabilities.tolerance_writers = "not an object";
+    });
+    const limits = payload.limits.join(" ");
+    expect(limits).not.toMatch(/slice of column ownership is published/i);
+    expect(limits).toMatch(/records no writer for any column/i);
+  });
+
+  test("an execution with no published gate produces no gate or ownership claim", () => {
+    const payload = graphWith(({ projection: p, evidence: e }) => {
+      for (const execution of p.executions)
+        for (const node of execution.nodes) {
+          node.gate = null;
+          if (node.role === "gate") node.role = "compute";
+        }
+      for (const mode of ["cold", "resume"]) delete evidenceChecks(e)[mode].gate;
+    });
+    expect(payload.gates.records).toBe(0);
+    expect(payload.gates.note).toBe("No gate record in this run. That is not a pass.");
+    expect(payload.limits.join(" ")).not.toMatch(/slice of column ownership is published/i);
+  });
+});
+
+/* ------------------------------------ a second, internally consistent candidate */
+
+// A hand-built alternate candidate, deliberately unlike the shipped one: one
+// execution rather than two, one kernel call rather than four and none, one
+// cache hit rather than two, a gate that declared itself not applicable rather
+// than one that passed, two person columns in its tolerance scope rather than
+// four household ones, and a build still running and not yet evaluated for
+// release. It is never registered in `projections.ts`, so no request can reach
+// it. It exists so the authored sentences can be read against evidence that is
+// not this dashboard's one candidate — the case the old literals got wrong.
+const ALT = {
+  candidate: "us-graph-alternate-fixture-v1",
+  run: "us-graph-alternate-fixture-run",
+  manifest: "1".repeat(64),
+  evidence: "2".repeat(64),
+  population: "3".repeat(64),
+  implementation: "4".repeat(64),
+  contentKey: "5".repeat(64),
+  runManifest: "6".repeat(64),
+  producerKey: "7".repeat(64),
+  gateKey: "8".repeat(64),
+  artifactKey: "9".repeat(64),
+  sourcePin: "a".repeat(64),
+};
+
+function altNode(overrides: Partial<ProjectionNode> & { id: string }): ProjectionNode {
+  return {
+    label: overrides.id,
+    group: "alternate",
+    group_label: "Alternate assembly",
+    role: "compute",
+    receipt_present: true,
+    failed: false,
+    blocked: false,
+    gate_exception: false,
+    execution_record: null,
+    receipt_outcome: "recorded",
+    cache: "computed",
+    node_key: ALT.producerKey,
+    kernel_ref: "alternate.kernel",
+    kernel_impl_hash: ALT.implementation,
+    determinism: "deterministic",
+    numeric: "bitwise",
+    tolerance: null,
+    runtime_dependencies: [],
+    seed: null,
+    wall_time_seconds: 0.25,
+    frame_key: null,
+    weight_key: null,
+    phase: null,
+    typed_inputs: [],
+    typed_outputs: [],
+    opaque_artifact_keys: [],
+    column_artifact_counts: [],
+    column_artifact_total: 0,
+    gate: null,
+    source_pins: [],
+    measures: [],
+    ...overrides,
+  };
+}
+
+function altProjection(): ReceiptProjection {
+  const typedArtifact = {
+    name: "frame",
+    artifact: "alternate.frame",
+    type: "frame",
+    type_version: 1,
+    artifact_key: ALT.artifactKey,
+    numeric: "bitwise",
+    tolerance: null,
+  };
+  return {
+    schema_version: RECEIPT_PROJECTION_SCHEMA,
+    projection_version: 1,
+    is_publisher_attachment: false,
+    provenance_note: "A hand-built alternate reduction, used only by these tests.",
+    label_basis: "Stage names are the node ids.",
+    coverage: {
+      basis: "run_manifest_typed_artifacts",
+      complete: true,
+      reason: "Both recorded receipts declare the typed artifact that connects them.",
+    },
+    country: "us",
+    candidate_release_id: ALT.candidate,
+    candidate_manifest_sha256: ALT.manifest,
+    run_id: ALT.run,
+    population_sha256: ALT.population,
+    build_evidence_sha256: ALT.evidence,
+    kernel_impl_hash: ALT.implementation,
+    computation_content_key: ALT.contentKey,
+    content_key_note: "One content key identifies the computation and its outputs.",
+    executions: [
+      {
+        mode: "only",
+        evidence_key: "only",
+        label: "Only recorded run",
+        description: "The single recorded execution of this alternate candidate.",
+        manifest_sha256: ALT.runManifest,
+        manifest_schema_version: 1,
+        content_key: ALT.contentKey,
+        kernel_calls: 1,
+        computed_count: 1,
+        cache_hit_count: 1,
+        failed_node_ids: [],
+        blocked_node_ids: [],
+        gate_exception_node_ids: [],
+        release_tier: null,
+        decision_count: 0,
+        nodes: [
+          altNode({
+            id: "alternate_build",
+            label: "Alternate build",
+            node_key: ALT.producerKey,
+            source_pins: [
+              { key: "alternate_source", label: "Alternate source", sha256: ALT.sourcePin },
+            ],
+            typed_outputs: [typedArtifact],
+          }),
+          altNode({
+            id: "alternate_build.gate",
+            label: "Alternate gate",
+            role: "gate",
+            cache: "hit",
+            node_key: ALT.gateKey,
+            typed_inputs: [
+              { ...typedArtifact, producer: "alternate_build", producer_key: ALT.producerKey },
+            ],
+            gate: {
+              outcome: "not_applicable",
+              scope: "alternate_scope",
+              passed: null,
+              checks: [],
+            },
+          }),
+        ],
+      },
+    ],
+  };
+}
+
+function altManifest(): CandidateQualityManifest {
+  return {
+    schema_version: "microcosm.candidate_quality.v1",
+    country: "us",
+    candidate_release_id: ALT.candidate,
+    run_id: ALT.run,
+    created_at: "2026-09-05T00:00:00+00:00",
+    execution_status: "running",
+    release_eligibility: {
+      status: "not_evaluated",
+      reason: "This alternate fixture is not evaluated for release.",
+    },
+    population: {
+      sha256: ALT.population,
+      period: "alternate fixture (development)",
+      entity: "person",
+    },
+    provenance: { source_implementation_sha256: ALT.implementation },
+    geography: null,
+    attachments: {
+      build_manifest: {
+        status: "available",
+        scope: "run",
+        sha256: ALT.evidence,
+        path: `artifacts/${ALT.evidence}.json`,
+        identity: { candidate_release_id: ALT.candidate, run_id: ALT.run },
+      },
+    },
+  } as CandidateQualityManifest;
+}
+
+function altEvidence(): Record<string, unknown> {
+  return {
+    candidate_release_id: ALT.candidate,
+    run_id: ALT.run,
+    checks: {
+      only: {
+        manifest_sha256: ALT.contentKey,
+        implementation_sha256: ALT.implementation,
+        population_sha256: ALT.population,
+        kernel_calls: 1,
+        source_sha256: { alternate_source: ALT.sourcePin },
+        gate: {
+          outcome: "not_applicable",
+          scope: "alternate_scope",
+          evidence: { passed: null, gates: {} },
+          capabilities: {
+            tolerance_writers: {
+              "person.age": ["alternate_build"],
+              "person.state_fips": ["alternate_build"],
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function altGraph() {
+  const source = altProjection();
+  const manifest = altManifest();
+  const evidence = altEvidence();
+  const checks = verifyProjectionBinding(source, manifest, ALT.manifest, evidence);
+  return { checks, payload: buildReceiptGraph(source, manifest, evidence, checks) };
+}
+
+describe("a second candidate reads as itself, not as the one that ships", () => {
+  test("the alternate fixture is internally consistent and binds", () => {
+    const { checks, payload } = altGraph();
+    expect(checks.map((check) => check.label)).toEqual([
+      "Candidate manifest",
+      "Build evidence",
+      "Population",
+      "Implementation",
+      "Only recorded run receipts",
+    ]);
+    expect(checks.at(-1)!.detail).toContain("1 computed and 1 served from cache");
+    expect(checks.at(-1)!.detail).toContain("1 projected source pins");
+    expect(payload.candidate.id).toBe(ALT.candidate);
+    expect(payload.executions).toHaveLength(1);
+    expect(payload.edges.map((edge) => `${edge.from} -> ${edge.to}`)).toEqual([
+      "alternate_build -> alternate_build.gate",
+    ]);
+    expect(payload.coverage.complete).toBe(true);
+    expect(payload.coverage.recorded_edges).toBe(1);
+  });
+
+  test("its limits state its own counts and statuses", () => {
+    const limits = altGraph().payload.limits.join(" ");
+    expect(limits).toContain("records one execution of this run, computing one kernel call");
+    expect(limits).toContain("two person columns inside");
+    expect(limits).toContain("execution as running");
+    expect(limits).toContain("release eligibility as not evaluated");
+    // None of the shipped candidate's figures may appear.
+    expect(limits).not.toMatch(
+      /two executions|four kernel calls|four household columns|completed|excluded from release/i,
+    );
+  });
+
+  test("its comparison prose does not describe two executions", () => {
+    const { payload } = altGraph();
+    expect(payload.comparison.title).toBe("One recorded execution");
+    expect(payload.comparison.execution_note).toContain("a single recorded execution");
+    expect(payload.comparison.execution_note).toContain("paired by this projection");
+    expect(payload.comparison.execution_note).not.toMatch(
+      /different byte digests|two executions|four kernel calls/,
+    );
+    expect(payload.comparison.distinct_executions).toBe(true);
+    expect(payload.comparison.same_computation_content_key).toBe(true);
+  });
+
+  test("its gate note reads its own single not-applicable gate", () => {
+    const { payload } = altGraph();
+    expect(payload.gates.records).toBe(1);
+    expect(payload.gates.note).toBe(
+      "One gate record in this run, scoped to alternate_scope. It attests to its own scope and to nothing else here.",
+    );
+    const gate = payload.nodes.find((node) => node.role === "gate")!;
+    expect(gate.states[0].gate).toBe("not_applicable");
+    // Not applicable withheld nothing, and this receipt declared no artifact.
+    expect(gate.states[0].outputs).toBe("no_typed_artifact");
+  });
+
+  test("the shipped candidate's prose is unchanged by any of this", () => {
+    const payload = graph();
+    expect(payload.comparison.title).toBe("Same computation, two executions");
+    expect(payload.limits.join(" ")).toContain(
+      "records two executions of this run, one computing four kernel calls and one computing none",
+    );
+    expect(payload.gates.note).toBe(
+      "One gate record in this run, scoped to geography_assignment_integrity. It attests to its own scope and to nothing else here.",
+    );
+    expect(payload.limits.join(" ")).toContain(
+      "for the four household columns inside the gate's declared tolerance scope",
+    );
   });
 });
 

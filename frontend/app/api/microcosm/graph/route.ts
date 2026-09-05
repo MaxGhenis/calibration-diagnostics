@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       buildEvidence,
     );
     return NextResponse.json(
-      buildReceiptGraph(projection, source.manifest, checks),
+      buildReceiptGraph(projection, source.manifest, buildEvidence, checks),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

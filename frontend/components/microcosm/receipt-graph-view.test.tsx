@@ -12,6 +12,7 @@ import { SiteFooter } from "../layout/site-footer";
 import { SiteHeader } from "../layout/site-header";
 import { ReceiptGraphSurface } from "./receipt-graph-view";
 import {
+  COUNT_WORDS,
   buildReceiptGraph,
   verifyProjectionBinding,
   type ReceiptProjection,
@@ -36,6 +37,7 @@ const PROJECTION = projectionJson as unknown as ReceiptProjection;
 const PAYLOAD = buildReceiptGraph(
   PROJECTION,
   MANIFEST,
+  EVIDENCE,
   verifyProjectionBinding(
     PROJECTION,
     MANIFEST,
@@ -159,13 +161,17 @@ describe("the inspector", () => {
 });
 
 describe("the comparison", () => {
-  test("separates one computation from two executions", () => {
+  test("separates one computation from the executions the run recorded", () => {
     const markup = render();
-    expect(markup).toContain("Same computation, two executions");
+    // The heading is the payload's own derived sentence, not a count written
+    // into the component: a run with a different number of executions has to
+    // read correctly here too.
+    expect(PAYLOAD.comparison.title).toBe("Same computation, two executions");
+    expect(markup).toContain(PAYLOAD.comparison.title);
     expect(markup).toContain(PAYLOAD.comparison.content_key);
     for (const execution of PAYLOAD.executions)
       expect(markup).toContain(execution.manifest_sha256);
-    expect(markup).toContain("Identical across both executions");
+    expect(markup).toContain("Identical across every recorded execution");
   });
 
   test("names where the executions actually differ", () => {
@@ -257,7 +263,12 @@ describe("the reader is told what the evidence does not pin", () => {
     // evidence carries a check for each. What is this projection's is which
     // recorded manifest bytes belong to which of them.
     expect(markup).toContain("paired by this projection");
-    expect(markup).toContain("computing four kernel calls and one computing none");
+    // The kernel-call figures are read out of the payload, which reads them out
+    // of the published evidence; this asserts that they reach the reader, not
+    // that they are these particular numbers.
+    expect(markup).toContain(
+      `one computing ${COUNT_WORDS[PAYLOAD.executions[0].kernel_calls!]} kernel calls and one computing none`,
+    );
     expect(markup).not.toContain("that separation is asserted by this projection");
   });
 
@@ -272,7 +283,7 @@ describe("the reader is told what the evidence does not pin", () => {
     expect(markup.indexOf(phrase)).toBeLessThan(
       markup.indexOf("What was checked before any of this was drawn"),
     );
-    expect(markup.indexOf("Same computation, two executions")).toBeLessThan(
+    expect(markup.indexOf(PAYLOAD.comparison.title)).toBeLessThan(
       markup.indexOf(phrase),
     );
   });
