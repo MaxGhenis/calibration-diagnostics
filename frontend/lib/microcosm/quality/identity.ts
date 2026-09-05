@@ -23,6 +23,9 @@ export interface PopulationIdentity {
    * comparable: a digest over population bytes and a release id are different
    * kinds of name, and equality of one says nothing about the other. */
   key: string;
+  /** The population digest alone, when there is one. Equal bytes cannot be two
+   * populations however the rest of the key is spelled. */
+  digest: string;
 }
 
 export type ComparisonIdentityStatus =
@@ -43,7 +46,11 @@ export const SAME_POPULATION_REASON =
 export const UNVERIFIED_POPULATION_REASON =
   "The two selections publish no comparable population identity, so this comparison is not established to be between different populations.";
 
-const UNRESOLVED: PopulationIdentity = { basis: "unresolved", key: "" };
+const UNRESOLVED: PopulationIdentity = {
+  basis: "unresolved",
+  key: "",
+  digest: "",
+};
 
 /** A candidate's population is named by the digest its immutable manifest
  * binds, read with the period and entity that digest was produced for. The
@@ -65,6 +72,7 @@ export function candidatePopulationIdentity(
           population.period,
           population.entity,
         ]),
+        digest: population.sha256,
       }
     : UNRESOLVED;
 }
@@ -80,7 +88,11 @@ export function publishedPopulationIdentity(
   return releaseId &&
     releaseId !== "latest" &&
     !releaseId.startsWith("candidate:")
-    ? { basis: "published_release", key: JSON.stringify([country, releaseId]) }
+    ? {
+        basis: "published_release",
+        key: JSON.stringify([country, releaseId]),
+        digest: "",
+      }
     : UNRESOLVED;
 }
 
@@ -119,8 +131,12 @@ export function comparisonIdentity(
     selected.basis !== incumbent.basis
   )
     return { status: "unverified", reason: UNVERIFIED_POPULATION_REASON };
-  return selected.key === incumbent.key
-    ? { status: "same_population", reason: SAME_POPULATION_REASON }
+  if (selected.key === incumbent.key)
+    return { status: "same_population", reason: SAME_POPULATION_REASON };
+  // One digest under two periods or two entities is a contradiction in the
+  // evidence rather than a second population, so it does not buy a comparison.
+  return selected.digest && selected.digest === incumbent.digest
+    ? { status: "unverified", reason: UNVERIFIED_POPULATION_REASON }
     : { status: "distinct_population", reason: "" };
 }
 
