@@ -25,7 +25,7 @@ The dev runner prints the selected port. The default mount is `/calibration/dash
 
 The TypeScript contracts live in [`types.ts`](../frontend/lib/microcosm/quality/types.ts); validation lives in [`artifact.ts`](../frontend/lib/microcosm/quality/artifact.ts).
 
-An immutable `microcosm.candidate_quality.v1` manifest lives at `manifests/<sha256>.json`, where the digest identifies its exact UTF-8 bytes. It contains:
+An immutable `microcosm.candidate_quality.v1` manifest lives at `manifests/<sha256>.json`, where the digest identifies its exact UTF-8 bytes. Every manifest and attachment digest is taken over the stored or served bytes before anything is decoded, so a directory source and a URL source agree byte for byte. Decoding is then strict: an artifact that is not valid UTF-8, or that begins with a byte order mark, is refused as malformed rather than being repaired into something whose digest no longer describes it. It contains:
 
 | Field | Meaning |
 | --- | --- |
@@ -63,7 +63,7 @@ Copy the whole bundle without changing its original relative partition layout, t
 
 `index.json` uses `microcosm.candidate_quality_index.v1`, with `country`, `updated_at` and `candidates[]`. Each entry includes candidate ID, run ID, execution status, eligibility, `updated_at`, and `manifest: {path, sha256}`. Candidate IDs are unique in the index. Keep older immutable manifests addressable when replacing an entry.
 
-Publish attachment bytes first, then the content-addressed manifest, then optionally the discovery index. The discovery feed is marked stale after 24 hours; this does not turn a completed immutable run into a stalled run. A timestamp over five minutes in the future has unknown freshness.
+Publish attachment bytes first, then the content-addressed manifest, then optionally the discovery index. Write every file as UTF-8 without a byte order mark, and compute each digest over those bytes. The discovery feed is marked stale after 24 hours; this does not turn a completed immutable run into a stalled run. A timestamp over five minutes in the future has unknown freshness.
 
 ## Population aggregates
 

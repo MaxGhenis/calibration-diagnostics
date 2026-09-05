@@ -140,6 +140,33 @@ function assertSame(actual: unknown, expected: string, description: string) {
     );
 }
 
+/** The digest names an artifact's exact bytes, so it is taken before anything is
+ * decoded and this is the only place the bytes become text. Decoding is strict:
+ * malformed UTF-8 is refused rather than silently becoming replacement
+ * characters, and a byte order mark is refused rather than being kept by one
+ * transport and stripped by the other. Refusing the mark, instead of removing
+ * it after hashing, keeps the bytes and their text identical for every artifact
+ * the reader accepts. */
+export function decodeArtifactText(bytes: Uint8Array): string {
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+      bytes,
+    );
+  } catch {
+    throw new ArtifactError(
+      "malformed_artifact",
+      "Artifact bytes are not valid UTF-8.",
+    );
+  }
+  if (text.startsWith("\uFEFF"))
+    throw new ArtifactError(
+      "malformed_artifact",
+      "Artifact bytes must not begin with a byte order mark.",
+    );
+  return text;
+}
+
 export function qualityFreshness(
   updatedAt: string | null,
   now = Date.now(),
@@ -154,22 +181,24 @@ export class CandidateQualityReader {
   constructor(
     private readonly options: {
       country: MicrocosmCountry;
-      readText: (path: string) => Promise<string>;
+      readBytes: (path: string) => Promise<Uint8Array>;
     },
   ) {}
 
   async verified(path: string, expected: string): Promise<string> {
-    const raw = await this.options.readText(safeArtifactPath(path));
-    if (createHash("sha256").update(raw).digest("hex") !== digest(expected))
+    const bytes = await this.options.readBytes(safeArtifactPath(path));
+    if (createHash("sha256").update(bytes).digest("hex") !== digest(expected))
       throw new ArtifactError(
         "hash_mismatch",
         `Artifact digest mismatch: ${path}.`,
       );
-    return raw;
+    return decodeArtifactText(bytes);
   }
 
   async index(): Promise<CandidateQualityIndex> {
-    const raw = json(await this.options.readText("index.json"));
+    const raw = json(
+      decodeArtifactText(await this.options.readBytes("index.json")),
+    );
     if (raw.schema_version !== QUALITY_INDEX_SCHEMA)
       throw new ArtifactError(
         "malformed_artifact",

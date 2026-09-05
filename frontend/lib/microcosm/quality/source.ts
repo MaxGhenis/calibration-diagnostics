@@ -8,14 +8,19 @@ import { countryRegistration, type MicrocosmCountry } from "../countries";
 import {
   CandidateQualityReader,
   candidateId,
+  decodeArtifactText,
   digest,
   safeArtifactPath,
 } from "./artifact";
 import type { CandidateQualityManifest } from "./types";
 
 const MAX_ARTIFACT_BYTES = 64 * 1024 * 1024;
+// Both transports hand back the artifact's exact bytes; decoding happens once,
+// strictly, in decodeArtifactText, so a digest is checked against what was
+// stored or served rather than against one transport's interpretation of it.
 export interface QualitySource {
   reader: CandidateQualityReader;
+  readBytes: (relativePath: string) => Promise<Uint8Array>;
   readText: (relativePath: string) => Promise<string>;
 }
 
@@ -35,9 +40,9 @@ export function configuredQualitySource(
       "partial_artifact",
       "Candidate evidence is not configured for this country.",
     );
-  let readText: QualitySource["readText"];
+  let readBytes: QualitySource["readBytes"];
   if (directory) {
-    readText = async (relativePath) => {
+    readBytes = async (relativePath) => {
       const root = await realpath(directory);
       const resolved = await realpath(
         path.resolve(root, safeArtifactPath(relativePath)),
@@ -52,7 +57,7 @@ export function configuredQualitySource(
           "malformed_artifact",
           "Evidence must be a compact aggregate artifact (at most 64 MiB).",
         );
-      return readFile(resolved, "utf8");
+      return readFile(resolved);
     };
   } else {
     let base: URL;
@@ -75,7 +80,7 @@ export function configuredQualitySource(
         "malformed_artifact",
         "Candidate evidence base URL must be HTTP(S), without credentials, query or fragment.",
       );
-    readText = async (relativePath) => {
+    readBytes = async (relativePath) => {
       const url = new URL(safeArtifactPath(relativePath), base);
       if (url.origin !== base.origin || !url.pathname.startsWith(base.pathname))
         throw new ArtifactError(
@@ -120,13 +125,14 @@ export function configuredQualitySource(
       } finally {
         await reader.cancel();
       }
-      return new TextDecoder("utf-8", { fatal: true }).decode(
-        Buffer.concat(chunks),
-      );
+      return Buffer.concat(chunks);
     };
   }
+  const readText: QualitySource["readText"] = async (relativePath) =>
+    decodeArtifactText(await readBytes(relativePath));
   return {
-    reader: new CandidateQualityReader({ country, readText }),
+    reader: new CandidateQualityReader({ country, readBytes }),
+    readBytes,
     readText,
   };
 }

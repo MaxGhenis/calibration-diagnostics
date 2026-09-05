@@ -370,3 +370,69 @@ test("unexpected read failures stay generic while authored contract messages rem
     detail: "Aggregate rows must be an array.",
   });
 });
+
+test("the digest covers the artifact's exact bytes, identically over both transports", async () => {
+  const f = await bundle();
+  const clean = await readFile(
+    path.join(f.root, `manifests/${await f.save()}.json`),
+  );
+  // Bytes that a decoder does not round-trip: the two transports used to keep
+  // or drop a byte order mark, and to substitute replacement characters for
+  // malformed input, so the same stored artifact failed for different reasons
+  // depending on where it was read from.
+  const cases = [
+    {
+      bytes: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), clean]),
+      message: "Artifact bytes must not begin with a byte order mark.",
+    },
+    {
+      bytes: Buffer.concat([clean, Buffer.from([0xff])]),
+      message: "Artifact bytes are not valid UTF-8.",
+    },
+  ].map((item) => ({
+    ...item,
+    digest: createHash("sha256").update(item.bytes).digest("hex"),
+  }));
+  const served = new Map<string, Uint8Array<ArrayBuffer>>();
+  for (const item of cases) {
+    await writeFile(
+      path.join(f.root, `manifests/${item.digest}.json`),
+      item.bytes,
+    );
+    served.set(
+      `/quality/manifests/${item.digest}.json`,
+      new Uint8Array(item.bytes),
+    );
+  }
+
+  // The stored bytes hash to the requested digest, so each failure names the
+  // encoding rather than reporting a mismatch against intact bytes.
+  for (const item of cases) {
+    await expect(
+      loadCandidate("us", "fixture-only", item.digest),
+    ).rejects.toThrow(item.message);
+    await expect(
+      loadCandidate("us", "fixture-only", item.digest),
+    ).rejects.toMatchObject({ code: "malformed_artifact" });
+  }
+
+  const server = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      const bytes = served.get(new URL(request.url).pathname);
+      return bytes
+        ? new Response(bytes)
+        : new Response("absent", { status: 404 });
+    },
+  });
+  try {
+    delete process.env.MICROCOSM_QUALITY_US_DIR;
+    process.env.MICROCOSM_QUALITY_US_BASE_URL = `${server.url}quality/`;
+    for (const item of cases)
+      await expect(
+        loadCandidate("us", "fixture-only", item.digest),
+      ).rejects.toThrow(item.message);
+  } finally {
+    await server.stop(true);
+  }
+});

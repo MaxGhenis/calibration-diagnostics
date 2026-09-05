@@ -37,18 +37,18 @@ function fixture(change?: (manifest: Record<string, any>) => void) {
   change?.(manifest);
   const text = JSON.stringify(manifest);
   const digest = sha(text);
-  const files = new Map([
+  const files = new Map<string, string | Uint8Array>([
     [`manifests/${digest}.json`, text],
     ["objects/calibration.json", payload],
   ]);
   const reads: string[] = [];
   const reader = new CandidateQualityReader({
     country: "us",
-    readText: async (path) => {
+    readBytes: async (path) => {
       reads.push(path);
       const value = files.get(path);
       if (value === undefined) throw new Error("missing object");
-      return value;
+      return typeof value === "string" ? Buffer.from(value, "utf8") : value;
     },
   });
   return { reader, files, reads, digest, manifest };
