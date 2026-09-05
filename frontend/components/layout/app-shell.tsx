@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 import { GlobalLoader } from "./global-loader";
@@ -149,7 +149,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Menu
             </button>
           </div>
-          <div key={`${country}:${release}`} className="min-w-0 flex-1 p-6 pt-0 lg:pt-6"><QualityStrip />{children}</div>
+          {/* Changing the population remounts the page below, so page-local
+              state cannot survive into another population's evidence. The
+              selector that causes the change must stay outside that key: a
+              keyed Fragment resets the children without adding a DOM node and
+              without tearing down the strip the user just interacted with,
+              which would drop focus to <body>. */}
+          <div className="min-w-0 flex-1 p-6 pt-0 lg:pt-6">
+            <QualityStrip />
+            <Fragment key={`${country}:${release}`}>{children}</Fragment>
+          </div>
           <SiteFooter />
         </main>
       </div>
