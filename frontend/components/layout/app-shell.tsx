@@ -34,6 +34,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const navToggleRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  // The dialog's own close paths -- Escape, the Close button, following a nav
+  // link -- return focus to the Menu button that opened it, which is what a
+  // modal should do. A close forced by the viewport crossing into desktop
+  // cannot: at that width the Menu button is `lg:hidden`, so focusing it would
+  // silently drop focus to <body>. Those closes hand focus to the main
+  // landmark, which is visible at every width, instead.
+  const closedByViewport = useRef(false);
 
   // The dialog only exists below `lg`; leave it closed for the next route
   // rather than carrying an open modal across navigations. close() on an
@@ -50,7 +58,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1024px)");
     const onChange = (event: MediaQueryListEvent) => {
-      if (event.matches) dialogRef.current?.close();
+      if (!event.matches || !dialogRef.current?.open) return;
+      closedByViewport.current = true;
+      dialogRef.current.close();
     };
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);
@@ -70,7 +80,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <dialog
           ref={dialogRef}
           aria-labelledby="nav-drawer-title"
-          onClose={() => navToggleRef.current?.focus()}
+          onClose={() => {
+            const restore = closedByViewport.current
+              ? mainRef.current
+              : navToggleRef.current;
+            closedByViewport.current = false;
+            restore?.focus({ preventScroll: true });
+          }}
           onClick={(event) => {
             if (event.target === dialogRef.current) closeNav();
           }}
@@ -108,7 +124,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <NavSidebar onNavigate={closeNav} />
           </div>
         </dialog>
-        <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+        <main
+          ref={mainRef}
+          tabIndex={-1}
+          className="flex min-w-0 flex-1 flex-col overflow-auto outline-none"
+        >
           <div className="flex items-center border-b border-border-light px-4 py-2 lg:hidden">
             <button
               ref={navToggleRef}
