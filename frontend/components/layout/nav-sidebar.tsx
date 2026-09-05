@@ -16,7 +16,7 @@ import {
   selectableCountries,
 } from "@/lib/microcosm/countries";
 
-export function NavSidebar() {
+export function NavSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { country, setCountry } = useCountry();
   const quality = useQualityContext();
@@ -43,7 +43,10 @@ export function NavSidebar() {
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setCountry(value)}
+                onClick={() => {
+                  setCountry(value);
+                  onNavigate?.();
+                }}
                 className={`h-7 rounded-md px-3 font-mono text-xs font-medium transition-colors ${
                   active
                     ? "bg-background text-foreground shadow-sm"
@@ -76,6 +79,7 @@ export function NavSidebar() {
                     key={item.href}
                     href={quality.href(navItemHref(item, country))}
                     {...navLinkAttributes(item)}
+                    onClick={onNavigate}
                     className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[13px] leading-tight transition-colors ${
                       active
                         ? "bg-primary/10 font-medium text-primary"

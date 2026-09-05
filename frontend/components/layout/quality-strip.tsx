@@ -45,11 +45,11 @@ export function QualityStrip() {
       className="mb-5 border-b border-border py-3"
     >
       <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
-        <label className="min-w-0 text-xs text-muted-foreground">
+        <label className="min-w-0 flex-1 basis-full text-xs text-muted-foreground sm:basis-64">
           Population
           <select
             aria-label="Selected population"
-            className="mt-1 block max-w-[440px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            className="mt-1 block w-full max-w-[440px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
             value={context.release}
             onChange={(event) => select(event.target.value)}
           >
@@ -60,11 +60,11 @@ export function QualityStrip() {
             ))}
           </select>
         </label>
-        <label className="min-w-0 text-xs text-muted-foreground">
+        <label className="min-w-0 flex-1 basis-full text-xs text-muted-foreground sm:basis-64">
           Incumbent comparison
           <select
             aria-label="Incumbent population"
-            className="mt-1 block max-w-[350px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            className="mt-1 block w-full max-w-[350px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
             value={context.selection.incumbent}
             onChange={(event) =>
               context.setSelection({ incumbent: event.target.value })
