@@ -1,16 +1,18 @@
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useQualityContext } from "@/components/layout/quality-context";
+import { receiptGraphIdentity } from "@/lib/microcosm/graph/navigation";
 import type { ReceiptGraphPayload } from "@/lib/microcosm/graph/types";
-import { parseCandidateToken } from "@/lib/microcosm/quality/selection";
-import { candidateReleaseToken } from "@/lib/microcosm/quality/selection";
 import { apiGet } from "../client";
 
 /** Build receipts belong to one immutable candidate. Without a candidate
  * selection there is nothing to ask for, and the view says so rather than
- * showing whichever run the dashboard happens to ship. */
+ * showing whichever run the dashboard happens to ship. The same rule decides
+ * whether this query runs and what the view says when it does not, so a
+ * selection that cannot be requested is never left reading as one that is still
+ * being fetched. */
 export function useReceiptGraph() {
   const { selection } = useQualityContext();
-  const identity = parseCandidateToken(candidateReleaseToken(selection));
+  const identity = receiptGraphIdentity(selection);
   return useQuery({
     queryKey: [
       "receipt-graph",

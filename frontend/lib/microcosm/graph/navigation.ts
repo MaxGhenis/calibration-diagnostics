@@ -8,6 +8,35 @@
 // link carrying another candidate's step opens on that candidate's own run
 // instead of on an empty inspector.
 
+import {
+  candidateReleaseToken,
+  parseCandidateToken,
+  type QualitySelection,
+} from "@/lib/microcosm/quality/selection";
+
+/** Whether the global selection is enough to ask for anything at all. The
+ * request needs both halves of the immutable identity, so a URL that carries a
+ * candidate and no usable manifest digest is an incomplete selection — a state
+ * the reader is told about, not a request left permanently in flight. */
+export type GraphSelectionReadiness =
+  | "no_candidate"
+  | "incomplete_identity"
+  | "ready";
+
+/** The identity the request is made with, or nothing. One spelling, used by the
+ * query hook and by the view that explains why there is no query, so the two
+ * cannot drift apart. */
+export function receiptGraphIdentity(selection: QualitySelection) {
+  return parseCandidateToken(candidateReleaseToken(selection));
+}
+
+export function graphSelectionReadiness(
+  selection: QualitySelection,
+): GraphSelectionReadiness {
+  if (!selection.candidate) return "no_candidate";
+  return receiptGraphIdentity(selection) ? "ready" : "incomplete_identity";
+}
+
 export interface GraphSelectionRequest {
   execution: string | null;
   node: string | null;

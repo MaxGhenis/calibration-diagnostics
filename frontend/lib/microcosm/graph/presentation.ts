@@ -5,6 +5,7 @@
 
 import dagre from "dagre";
 import type { StatusTone } from "@/components/shared/status-pill";
+import type { GraphSelectionReadiness } from "./navigation";
 import type {
   CacheState,
   ExecutionEdge,
@@ -87,6 +88,12 @@ export function gateReading(state: GateState): AxisReading {
         tone: "success",
         help: "This step's own gate passed, within its declared scope.",
       };
+    case "not_applicable":
+      return {
+        label: "Gate not applicable",
+        tone: "neutral",
+        help: "This step's gate recorded that it did not apply here. It certified nothing and withheld nothing.",
+      };
     case "fail":
       return {
         label: "Gate failed",
@@ -114,11 +121,45 @@ export function gateReading(state: GateState): AxisReading {
   }
 }
 
+/** Three readings, and only one of them warns. A receipt that recorded no typed
+ * or opaque artifact succeeded; it is stated neutrally, and its own words say
+ * what it did record. */
 export function outputReading(state: NodeExecutionState): AxisReading {
-  return state.outputs_usable
-    ? { label: "Outputs recorded", tone: "info", help: state.outputs_reason }
-    : { label: "Outputs not usable", tone: "warning", help: state.outputs_reason };
+  switch (state.outputs) {
+    case "usable":
+      return { label: "Outputs recorded", tone: "info", help: state.outputs_reason };
+    case "no_typed_artifact":
+      return {
+        label: "No typed artifact output",
+        tone: "neutral",
+        help: state.outputs_reason,
+      };
+    default:
+      return {
+        label: "Outputs not usable",
+        tone: "warning",
+        help: state.outputs_reason,
+      };
+  }
 }
+
+/** The reading for a step this execution has no state for at all. Annotated so
+ * the compiler checks it against the contract rather than accepting whatever
+ * subset of the fields happens to be written here. */
+const NO_STATE_RECORDED: Omit<NodeExecutionState, "mode"> = {
+  execution: "not_evidenced",
+  cache: "unknown",
+  gate: "unreached",
+  gate_record: null,
+  outputs: "not_usable",
+  outputs_usable: false,
+  outputs_reason: "No receipt for this step in this execution.",
+  node_key: null,
+  output_keys: [],
+  frame_key: null,
+  weight_key: null,
+  wall_time_seconds: null,
+};
 
 export function stateFor(
   node: ReceiptGraphNode,
@@ -126,19 +167,39 @@ export function stateFor(
 ): NodeExecutionState {
   return (
     node.states.find((state) => state.mode === mode) ??
-    node.states[0] ?? {
-      mode,
-      execution: "not_evidenced",
-      cache: "unknown",
-      gate: "unreached",
-      gate_record: null,
-      outputs_usable: false,
-      outputs_reason: "No receipt for this step in this execution.",
-      node_key: null,
-      output_keys: [],
-      wall_time_seconds: null,
-    }
+    node.states[0] ?? { mode, ...NO_STATE_RECORDED }
   );
+}
+
+/** Release eligibility as a sentence, for whatever the manifest happens to say.
+ * The two statuses this evidence uses are worded properly; anything else is
+ * named as a status rather than dropped into a sentence it does not fit. */
+export function releaseEligibilityReading(status: string): string {
+  if (!status) return "Release eligibility not stated";
+  if (status === "eligible") return "Eligible for release";
+  if (status === "excluded") return "Excluded from release";
+  return `Release eligibility: ${status.replaceAll("_", " ")}`;
+}
+
+/** What the reader is told when the selection cannot produce a request at all.
+ * A selection missing half of its immutable identity leaves the query disabled,
+ * so it has to be stated as incomplete rather than left reading as a fetch that
+ * never finishes. */
+export function selectionNotice(readiness: GraphSelectionReadiness): {
+  title: string;
+  description: string;
+} {
+  return readiness === "no_candidate"
+    ? {
+        title: "No candidate selected",
+        description:
+          "Build receipts belong to one immutable candidate. Choose one in the population selector above, or follow a candidate link from Quality evidence, and its recorded run appears here.",
+      }
+    : {
+        title: "Incomplete candidate selection",
+        description:
+          "This link names a candidate but no usable manifest digest. Build receipts are requested by both halves of the immutable identity, so nothing is fetched. Reselect the candidate in the population selector above to restore its manifest digest.",
+      };
 }
 
 /** One hop of recorded dependency, in both directions. Only typed artifacts a

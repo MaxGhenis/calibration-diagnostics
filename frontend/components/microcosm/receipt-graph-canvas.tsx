@@ -6,8 +6,11 @@
 // wired into the flow on a guess.
 //
 // The list beside this canvas carries the same information and is the keyboard
-// path through it, so the canvas is announced as one labelled image rather than
-// as a second, worse set of controls.
+// path through it. The canvas is therefore a labelled group rather than a
+// labelled image: `role="img"` hides its whole subtree from assistive
+// technology, and this one holds real controls — the zoom buttons and the
+// attribution link — that a keyboard reaches and would then find unannounced.
+// A group keeps the one-sentence label and leaves those controls addressable.
 
 import { useEffect, useMemo } from "react";
 import ReactFlow, {
@@ -188,7 +191,7 @@ function Canvas({
 
   return (
     <div
-      role="img"
+      role="group"
       aria-label={ariaLabel}
       className="h-[420px] w-full overflow-hidden rounded-md border border-border bg-card/60 sm:h-[460px]"
     >

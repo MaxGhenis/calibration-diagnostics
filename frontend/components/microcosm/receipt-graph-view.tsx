@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { StatusPill } from "@/components/shared/status-pill";
 import { useReceiptGraph } from "@/lib/api/hooks/use-receipt-graph";
 import {
+  graphSelectionReadiness,
   graphSelectionUrl,
   nextStep,
   resolveGraphSelection,
@@ -32,6 +33,8 @@ import {
   gateReading,
   neighbours,
   outputReading,
+  releaseEligibilityReading,
+  selectionNotice,
   stateFor,
   type AxisReading,
 } from "@/lib/microcosm/graph/presentation";
@@ -524,8 +527,9 @@ export function ReceiptGraphSurface({
                 : "warning"
             }
           >
-            {payload.candidate.release_eligibility.status.replaceAll("_", " ")} from
-            release
+            {releaseEligibilityReading(
+              payload.candidate.release_eligibility.status,
+            )}
           </StatusPill>
         </div>
       </div>
@@ -789,13 +793,15 @@ export function ReceiptGraphView() {
     [search, payload],
   );
 
-  if (!selection.candidate)
-    return (
-      <EmptyState
-        title="No candidate selected"
-        description="Build receipts belong to one immutable candidate. Choose one in the population selector above, or follow a candidate link from Quality evidence, and its recorded run appears here."
-      />
-    );
+  // A selection that cannot produce a request is stated as what it is. Only
+  // once the request is actually in flight does the view report reading, so a
+  // candidate carrying no usable manifest digest never leaves the reader
+  // waiting on a fetch that was never started.
+  const readiness = graphSelectionReadiness(selection);
+  if (readiness !== "ready") {
+    const notice = selectionNotice(readiness);
+    return <EmptyState title={notice.title} description={notice.description} />;
+  }
   if (isPending)
     return (
       <EmptyState title="Reading the candidate's build receipts…" variant="compact" />

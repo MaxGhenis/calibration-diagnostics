@@ -20,6 +20,7 @@ import {
   type GateState,
   type MappingAxis,
   type NodeExecutionState,
+  type OutputState,
   type ReceiptGraphAvailable,
   type ReceiptGraphNode,
   type TypedArtifactRef,
@@ -299,11 +300,21 @@ export function verifyProjectionBinding(
 }
 
 /** Execution, cache and gate are three separate readings of one receipt.
- * Failure, blocking and absence all outrank the presence of an output. */
+ * Failure, blocking and absence all outrank the presence of an output.
+ *
+ * Blocking is read before failure, and the order matters. `failed` comes from
+ * the run manifest's `known_failures`, which is an umbrella the manifest
+ * derives for itself: it collects every gate whose outcome is not certifying,
+ * and `unreached` is one of those. `blocked` comes from the executor's own
+ * per-node record of what happened, where `unreached` means the step never
+ * ran. When both are set the narrower, direct record is the true one, so a step
+ * the run never reached reads as never reached rather than as failed. A gate
+ * exception is the executor's record too, and that one is a real failure. */
 export function executionState(node: ProjectionNode | undefined): ExecutionState {
   if (!node || !node.receipt_present) return "not_evidenced";
-  if (node.failed || node.gate_exception) return "failed";
+  if (node.gate_exception) return "failed";
   if (node.blocked) return "blocked";
+  if (node.failed) return "failed";
   return "recorded";
 }
 
@@ -320,8 +331,12 @@ export function gateState(node: ProjectionNode | undefined): GateState {
   if (!node.gate) return "no_gate_record";
   switch (node.gate.outcome) {
     case "pass":
-    case "not_applicable":
       return "pass";
+    // A gate that declared itself not applicable certified nothing, so it is
+    // not reported as a pass. It also refused nothing, so it withholds no
+    // output below.
+    case "not_applicable":
+      return "not_applicable";
     case "fail":
       return "fail";
     case "unreached":
@@ -331,49 +346,63 @@ export function gateState(node: ProjectionNode | undefined): GateState {
   }
 }
 
-/** Whether this receipt's own outputs may be offered as usable. Only this
- * receipt's execution and its own gate are consulted. */
+/** What this receipt recorded on its output side, in three readings rather than
+ * two. Only this receipt's own execution and its own gate are consulted.
+ *
+ * The third reading exists because "this step's outputs were withheld" and
+ * "this step declared no typed or opaque artifact" are different facts and were
+ * being told to the reader in the same warning words. Two of the six receipts
+ * in the only run this dashboard ships are the second kind: they succeeded,
+ * their gate passed or they had none, and they simply have nothing this view
+ * draws a dependency from. */
 export function outputAvailability(node: ProjectionNode | undefined): {
+  state: OutputState;
   usable: boolean;
   reason: string;
 } {
+  const withheld = (reason: string) =>
+    ({ state: "not_usable", usable: false, reason }) as const;
   const execution = executionState(node);
   if (execution === "not_evidenced")
-    return {
-      usable: false,
-      reason: "No receipt for this step in this execution, so nothing it would produce is evidenced.",
-    };
-  if (execution === "failed")
-    return {
-      usable: false,
-      reason: node?.gate_exception
-        ? "The gate raised, so the executor recorded its declared outputs as unavailable."
-        : "This step is in the run's recorded failures, so its outputs are not usable.",
-    };
+    return withheld(
+      "No receipt for this step in this execution, so nothing it would produce is evidenced.",
+    );
   if (execution === "blocked")
-    return {
-      usable: false,
-      reason: `This step was never reached: ${
+    return withheld(
+      `This step was never reached: ${
         node?.execution_record?.blocked_by.map((entry) => entry.node).join(", ") ||
         "its required inputs were unavailable"
       }.`,
-    };
+    );
+  if (execution === "failed")
+    return withheld(
+      node?.gate_exception
+        ? "The gate raised, so the executor recorded its declared outputs as unavailable."
+        : "This step is in the run's recorded failures, so its outputs are not usable.",
+    );
   const gate = gateState(node);
-  if (gate === "fail")
-    return { usable: false, reason: "This step's own gate failed." };
+  if (gate === "fail") return withheld("This step's own gate failed.");
   if (gate === "evidence_absent" || gate === "unreached")
+    return withheld("This step's own gate recorded no usable verdict.");
+  if (!node?.typed_outputs.length && !node?.opaque_artifact_keys.length) {
+    const columns = node?.column_artifact_total ?? 0;
     return {
+      state: "no_typed_artifact",
       usable: false,
-      reason: "This step's own gate recorded no usable verdict.",
+      // Not "no output". This receipt succeeded; it recorded no typed or opaque
+      // artifact, which is what this view draws dependencies from, and it may
+      // well have recorded other things. Where it recorded per-column
+      // artifacts, say how many rather than imply there were none.
+      reason: columns
+        ? `This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from. It did record ${columns.toLocaleString("en-US")} per-column artifacts, which the saved manifests do not name a consumer for.`
+        : "This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from.",
     };
-  if (!node?.typed_outputs.length && !node?.opaque_artifact_keys.length)
-    return {
-      usable: false,
-      reason: "This receipt declares no artifact output.",
-    };
+  }
   return {
+    state: "usable",
     usable: true,
-    reason: "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+    reason:
+      "This receipt recorded its own outputs and its own gate, if any, allowed them.",
   };
 }
 
@@ -385,6 +414,7 @@ function nodeState(mode: string, node: ProjectionNode | undefined): NodeExecutio
     cache: cacheState(node),
     gate: gateState(node),
     gate_record: node?.gate ?? null,
+    outputs: availability.state,
     outputs_usable: availability.usable,
     outputs_reason: availability.reason,
     node_key: node?.node_key ?? null,
@@ -735,10 +765,20 @@ export function buildReceiptGraph(
 
   const limits = [
     projection.coverage.reason,
+    // The compiled structural declaration is not missing from the world; it is
+    // missing from anything the publisher pinned. Saying "unpinned, so unused"
+    // is the accurate scope limitation, and it is the reason two relationships
+    // this run does have — the boundary step's base and the gate step's
+    // population — are absent from the canvas.
+    "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
     "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
+    // Everything else in the binding block is re-derived from bytes the
+    // publisher attached. This one is not, and the difference is worth stating
+    // rather than letting the two sit side by side as if equally evidenced.
+    "Two executions are told apart here by the byte digest of each recorded run manifest. Neither manifest byte digest is pinned by anything the publisher attached, so that separation is asserted by this projection. The population, implementation, content-key and source digests checked above are bound by the publisher's own build evidence.",
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
@@ -818,7 +858,7 @@ export function buildReceiptGraph(
         new Set(executions.map((execution) => execution.manifest_sha256)).size ===
         executions.length,
       execution_note:
-        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same.",
+        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. The digests themselves are asserted by this projection: the publisher's build evidence pins the shared content key, not either manifest's bytes.",
       output_identity: comparison,
       cache_differences: cacheDifferences,
     },
