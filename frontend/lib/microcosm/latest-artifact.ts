@@ -35,6 +35,10 @@ import {
   classifyTargetRepresentation,
   type TargetRepresentation,
 } from "./target-representation";
+import {
+  comparisonIdentity,
+  populationIdentity,
+} from "./quality/identity";
 import { readStructuredTarget } from "./structured-target-reader";
 import { matchTargetSurfaces } from "./target-surface-matcher";
 
@@ -102,6 +106,10 @@ const RELEASE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export class InvalidReleaseIdError extends Error {}
 
+// A request that names one population twice. The caller authored it, so it is
+// answered like any other bad argument rather than as an upstream failure.
+export class SelfComparisonError extends Error {}
+
 export function assertSafeReleaseId(id: string, label = "release"): string {
   if (id === "latest" || id === "") return id;
   if (!RELEASE_ID_RE.test(id)) {
@@ -113,7 +121,10 @@ export function assertSafeReleaseId(id: string, label = "release"): string {
 // Route catch → HTTP: a bad id is the caller's fault (400); anything else is
 // an upstream/HF failure (502). Keeps status semantics consistent across routes.
 export function classifyApiError(error: unknown): { status: number; body: { detail: string } } {
-  if (error instanceof InvalidReleaseIdError) {
+  if (
+    error instanceof InvalidReleaseIdError ||
+    error instanceof SelfComparisonError
+  ) {
     return { status: 400, body: { detail: error.message } };
   }
   return {
@@ -2935,5 +2946,17 @@ export async function loadComparison(
     loadRelease(aId, revalidate, country),
     loadRelease(bId, revalidate, country),
   ]);
-  return buildComparison(a, b);
+  // Resolved here rather than in the views alone: `latest` and the id it
+  // resolves to, or two manifests recording one population, reach this loader
+  // as two different tokens, and a direct API request must not get a population
+  // overlaid on itself with one copy labelled the incumbent. The staging diff
+  // keeps building on its own terms; only a request that named two populations
+  // is answerable by whether they are two.
+  const identity = comparisonIdentity(
+    populationIdentity(a),
+    populationIdentity(b),
+  );
+  if (identity.status === "same_population")
+    throw new SelfComparisonError(identity.reason);
+  return { ...buildComparison(a, b), identity };
 }

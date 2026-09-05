@@ -10,6 +10,7 @@ import type { ExplorerState } from "@/lib/microcosm/calibration-explorer";
 import type { CalibrationTreeResponse } from "@/lib/microcosm/calibration-tree";
 import type { TargetChangeMode } from "@/lib/microcosm/target-change";
 import type { TargetChangeTreeApiResponse } from "@/lib/microcosm/target-change-tree";
+import type { ComparisonIdentity } from "@/lib/microcosm/quality/identity";
 import {
   hasCapability,
   type CountryCapability,
@@ -435,6 +436,10 @@ export interface MicrocosmComparisonVariableRow {
 }
 
 export interface MicrocosmComparison {
+  // How the two requested populations resolved. A comparison the loader
+  // established to be between one population is refused rather than returned,
+  // so this is never "same_population" on a successful response.
+  identity: ComparisonIdentity;
   a: {
     release_id: string;
     description?: string | null;

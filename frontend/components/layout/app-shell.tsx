@@ -124,7 +124,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main
           ref={mainRef}
           tabIndex={-1}
-          className="flex min-w-0 flex-1 flex-col overflow-auto outline-none"
+          // Focus lands here when the drawer closes at a width that hid the
+          // button that opened it, so it has to be visible when it does. An
+          // inset ring, rather than an outline, because <main> is the scroll
+          // container and an outer ring would be clipped by the viewport.
+          className="flex min-w-0 flex-1 flex-col overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
         >
           <div className="flex items-center border-b border-border-light px-4 py-2 lg:hidden">
             <button

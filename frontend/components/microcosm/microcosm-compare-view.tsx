@@ -16,6 +16,7 @@ import {
   useMicrocosmReleases,
   type MicrocosmComparisonRow,
 } from "@/lib/api/hooks/use-microcosm";
+import { useResolvedComparison } from "@/lib/api/hooks/use-quality";
 
 const MAX_MOVER_REL_ERROR = 10; // Keep the compare summary to bounded relative errors (<= 1000%).
 const TARGET_COMPARE_PAGE_SIZE = 100;
@@ -559,15 +560,19 @@ function LossRow({
 
 export function MicrocosmCompareView() {
   const quality = useQualityContext();
+  const comparison = useResolvedComparison();
   const { data: releaseData, isLoading: releasesLoading } = useMicrocosmReleases();
   const releases = releaseData?.releases ?? [];
 
   const [defaultB, setDefaultB] = useState("");
   const b = quality.release || defaultB;
-  // B may be the implicit Latest rather than an explicit selection, so the
-  // global selection cannot rule this out on its own: a comparison of a release
-  // with itself is no comparison, and A stays unset.
-  const a = quality.selection.incumbent === b ? "" : quality.selection.incumbent;
+  // B may be the implicit Latest rather than an explicit selection, and A may
+  // be another name for whatever B resolves to, so neither the URL tokens nor
+  // the global selection settle this on their own. The shared resolution does:
+  // when it reports one population, A stays unset and the server would refuse
+  // the diff anyway.
+  const a = comparison.incumbent;
+  const selfComparison = comparison.status === "same_population";
   const setA = (value: string) => quality.setSelection({ incumbent: value });
   const setB = (value: string) => {
     if (value.startsWith("candidate:")) {
@@ -679,8 +684,13 @@ export function MicrocosmCompareView() {
         )}
       </SectionCard>
 
-      {isLoading ? (
+      {isLoading || comparison.resolving ? (
         <LoadingBlock label="Comparing releases…" />
+      ) : selfComparison ? (
+        <EmptyState
+          title="No comparison to draw"
+          description={comparison.reason}
+        />
       ) : error || !data ? (
         <EmptyState
           title="Comparison unavailable"

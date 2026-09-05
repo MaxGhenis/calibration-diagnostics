@@ -1,12 +1,11 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-
 import { useQualityContext } from "./quality-context";
 import { QualityLink } from "./quality-link";
 import {
   useQualityIndex,
   useQualityManifest,
+  useResolvedComparison,
 } from "@/lib/api/hooks/use-quality";
 import {
   releaseSelectOptions,
@@ -16,7 +15,7 @@ import { StatusPill } from "@/components/shared/status-pill";
 
 export function QualityStrip() {
   const context = useQualityContext();
-  const search = useSearchParams();
+  const comparison = useResolvedComparison();
   const { data: catalog } = useQualityIndex();
   const { data: releases } = useMicrocosmReleases();
   const manifest = useQualityManifest();
@@ -28,7 +27,7 @@ export function QualityStrip() {
       label: `${entry.candidate_release_id} · ${entry.release_eligibility.status.replaceAll("_", " ")}`,
     })),
   ];
-  for (const value of [context.release, context.selection.incumbent]) {
+  for (const value of [context.release, comparison.incumbent]) {
     if (value && !options.some((option) => option.value === value))
       options.push({
         value,
@@ -49,12 +48,6 @@ export function QualityStrip() {
       context.release,
       context.release ? "" : (releases?.latest_release_id ?? ""),
     ].filter(Boolean),
-  );
-  // A hand-authored URL can still name the selected population as its own
-  // incumbent. That resolves to no comparison rather than a false one; say so,
-  // instead of leaving the control looking as though it lost the selection.
-  const selfComparison = Boolean(
-    context.release && search.get("incumbent") === context.release,
   );
   const eligibility = manifest.data?.release_eligibility;
   return (
@@ -83,7 +76,7 @@ export function QualityStrip() {
           <select
             aria-label="Incumbent population"
             className="mt-1 block w-full max-w-[350px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
-            value={context.selection.incumbent}
+            value={comparison.incumbent}
             onChange={(event) =>
               context.setSelection({ incumbent: event.target.value })
             }
@@ -140,12 +133,11 @@ export function QualityStrip() {
             explicit identity match
           </span>
         )}
-        {selfComparison ? (
-          <span>
-            The requested incumbent is the selected population itself, so no
-            comparison is shown.
-          </span>
-        ) : null}
+        {/* A hand-authored URL, the Latest pointer and a re-registered
+            candidate can all name the selected population a second time. That
+            draws no comparison; say which resolution applied, instead of
+            leaving the control looking as though it lost the selection. */}
+        {comparison.reason ? <span>{comparison.reason}</span> : null}
         {catalog?.freshness === "stale" ? (
           <span>
             Candidate discovery feed is over 24 hours old; immutable attachments

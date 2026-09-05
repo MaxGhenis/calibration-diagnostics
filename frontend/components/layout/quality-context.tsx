@@ -6,6 +6,7 @@ import { useCountry } from "./country-context";
 import {
   candidateReleaseToken,
   qualityHref,
+  requestedIncumbent,
   selectionFromSearch,
   selectionUrl,
   type QualitySelection,
@@ -14,6 +15,9 @@ import {
 interface QualityContextValue {
   selection: QualitySelection;
   release: string;
+  // What the URL asked to compare against, kept alongside the resolved
+  // selection so a surface can explain a comparison it is not drawing.
+  requestedIncumbent: string;
   setSelection: (patch: Partial<Omit<QualitySelection, "country">>) => void;
   href: (destination: string) => string;
 }
@@ -24,15 +28,20 @@ export function QualityProvider({ children }: { children: ReactNode }) {
   const { country } = useCountry();
   const search = useSearchParams();
   const router = useRouter();
+  const params = useMemo(
+    () => new URLSearchParams(search.toString()),
+    [search],
+  );
   const selection = useMemo(
-    () => selectionFromSearch(new URLSearchParams(search.toString()), country),
-    [country, search],
+    () => selectionFromSearch(params, country),
+    [country, params],
   );
   return (
     <QualityContext.Provider
       value={{
         selection,
         release: candidateReleaseToken(selection) || selection.release,
+        requestedIncumbent: requestedIncumbent(params, country),
         setSelection: (patch) =>
           router.push(selectionUrl(window.location.href, country, patch), {
             scroll: false,

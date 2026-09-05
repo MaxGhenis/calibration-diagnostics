@@ -20,6 +20,7 @@ import {
   useQualityAttachment,
   useQualityIndex,
   useQualityManifest,
+  useResolvedComparison,
 } from "@/lib/api/hooks/use-quality";
 import { useMicrocosmTargetDiagnostics } from "@/lib/api/hooks/use-microcosm";
 import { QualityMethodologyNote } from "./quality-methodology-note";
@@ -133,7 +134,14 @@ export function CandidateCatalog() {
 export function QualityOverviewView() {
   const context = useQualityContext();
   const manifest = useQualityManifest();
-  const hasIncumbent = Boolean(parseCandidateToken(context.selection.incumbent));
+  const comparison = useResolvedComparison();
+  // Definition compatibility is not identity: two immutable manifests can
+  // record one population under the same reused candidate id, and their
+  // aggregates then agree on period, entity and bins because they describe the
+  // same weights. Overlay an incumbent only once the shared resolution has
+  // established it is a second population.
+  const incumbentToken = comparison.incumbent;
+  const hasIncumbent = Boolean(parseCandidateToken(incumbentToken));
   const data = manifest.data;
   const targetDiagnostics = useMicrocosmTargetDiagnostics(
     { release: context.release, limit: 1 },
@@ -153,12 +161,12 @@ export function QualityOverviewView() {
   const incumbentSupport = useQualityAttachment<PopulationSupport>(
     "support",
     hasIncumbent,
-    context.selection.incumbent,
+    incumbentToken,
   );
   const incumbentDistributions = useQualityAttachment<PopulationDistributions>(
     "distributions",
     hasIncumbent,
-    context.selection.incumbent,
+    incumbentToken,
   );
   const [level, setLevel] = useState("national");
   const [geography, setGeography] = useState("");
@@ -470,7 +478,7 @@ export function QualityOverviewView() {
               Unit: {series.unit}. Bin definition: {series.bin_definition_id}.
               Shares include missing values in their denominator.
             </p>
-            {context.selection.incumbent && !comparisonSeries ? (
+            {incumbentToken && !comparisonSeries ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 No incumbent distribution with matching period, entity, weight
                 basis, units, bins and geography vintage is attached.
@@ -506,9 +514,7 @@ export function QualityOverviewView() {
                     <th>Weight mass</th>
                     <th>Effective sample size</th>
                     <th>Largest weight share</th>
-                    {context.selection.incumbent ? (
-                      <th>Incumbent ESS</th>
-                    ) : null}
+                    {supportComparable ? <th>Incumbent ESS</th> : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -548,7 +554,7 @@ export function QualityOverviewView() {
                         <td>{fmt(row.weight_sum)}</td>
                         <td>{fmt(row.effective_sample_size)}</td>
                         <td>{percentShare(row.max_weight_share)}</td>
-                        {context.selection.incumbent ? (
+                        {supportComparable ? (
                           <td>{fmt(other?.effective_sample_size)}</td>
                         ) : null}
                       </tr>
@@ -565,7 +571,7 @@ export function QualityOverviewView() {
               "No weight/support diagnostics have been published for this candidate."}
           </p>
         )}
-        {context.selection.incumbent && !supportComparable ? (
+        {incumbentToken && !supportComparable ? (
           <p className="mt-2 text-xs text-muted-foreground">
             An incumbent comparison requires an attached population with the
             same period, entity and weight definitions.
@@ -583,7 +589,7 @@ export function QualityOverviewView() {
             Inspect {level.replaceAll("_", " ")} calibration targets
           </QualityLink>
         ))}
-        {context.selection.incumbent &&
+        {incumbentToken &&
         data.attachments.calibration_diagnostics?.status === "available" ? (
           <QualityLink
             href="/microcosm/compare"

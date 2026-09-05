@@ -23,6 +23,18 @@ export function parseCandidateToken(token: string) {
     : undefined;
 }
 
+// The incumbent a URL asked for, before any self-comparison is resolved away.
+// A surface that reports why a comparison is not being drawn needs to know one
+// was requested at all, which the resolved selection no longer records.
+export function requestedIncumbent(
+  params: URLSearchParams,
+  country: MicrocosmCountry,
+): string {
+  return !params.get("country") || params.get("country") === country
+    ? (params.get("incumbent") ?? "")
+    : "";
+}
+
 export function selectionFromSearch(
   params: URLSearchParams,
   country: MicrocosmCountry,
@@ -43,14 +55,18 @@ export function selectionFromSearch(
         : (token?.manifest_sha256 ?? params.get("manifest_sha256") ?? "")
       : "",
     release: candidate ? "" : release,
-    incumbent: matches ? (params.get("incumbent") ?? "") : "",
+    incumbent: requestedIncumbent(params, country),
   });
 }
 
 // An incumbent names a DIFFERENT population to compare against. A selection
 // whose incumbent is its own population describes no comparison, however it was
 // authored, so it resolves to none here rather than overlaying a population on
-// itself and labelling one copy Incumbent.
+// itself and labelling one copy Incumbent. This settles the spellings that are
+// equal as strings, synchronously and without a fetch; the spellings that are
+// equal only once resolved -- `latest` against the id it points at, two
+// manifests of one population -- are settled against loaded identities in
+// lib/microcosm/quality/identity.ts.
 export function withoutSelfComparison(
   selection: QualitySelection,
 ): QualitySelection {
