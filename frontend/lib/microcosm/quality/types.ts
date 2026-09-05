@@ -31,6 +31,8 @@ export interface ReleaseEligibility {
 }
 export interface EvidenceIdentity {
   candidate_release_id?: string;
+  release_id?: string;
+  country?: string;
   population_sha256?: string;
   model_package?: string;
   model_version?: string;
@@ -38,6 +40,7 @@ export interface EvidenceIdentity {
   target_surface_sha256?: string;
   run_id?: string;
   snapshot_id?: string;
+  chronicle_snapshot_id?: string;
   source_id?: string;
 }
 export interface EvidenceAttachment {

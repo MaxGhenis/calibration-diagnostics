@@ -255,3 +255,219 @@ test("statuses must be real strings, so an array cannot smuggle one past its gua
     smuggled.reader.manifest("candidate-26", smuggled.digest),
   ).rejects.toMatchObject({ code: "malformed_artifact" });
 });
+
+function payloadFixture(
+  payload: string,
+  change?: (manifest: Record<string, any>) => void,
+) {
+  const f = fixture(change);
+  f.files.set("objects/calibration.json", payload);
+  f.manifest.attachments.calibration_diagnostics.sha256 = createHash("sha256")
+    .update(payload)
+    .digest("hex");
+  const text = JSON.stringify(f.manifest);
+  f.digest = createHash("sha256").update(text).digest("hex");
+  f.files.set(`manifests/${f.digest}.json`, text);
+  return f;
+}
+
+test("embedded identity omissions cannot cross run, model, snapshot or country", async () => {
+  for (const [key, value] of [
+    ["run_id", "another-run"],
+    ["model_version", "2"],
+    ["snapshot_id", "another-snapshot"],
+    ["country", "uk"],
+    ["country", { code: "uk", label: "Invented" }],
+  ]) {
+    const f = payloadFixture(
+      JSON.stringify({ [key as string]: value }),
+      (m) => {
+        m.provenance = {
+          model_version: "1",
+          chronicle_snapshot_id: "calibration-snapshot",
+        };
+      },
+    );
+    const manifest = await f.reader.manifest("candidate-26", f.digest);
+    await expect(
+      f.reader.attachment(manifest, "calibration_diagnostics"),
+    ).rejects.toMatchObject({ code: "stale_artifact" });
+  }
+});
+
+test("matching country presentation and optional identities keep original payload fields", async () => {
+  const f = payloadFixture(
+    '{"country":{"code":"us","label":"Invented"},"targets":[]}',
+  );
+  const manifest = await f.reader.manifest("candidate-26", f.digest);
+  expect(
+    await f.reader.attachment(manifest, "calibration_diagnostics"),
+  ).toEqual({ country: { code: "us", label: "Invented" }, targets: [] });
+});
+
+test("nested overflow numbers refuse instead of entering quality evidence", async () => {
+  for (const raw of [
+    '{"x":1e400}',
+    '{"x":[{"value":-1e400}]}',
+    `{"x":${"9".repeat(400)}}`,
+  ]) {
+    const f = payloadFixture(raw);
+    const manifest = await f.reader.manifest("candidate-26", f.digest);
+    await expect(
+      f.reader.attachment(manifest, "calibration_diagnostics"),
+    ).rejects.toMatchObject({ code: "malformed_artifact" });
+  }
+});
+
+test("timestamp grammar has a timezone and a real calendar date", async () => {
+  for (const value of [
+    "2026-09-05 00:00:00+00:00",
+    "2026-09-05T00:00:00",
+    "2026-02-30T00:00:00Z",
+    "0000-01-01T00:00:00Z",
+    "2026-09-05T00:00:00+01:99",
+    "2026-09-05T00:00:00+24:00",
+  ]) {
+    const f = fixture((m) => {
+      m.created_at = value;
+    });
+    await expect(
+      f.reader.manifest("candidate-26", f.digest),
+    ).rejects.toMatchObject({ code: "malformed_artifact" });
+  }
+  const f = fixture((m) => {
+    m.created_at = "2024-02-29T12:00:00.123+05:30";
+  });
+  expect((await f.reader.manifest("candidate-26", f.digest)).created_at).toBe(
+    "2024-02-29T12:00:00.123+05:30",
+  );
+});
+
+test("run and model payloads cannot claim population scope", async () => {
+  for (const scope of ["run", "model"]) {
+    const f = payloadFixture(
+      '{"population_sha256":"' + "a".repeat(64) + '"}',
+      (m) => {
+        const entry = m.attachments.calibration_diagnostics;
+        entry.scope = scope;
+        entry.identity =
+          scope === "run"
+            ? { candidate_release_id: "candidate-26", run_id: "run-26" }
+            : { model_package: "invented-model", model_version: "1" };
+      },
+    );
+    const manifest = await f.reader.manifest("candidate-26", f.digest);
+    await expect(
+      f.reader.attachment(manifest, "calibration_diagnostics"),
+    ).rejects.toMatchObject({ code: "stale_artifact" });
+  }
+});
+
+test("model inspection and cross-dataset evaluation keep independent runs", async () => {
+  for (const scope of ["model", "population"]) {
+    const f = payloadFixture(
+      '{"run_id":"evaluation-run","snapshot_id":"evaluation-snapshot"}',
+      (m) => {
+        m.provenance = { chronicle_snapshot_id: "calibration-snapshot" };
+        const entry = m.attachments.calibration_diagnostics;
+        entry.scope = scope;
+        entry.identity =
+          scope === "model"
+            ? {
+                model_package: "invented-model",
+                model_version: "1",
+                run_id: "evaluation-run",
+                snapshot_id: "evaluation-snapshot",
+              }
+            : {
+                ...entry.identity,
+                run_id: "evaluation-run",
+                snapshot_id: "evaluation-snapshot",
+              };
+        if (scope === "population") m.attachments.cross_dataset = entry;
+      },
+    );
+    // Only cross_dataset gets the evaluation exception for population scope.
+    if (scope === "population") {
+      delete f.manifest.attachments.calibration_diagnostics;
+      const text = JSON.stringify(f.manifest);
+      f.digest = createHash("sha256").update(text).digest("hex");
+      f.files.set(`manifests/${f.digest}.json`, text);
+    }
+    const manifest = await f.reader.manifest("candidate-26", f.digest);
+    expect(
+      await f.reader.attachment(
+        manifest,
+        scope === "model" ? "calibration_diagnostics" : "cross_dataset",
+      ),
+    ).toMatchObject({
+      run_id: "evaluation-run",
+      snapshot_id: "evaluation-snapshot",
+    });
+  }
+});
+
+test("evaluation snapshot alias cannot contradict its descriptor", async () => {
+  const f = fixture((m) => {
+    m.attachments.cross_dataset = {
+      ...m.attachments.calibration_diagnostics,
+      identity: {
+        ...m.attachments.calibration_diagnostics.identity,
+        run_id: "evaluation-run",
+        snapshot_id: "evaluation-snapshot",
+        chronicle_snapshot_id: "another-evaluation",
+      },
+    };
+  });
+  await expect(
+    f.reader.manifest("candidate-26", f.digest),
+  ).rejects.toMatchObject({ code: "stale_artifact" });
+});
+
+test("model descriptor cannot claim candidate aliases", async () => {
+  for (const field of [
+    "candidate_release_id",
+    "release_id",
+    "population_sha256",
+  ]) {
+    const f = fixture((m) => {
+      m.attachments.calibration_diagnostics.scope = "model";
+      m.attachments.calibration_diagnostics.identity = {
+        model_package: "invented-model",
+        model_version: "1",
+        [field]: "another-population",
+      };
+    });
+    await expect(
+      f.reader.manifest("candidate-26", f.digest),
+    ).rejects.toMatchObject({ code: "malformed_artifact" });
+  }
+});
+
+test("discovery cannot announce an incomplete run as eligible", async () => {
+  const f = fixture();
+  f.files.set(
+    "index.json",
+    JSON.stringify({
+      schema_version: "microcosm.candidate_quality_index.v1",
+      country: "us",
+      updated_at: f.manifest.created_at,
+      candidates: [
+        {
+          candidate_release_id: "candidate-26",
+          run_id: "run-26",
+          updated_at: f.manifest.created_at,
+          execution_status: "running",
+          release_eligibility: {
+            status: "eligible",
+            reason: "Invented inconsistent attestation",
+          },
+          manifest: { path: `manifests/${f.digest}.json`, sha256: f.digest },
+        },
+      ],
+    }),
+  );
+  await expect(f.reader.index()).rejects.toMatchObject({
+    code: "malformed_artifact",
+  });
+});
