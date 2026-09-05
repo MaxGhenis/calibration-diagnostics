@@ -306,3 +306,7 @@ shape `selectionUrl` already returned for the candidate selector.
 - State: red regression step recorded before adapter edits.
 - Done: unchanged baseline 62/62 passes; expanded adapter tests 68 pass / 42 fail, covering summary/identity/execution/gate refusals, declared typed-output matching, state precedence and the retained unpinned-byte limit. Logs: `/private/tmp/calibration-receipt-consistency-20260905/{baseline-adapter,red-adapter}.log`.
 - Next: implement bounded checks. Read-only generator audit confirms explicit field selection and no actual path leak in shipped evidence; the source-like detail probe mutates projection content only.
+
+- State: adapter correction green for graph/route/view; review tightened ambiguous typed-input slots (supplemental red: 111 pass / 1 fail).
+- Done: enforce execution/receipt uniqueness, content-key and published summary consistency, required receipt implementation/source pins, full published gate evidence agreement and typed producer declarations. Preserve generator cache-count semantics independently of failed/blocked states, prior labels/mobile behavior and projection-asserted execution byte digests. No generator/artifact/type/presentation/dependency changes.
+- Validation: TypeScript passed. Broader relevant run: 245 pass / 3 local-HTTP setup failures; sandbox denies socket binds (`Operation not permitted`), preventing private-port WebKit too. Next: final review, one full suite, frozen hashes and reports with explicit environment limits.

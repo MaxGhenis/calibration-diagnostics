@@ -173,10 +173,6 @@ describe("receipt consistency regressions from the independent probes", () => {
           node.blocked = true;
           node.execution_record = { state: "unreached", blocked_by: [], unavailable_artifacts: [] };
           execution.blocked_node_ids = [node.id];
-          if (node.cache === "computed") execution.computed_count--;
-          else execution.cache_hit_count--;
-          execution.kernel_calls = execution.computed_count;
-          evidenceChecks(e)[execution.evidence_key].kernel_calls = execution.kernel_calls;
         }
       }
       const checks = verifyProjectionBinding(p, manifest(), CANDIDATE_MANIFEST_SHA, e);
@@ -184,7 +180,9 @@ describe("receipt consistency regressions from the independent probes", () => {
       const states = result.nodes.find(n => n.role === "gate")!.states;
       expect(states.every(s => s.gate === outcome)).toBe(true);
       expect(states.every(s => s.execution === (outcome === "unreached" ? "blocked" : outcome === "fail" ? "failed" : "recorded"))).toBe(true);
-      if (outcome === "unreached") expect(states.every(s => s.cache === "unknown")).toBe(true);
+      // Generator cache categories are recorded independently of outcomes;
+      // retain the real 4/2 and 0/6 totals while showing blocked execution.
+      expect(result.executions.map(e => [e.computed_count, e.cache_hit_count])).toEqual([[4, 2], [0, 6]]);
     },
   );
 
@@ -207,6 +205,10 @@ describe("a typed input must resolve its producer's declared output", () => {
     ["different artifact version", input => { input.type_version = 99; }],
     ["missing artifact type", input => { input.type = null; }],
     ["missing artifact version", input => { input.type_version = null; }],
+    ["omitted version on both declarations", (input, producer) => {
+      Reflect.deleteProperty(input, "type_version");
+      Reflect.deleteProperty(producer.typed_outputs[0], "type_version");
+    }],
     ["missing producer output", (_, producer) => { producer.typed_outputs.shift(); }],
     ["ambiguous producer output", (_, producer) => { producer.typed_outputs.push(clone(producer.typed_outputs[0])); }],
     ["absent producer receipt", (_, producer) => { producer.receipt_present = false; }],
@@ -232,6 +234,17 @@ describe("a typed input must resolve its producer's declared output", () => {
       execution.nodes.find(n => n.id === "assemble_stacked_spine")!.typed_inputs[0].name = "local_frame";
     const result = buildReceiptGraph(p, manifest(), verify());
     expect(result.edges.find(e => e.to === "assemble_stacked_spine")!.artifacts.some(a => a.name === "local_frame")).toBe(true);
+  });
+
+  test("drops ambiguous consumer slots rather than drawing both claims", () => {
+    const p = projection();
+    for (const execution of p.executions) {
+      const inputs = execution.nodes.find(n => n.id === "assemble_stacked_spine")!.typed_inputs;
+      inputs[1].name = inputs[0].name;
+    }
+    const result = buildReceiptGraph(p, manifest(), verify());
+    expect(result.edges.some(e => e.to === "assemble_stacked_spine")).toBe(false);
+    expect(result.limits.join(" ")).toMatch(/ambiguous input/);
   });
 });
 

@@ -1,10 +1,11 @@
 // Turn a checked-in receipt projection into the payload the view draws, but
 // only once the projection has been shown to describe the selected immutable
 // candidate. The projection is local evidence data, not a publisher attachment,
-// so it earns nothing on its own: every identity it claims is re-checked here
-// against the candidate manifest the reader authenticated and against the
-// publisher's own build-evidence attachment. A single disagreement makes the
-// run unavailable; nothing falls back to another candidate's graph.
+// so these checks establish agreement with the identities and aggregate fields
+// in the authenticated publisher summary, not authentication of complete receipt
+// bytes. Other receipt details, including execution byte digests, remain local
+// projection assertions. A disagreement makes the run unavailable; unsupported
+// typed dependencies are omitted with a reason. No other candidate is substituted.
 
 import { ArtifactError } from "../../cross-dataset/artifact";
 import type { CandidateQualityManifest } from "../quality/types";
@@ -130,7 +131,96 @@ export interface BuildEvidenceCheck {
   kernel_calls?: unknown;
   release_eligible?: unknown;
   source_sha256?: Record<string, unknown>;
-  gate?: { outcome?: unknown; scope?: unknown };
+  gate?: {
+    outcome?: unknown;
+    scope?: unknown;
+    evidence?: {
+      passed?: unknown;
+      gates?: Record<string, {
+        passed?: unknown;
+        failures?: unknown;
+        details?: Record<string, unknown>;
+      }>;
+    };
+  };
+}
+
+function requireUnique(values: string[], description: string) {
+  if (values.some(value => !value) || new Set(values).size !== values.length)
+    refuse(`The stored projection has missing or duplicate ${description}.`);
+}
+
+/** Mirror the generator's reduced gate fields, using only published evidence.
+ * Null/empty here mean no recorded verdict/detail, never an inferred pass. */
+function publishedGateRecord(gate: NonNullable<BuildEvidenceCheck["gate"]>): GateRecord {
+  const passed = gate.evidence?.passed ?? null;
+  if (passed !== null && typeof passed !== "boolean")
+    refuse("Published gate evidence has an invalid passed value.");
+  if ((gate.outcome != null && typeof gate.outcome !== "string") ||
+      (gate.scope != null && typeof gate.scope !== "string"))
+    refuse("Published gate evidence has an invalid outcome or scope.");
+  return {
+    outcome: gate.outcome ?? null,
+    scope: gate.scope ?? null,
+    passed,
+    checks: Object.entries(gate.evidence?.gates ?? {}).map(([name, check]) => {
+      const checkPassed = check.passed ?? null;
+      const failures = check.failures ?? [];
+      if ((checkPassed !== null && typeof checkPassed !== "boolean") ||
+          !Array.isArray(failures) || failures.some(value => typeof value !== "string"))
+        refuse("Published gate check has invalid verdict evidence.");
+      return {
+        name,
+        passed: checkPassed,
+        failures,
+        details: Object.entries(check.details ?? {})
+          .filter(([, value]) => typeof value !== "object")
+          .map(([key, value]) => {
+            if (!["string", "number", "boolean"].includes(typeof value))
+              refuse("Published gate check has invalid detail evidence.");
+            return { key, value: value as string | number | boolean };
+          }),
+      };
+    }),
+  };
+}
+
+function canonicalGateChecks(gate: GateRecord) {
+  requireUnique(gate.checks.map(check => check.name), "gate check names");
+  return JSON.stringify(gate.checks.map(check => {
+    requireUnique(check.details.map(detail => detail.key), "gate detail keys");
+    return {
+      name: check.name,
+      passed: check.passed,
+      failures: check.failures,
+      details: [...check.details].sort((a, b) => a.key.localeCompare(b.key)),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name)));
+}
+
+function verifyGate(execution: ProjectionExecution, check: BuildEvidenceCheck) {
+  const gates = execution.nodes.filter(node => node.gate !== null);
+  if (!check.gate) {
+    if (gates.length) refuse(`The ${execution.mode} gate has no published evidence.`);
+    return;
+  }
+  if (gates.length !== 1 || !gates[0].receipt_present || gates[0].role !== "gate")
+    refuse(`The ${execution.mode} execution must record the single published gate.`);
+  const gate = gates[0].gate!;
+  const published = publishedGateRecord(check.gate);
+  for (const field of ["outcome", "scope", "passed"] as const)
+    if (gate[field] !== published[field])
+      refuse(`The ${execution.mode} gate ${field} differs from the one the candidate published.`);
+  if (canonicalGateChecks(gate) !== canonicalGateChecks(published))
+    refuse(`The ${execution.mode} gate checks differ from the evidence the candidate published.`);
+  if (
+    (gate.outcome === "pass" &&
+      (gate.passed !== true || gate.checks.some(c => c.passed !== true || c.failures.length > 0))) ||
+    (gate.outcome === "fail" && gate.passed === true) ||
+    (["not_applicable", "unreached", "evidence_absent"].includes(gate.outcome ?? "") &&
+      (gate.passed !== null || gate.checks.length > 0))
+  )
+    refuse(`The ${execution.mode} gate outcome contradicts its verdict evidence.`);
 }
 
 export function buildEvidenceCheck(
@@ -212,6 +302,19 @@ export function verifyProjectionBinding(
   if (buildEvidence.run_id !== manifest.run_id)
     refuse("Published build evidence names a different build run.");
 
+  if (!projection.executions.length)
+    refuse("The stored receipt projection records no executions.");
+  requireUnique(projection.executions.map(e => e.mode), "execution modes");
+  requireUnique(projection.executions.map(e => e.evidence_key), "execution evidence keys");
+  requireUnique(projection.executions.map(e => e.manifest_sha256), "execution byte digests");
+  // Only publisher checks with a graph content key describe graph executions.
+  // The real `direct` check has none and is intentionally not projected.
+  const publishedExecutions = Object.entries(
+    (buildEvidence.checks ?? {}) as Record<string, BuildEvidenceCheck>,
+  ).filter(([, check]) => check?.manifest_sha256 !== undefined);
+  if (publishedExecutions.some(([key]) => !projection.executions.some(e => e.evidence_key === key)))
+    refuse("The stored receipt projection omits a published graph execution.");
+
   const checks: BindingCheck[] = [
     {
       label: "Candidate manifest",
@@ -230,12 +333,14 @@ export function verifyProjectionBinding(
     {
       label: "Implementation",
       detail:
-        "Every receipt was produced by the source implementation the candidate manifest publishes.",
+        "All recorded receipt implementation hashes agree with the candidate manifest and publisher summary. This checks identity agreement, not authentication of complete receipt bytes.",
     },
   ];
 
   for (const execution of projection.executions) {
     const check = buildEvidenceCheck(buildEvidence, execution.evidence_key);
+    sameDigest(execution.content_key, projection.computation_content_key,
+      `Projected ${execution.mode} computation content key`);
     sameDigest(
       check.manifest_sha256,
       execution.content_key,
@@ -253,47 +358,42 @@ export function verifyProjectionBinding(
     );
     if (!HEX64.test(execution.manifest_sha256))
       refuse(`The ${execution.mode} execution has no recorded manifest digest.`);
-    const computed = execution.nodes.filter(
-      (node) => node.cache === "computed",
-    ).length;
-    if (typeof check.kernel_calls === "number" && check.kernel_calls !== computed)
+    if (!execution.nodes.some(node => node.receipt_present))
+      refuse(`The ${execution.mode} execution records no node receipts.`);
+    requireUnique(execution.nodes.map(node => node.id), `${execution.mode} node ids`);
+    // These are the generator's recorded cache categories, independent of
+    // success, known failures or blocking. Do not reinterpret them as counts
+    // of successful work or rewrite the publisher's kernel-call summary.
+    const computed = execution.nodes.filter(node => cacheState(node) === "computed").length;
+    const hits = execution.nodes.filter(node => cacheState(node) === "hit").length;
+    if (typeof check.kernel_calls !== "number" || !Number.isSafeInteger(check.kernel_calls) || check.kernel_calls < 0)
+      refuse(`Published build evidence has no usable ${execution.mode} kernel-call count.`);
+    if (check.kernel_calls !== computed)
       refuse(
         `Published build evidence reports ${check.kernel_calls} kernel calls for the ${execution.mode} execution, but ${computed} receipts record a computation.`,
       );
+    if (execution.computed_count !== computed || execution.cache_hit_count !== hits ||
+        execution.kernel_calls !== check.kernel_calls)
+      refuse(`The ${execution.mode} projection summary contradicts its receipts or published kernel-call count.`);
+    let sourcePins = 0;
     for (const node of execution.nodes) {
-      if (node.kernel_impl_hash && node.kernel_impl_hash !== projection.kernel_impl_hash)
+      if (node.receipt_present && node.kernel_impl_hash !== projection.kernel_impl_hash)
         refuse(
           `Receipt ${node.id} was produced by an implementation the candidate does not publish.`,
         );
       for (const pin of node.source_pins) {
         const published = check.source_sha256?.[pin.key];
-        if (published !== undefined && published !== pin.sha256)
+        if (!HEX64.test(pin.sha256) || published !== pin.sha256)
           refuse(
             `The ${pin.label} digest recorded by ${node.id} differs from the one the candidate published.`,
           );
+        sourcePins++;
       }
     }
-    const gate = execution.nodes.find((node) => node.gate);
-    const publishedGate = check.gate;
-    if (publishedGate && gate?.gate) {
-      if (
-        typeof publishedGate.outcome === "string" &&
-        publishedGate.outcome !== gate.gate.outcome
-      )
-        refuse(
-          `The ${execution.mode} gate outcome differs from the one the candidate published.`,
-        );
-      if (
-        typeof publishedGate.scope === "string" &&
-        publishedGate.scope !== gate.gate.scope
-      )
-        refuse(
-          `The ${execution.mode} gate scope differs from the one the candidate published.`,
-        );
-    }
+    verifyGate(execution, check);
     checks.push({
       label: `${execution.label} receipts`,
-      detail: `${computed} computed and ${execution.nodes.length - computed} served from cache, matching the published kernel-call count; source digests agree with the candidate's build evidence.`,
+      detail: `${computed} computed and ${hits} served from cache; the computed count matches the published kernel-call count. ${sourcePins} projected source pins agree with the candidate's build evidence.${check.gate ? " The gate outcome, scope, passed verdict and checks agree with the published evidence." : " No gate evidence is published or projected."}`,
     });
   }
   return checks;
@@ -461,8 +561,8 @@ export function pinDifferences(
 
 /** Edges come only from typed artifact inputs a receipt actually declared, and
  * only when the named producer is a receipt in the same execution whose own key
- * is the one the consumer recorded. An input naming an absent or mismatched
- * producer is dropped rather than drawn. */
+ * and declared output artifact/key/type/version agree with the input. Missing
+ * or ambiguous evidence is dropped rather than turned into a structural edge. */
 function recordedEdges(projection: ReceiptProjection): {
   edges: ExecutionEdge[];
   dropped: string[];
@@ -470,20 +570,38 @@ function recordedEdges(projection: ReceiptProjection): {
   const byPair = new Map<string, ExecutionEdge>();
   const dropped: string[] = [];
   for (const execution of projection.executions) {
-    const keys = new Map(execution.nodes.map((node) => [node.id, node.node_key]));
+    const producers = new Map(execution.nodes.map((node) => [node.id, node]));
     for (const node of execution.nodes) {
+      if (!node.receipt_present) continue;
       for (const input of node.typed_inputs) {
+        if (!input.name || node.typed_inputs.filter(entry => entry.name === input.name).length !== 1) {
+          dropped.push(`${execution.mode}: ${node.id} recorded an ambiguous input slot ${input.name}.`);
+          continue;
+        }
         const producer = input.producer;
-        if (!producer || !keys.has(producer)) {
+        const receipt = producer ? producers.get(producer) : undefined;
+        if (!producer || !receipt?.receipt_present) {
           dropped.push(
             `${execution.mode}: ${node.id} names producer ${producer ?? "(none)"}, which has no receipt in this execution.`,
           );
           continue;
         }
-        if (input.producer_key && keys.get(producer) !== input.producer_key) {
+        if (!input.producer_key || !HEX64.test(input.producer_key) || receipt.node_key !== input.producer_key) {
           dropped.push(
-            `${execution.mode}: ${node.id} recorded a different key for producer ${producer}.`,
+            `${execution.mode}: ${node.id} ${input.producer_key ? "recorded a different key" : "recorded no key"} for producer ${producer}.`,
           );
+          continue;
+        }
+        // `name` is the consumer's local slot; `artifact` identifies the
+        // producer's declaration and need not have the same local name.
+        const outputs = receipt.typed_outputs.filter(output => output.artifact === input.artifact);
+        const output = outputs[0];
+        if (outputs.length !== 1 || !input.artifact || !input.artifact_key ||
+            !HEX64.test(input.artifact_key) || !input.type || !Number.isSafeInteger(input.type_version) ||
+            input.type_version === null || input.type_version < 1 ||
+            output.artifact_key !== input.artifact_key || output.type !== input.type ||
+            output.type_version !== input.type_version) {
+          dropped.push(`${execution.mode}: ${node.id} input ${input.name} has no unique matching artifact key, type and version declared by producer ${producer}.`);
           continue;
         }
         const pair = `${producer} ${node.id}`;
@@ -507,7 +625,9 @@ function recordedEdges(projection: ReceiptProjection): {
         }
         if (!existing.modes.includes(execution.mode))
           existing.modes.push(execution.mode);
-        if (!existing.artifacts.some((entry) => entry.name === artifact.name))
+        if (!existing.artifacts.some((entry) => entry.name === artifact.name &&
+            entry.artifact_key === artifact.artifact_key && entry.type === artifact.type &&
+            entry.type_version === artifact.type_version))
           existing.artifacts.push(artifact);
       }
     }
@@ -697,7 +817,7 @@ export function buildReceiptGraph(
       kernel_calls: execution.kernel_calls,
       computed_count: execution.computed_count,
       cache_hit_count: execution.cache_hit_count,
-      receipt_count: execution.nodes.length,
+      receipt_count: execution.nodes.filter(node => node.receipt_present).length,
       wall_time_seconds: total ? Number(total.toFixed(3)) : null,
     };
   });
@@ -780,9 +900,7 @@ export function buildReceiptGraph(
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
     "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
-    // Everything else in the binding block is re-derived from bytes the
-    // publisher attached. This one is not, and the difference is worth stating
-    // rather than letting the two sit side by side as if equally evidenced.
+    // Summary identity agreement does not authenticate full receipt bytes.
     "Two executions are told apart here by the byte digest of each recorded run manifest. Neither manifest byte digest is pinned by anything the publisher attached, so that separation is asserted by this projection. The population, implementation, content-key and source digests checked above are bound by the publisher's own build evidence.",
     ...(divergentPins.length
       ? [
