@@ -1,36 +1,50 @@
 # Resolved-population identity guard (D1)
 
-Branch `candidate-quality-resolved-identity-20260905`, base
-`14552168cad50f963c3064a4cb73adfcc605231e`, starting head
-`e868a320257d187f122ac8d1fa4c201ee4c6cf60`.
+Branch `candidate-quality-resolved-identity-20260905`, branch base
+`14552168cad50f963c3064a4cb73adfcc605231e`, predecessor head
+`e868a320257d187f122ac8d1fa4c201ee4c6cf60` (branch
+`candidate-quality-review-fixes-20260905`, left frozen and clean).
 
 Finding D1 of
 `/Users/maxghenis/architecture-reviews/microcosm-20260904/dashboard-review-fixes-independent-review.md`:
 the self-comparison guard added at e868 compares literal transport strings, so
-two spellings of one population still compare against themselves.
-
-## State
-
-- Worktree inspected: clean at e868a32, no upstream configured, nothing pushed.
-- `frontend/node_modules` absent in this worktree; installing from the checked-in
-  `bun.lock` with `--frozen-lockfile` (no dependency upgrade).
+two spellings of one population still compared against themselves.
 
 ## Done
 
-- (nothing yet)
+- Worktree inspected before editing: clean at e868a32, no upstream configured,
+  nothing pushed. `frontend/node_modules` was absent and was installed from the
+  checked-in `bun.lock` with `--frozen-lockfile`; no dependency was upgraded.
+- `frontend/lib/microcosm/quality/identity.ts`: the shared resolution. A
+  candidate names its population by the digest its immutable manifest binds,
+  read with that population's period and entity and the country; a published
+  release names one by the concrete id the pointer resolves to. Same key is one
+  population; different keys under the same kind of name is a comparison; a
+  candidate digest against a published release id, a build with no population,
+  or one digest declared under two periods leaves the question open and is
+  labelled rather than claimed.
+- `loadComparison` refuses a resolved self-comparison with `SelfComparisonError`,
+  which `classifyApiError` answers 400, so `/api/microcosm/compare` cannot be
+  used to bypass the views. `buildComparison` is untouched, so the staging diff
+  keeps building on its own terms.
+- One client hook, `useResolvedComparison`, drives the population strip, the
+  compare page and the quality overview: a refused incumbent empties the
+  control, the A selection, the incumbent overlay and the Incumbent ESS column
+  together, and the authored sentence explains it.
+- `resolvedReleaseId` maps a hand-authored `?release=latest` and the empty
+  default onto the same release.
+- Regression tests: `identity.test.ts` (the pure rules and the whole client
+  decision) and `resolved-identity.test.ts` (both demonstrated aliases and two
+  genuinely different populations through the actual loader and the compare
+  route, on synthetic fixtures with every published fetch stubbed).
+- Visible focus ring on the `<main>` landmark.
+- `docs/candidate-quality.md` records what settles an incumbent.
+- Verified: `bun test` 385 pass / 0 fail, `bun run lint` (tsc --noEmit) clean,
+  `bun run build` succeeds with the route table identical to the e868 build.
+  Logs in the review directory.
 
 ## Next
 
-1. Pure `lib/microcosm/quality/identity.ts`: population identity per side
-   (candidate population digest + period/entity/country, or resolved published
-   release id) and a three-way comparison verdict with authored explanations.
-2. Server: `buildComparison` carries the verdict; `loadComparison` refuses a
-   resolved self-comparison so `/api/microcosm/compare` cannot be bypassed.
-3. Client: one shared `useResolvedComparison()` hook feeding the strip, the
-   compare view and the quality overview.
-4. Regression tests for both demonstrated aliases and for true different
-   populations (reused candidate id, different population digest).
-5. Visible focus ring on the main landmark.
-6. Full frontend tests, `tsc --noEmit`, production build; logs to the review
-   directory; receipt at
-   `/Users/maxghenis/architecture-reviews/microcosm-20260904/dashboard-resolved-identity-author-receipt.md`.
+- Nothing outstanding for D1. Receipt at
+  `/Users/maxghenis/architecture-reviews/microcosm-20260904/dashboard-resolved-identity-author-receipt.md`,
+  including the limitations that remain.
