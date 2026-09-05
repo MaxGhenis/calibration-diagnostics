@@ -108,9 +108,35 @@ to or from them. Coverage is partial and has to say so.
 Per-execution frame and weight keys are kept unmerged, so two executions that
 recorded different frames would show two values rather than the first one.
 
+### Tested
+
+`bun test` — 507 pass, 0 fail across 58 files. `bun run lint` (`tsc --noEmit`)
+clean. `bun run build` succeeds; `/api/microcosm/graph` is served dynamically
+and `/microcosm/pipeline` prerenders.
+
+The route and adapter tests read the actual publisher bytes, checked in under
+`lib/microcosm/graph/fixtures/` and content-addressed by their own digests, so
+editing a fixture fails the test rather than changing what it claims:
+
+- the immutable candidate manifest `ff2f231b…`,
+- the run-scoped build evidence `1d3b94d8…` it attaches,
+- the manifest of `us-graph-f001-assembly-20260905-v1`, a real build that failed
+  before population construction and that this dashboard ships no receipts for,
+- a deliberately tampered copy of the first, kept at the filename the untampered
+  bytes content-address, so the reader has a real hash mismatch to refuse.
+
+Covered: the four-computed/two-hit versus six-hit pair; identical output pins
+under a shared content key with differing manifest bytes; eighteen adversarial
+binding refusals; dropped edges for absent and mismatched producers; failure,
+gate exception, blocking and absence outranking a recorded output; a passing
+gate not completing anything else; partial coverage; retained URL selection and
+keyboard movement; and the absence of hosts, paths, payload bytes and individual
+identifiers from both the route body and the rendered markup.
+
+Quality's "Build provenance" attachment row now links to the Pipeline page
+through `QualityLink`, so the candidate travels with the reader.
+
 ## Next
 
-1. Tests: adapter, route, navigation, presentation, rendered surface.
-2. Candidate context on the target-detail trace link.
-3. `bun test`, `bun run lint`, `bun run build`, WebKit pass.
-4. Author report and patch.
+1. WebKit pass on a port that is not 4397 or 4398.
+2. Author report and patch.

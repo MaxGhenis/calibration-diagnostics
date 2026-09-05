@@ -16,7 +16,7 @@ import {
 // reading of the selected run, and one of the stages it names is being revised.
 // It stays on the page, dated and folded away, underneath the receipts the
 // selected candidate actually recorded.
-function HistoricalOverview() {
+export function HistoricalOverview() {
   return (
     <details className="rounded-lg border border-border bg-card">
       <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">

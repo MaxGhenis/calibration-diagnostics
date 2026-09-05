@@ -1,0 +1,277 @@
+{
+  "aggregate_sha256": {
+    "distributions": "93c344990b4ce7fe2809bcf79af9711524fd4fa5bc8b84975e23447a72138289",
+    "support": "277e1c1eec388535036868b27236e490d8ad8fc1c0395405cf3632ef2e04d3c8",
+    "support_household": "64fcccec60d94ebf7578542d1a3f13dea20d959c374ddfe9512e067d0bc36b66"
+  },
+  "aggregation_driver_sha256": "80bd27cdf5745a226b471633590a5b91928ca0d3bdf3a4a38b796adffe973f6f",
+  "aggregation_implementation_sha256": "e4ea51488c3dbebd403bf4eebd680f8b5c8418de2e8bca041ec77dcd756cf563",
+  "candidate_release_id": "us-graph-f001-geography-20260905-v1",
+  "checks": {
+    "cold": {
+      "assembly_population_sha256": "95a9b4d3cb3719ef9e831ae258e281699ab00ff0f6a2d34d20a5352797ec6fea",
+      "gate": {
+        "capabilities": {
+          "consumes_se": false,
+          "dependencies": [
+            "numpy",
+            "pandas"
+          ],
+          "determinism": "deterministic",
+          "numeric": "platform_bitwise",
+          "role": "gate",
+          "seed_source": "none",
+          "structural": "none",
+          "tolerance": null,
+          "tolerance_writers": {
+            "household.congressional_district_geoid": [
+              "assign_us_puma_ladder"
+            ],
+            "household.county_fips": [
+              "assign_us_puma_ladder"
+            ],
+            "household.puma": [
+              "assemble_stacked_spine.prepare",
+              "assign_us_puma_ladder"
+            ],
+            "household.state_fips": [
+              "assemble_stacked_spine.prepare"
+            ]
+          }
+        },
+        "evidence": {
+          "gates": {
+            "us_puma_ladder": {
+              "details": {
+                "nyc_weighted_household_share": 0.02769910116255789,
+                "nyc_weighted_share_of_new_york": 0.4129110204519946
+              },
+              "failures": [],
+              "passed": true
+            }
+          },
+          "passed": true
+        },
+        "outcome": "pass",
+        "scope": "geography_assignment_integrity"
+      },
+      "implementation_sha256": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "kernel_calls": 4,
+      "manifest_sha256": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+      "mode": "cold",
+      "peak_rss_bytes_macos": 2190557184,
+      "population_sha256": "9d64839e065953d94511dde19b29b2240f91c6a08bdec6b6aa3902f60553f9c6",
+      "release_eligible": false,
+      "resolved_weights": {
+        "family": {
+          "kind": "importance",
+          "total": 143306277.22302914
+        },
+        "household": {
+          "kind": "importance",
+          "total": 134690323.34024486
+        },
+        "marital_unit": {
+          "kind": "importance",
+          "total": 259506166.09233785
+        },
+        "person": {
+          "kind": "importance",
+          "total": 321556102.7718972
+        },
+        "spm_unit": {
+          "kind": "importance",
+          "total": 137980385.60592443
+        },
+        "tax_unit": {
+          "kind": "importance",
+          "total": 186785089.9815508
+        }
+      },
+      "rows": {
+        "family": 17212,
+        "household": 17004,
+        "marital_unit": 30917,
+        "person": 38604,
+        "spm_unit": 17079,
+        "tax_unit": 23179
+      },
+      "sample_fraction": 0.01,
+      "sample_seed": 578,
+      "scope": "assembly_geography_development",
+      "source_sha256": {
+        "acs_household": "8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0",
+        "acs_person": "afdc6d90c6e2f0bab365ed32d95ba4c4d8ac651162f46ac7861295b2dc469894",
+        "asec_raw_stage": "e2f2b7495bfcf1448dfb0acb0a17e93f86a6ab8bef8a70ec0a2981983028cbb5",
+        "congressional_district_vintage_crosswalk": "c7cb040b1f57ca2ea2adcbfe60cc2b250ca23acbc4b640cd421e766fa54c1aec",
+        "puma_ladder": "39a2ab2abeab07a88362af7ab2940e0e1d50a297c919e4bbc6fb65bab51147d8"
+      },
+      "started_at_utc": "2026-09-05T06:07:03.845846+00:00",
+      "status": "passed_engineering_checks",
+      "wall_time_seconds": 26.723163500006194
+    },
+    "direct": {
+      "assembly_population_sha256": "95a9b4d3cb3719ef9e831ae258e281699ab00ff0f6a2d34d20a5352797ec6fea",
+      "implementation_sha256": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "mode": "direct",
+      "peak_rss_bytes_macos": 1985134592,
+      "population_sha256": "9d64839e065953d94511dde19b29b2240f91c6a08bdec6b6aa3902f60553f9c6",
+      "release_eligible": false,
+      "resolved_weights": {
+        "family": {
+          "kind": "importance",
+          "total": 143306277.22302914
+        },
+        "household": {
+          "kind": "importance",
+          "total": 134690323.34024486
+        },
+        "marital_unit": {
+          "kind": "importance",
+          "total": 259506166.09233785
+        },
+        "person": {
+          "kind": "importance",
+          "total": 321556102.7718972
+        },
+        "spm_unit": {
+          "kind": "importance",
+          "total": 137980385.60592443
+        },
+        "tax_unit": {
+          "kind": "importance",
+          "total": 186785089.9815508
+        }
+      },
+      "rows": {
+        "family": 17212,
+        "household": 17004,
+        "marital_unit": 30917,
+        "person": 38604,
+        "spm_unit": 17079,
+        "tax_unit": 23179
+      },
+      "sample_fraction": 0.01,
+      "sample_seed": 578,
+      "scope": "assembly_geography_development",
+      "source_sha256": {
+        "acs_household": "8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0",
+        "acs_person": "afdc6d90c6e2f0bab365ed32d95ba4c4d8ac651162f46ac7861295b2dc469894",
+        "asec_raw_stage": "e2f2b7495bfcf1448dfb0acb0a17e93f86a6ab8bef8a70ec0a2981983028cbb5",
+        "congressional_district_vintage_crosswalk": "c7cb040b1f57ca2ea2adcbfe60cc2b250ca23acbc4b640cd421e766fa54c1aec",
+        "puma_ladder": "39a2ab2abeab07a88362af7ab2940e0e1d50a297c919e4bbc6fb65bab51147d8"
+      },
+      "started_at_utc": "2026-09-05T06:06:07.725834+00:00",
+      "status": "passed_engineering_checks",
+      "wall_time_seconds": 23.86733358300262
+    },
+    "resume": {
+      "assembly_population_sha256": "95a9b4d3cb3719ef9e831ae258e281699ab00ff0f6a2d34d20a5352797ec6fea",
+      "gate": {
+        "capabilities": {
+          "consumes_se": false,
+          "dependencies": [
+            "numpy",
+            "pandas"
+          ],
+          "determinism": "deterministic",
+          "numeric": "platform_bitwise",
+          "role": "gate",
+          "seed_source": "none",
+          "structural": "none",
+          "tolerance": null,
+          "tolerance_writers": {
+            "household.congressional_district_geoid": [
+              "assign_us_puma_ladder"
+            ],
+            "household.county_fips": [
+              "assign_us_puma_ladder"
+            ],
+            "household.puma": [
+              "assemble_stacked_spine.prepare",
+              "assign_us_puma_ladder"
+            ],
+            "household.state_fips": [
+              "assemble_stacked_spine.prepare"
+            ]
+          }
+        },
+        "evidence": {
+          "gates": {
+            "us_puma_ladder": {
+              "details": {
+                "nyc_weighted_household_share": 0.02769910116255789,
+                "nyc_weighted_share_of_new_york": 0.4129110204519946
+              },
+              "failures": [],
+              "passed": true
+            }
+          },
+          "passed": true
+        },
+        "outcome": "pass",
+        "scope": "geography_assignment_integrity"
+      },
+      "implementation_sha256": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "kernel_calls": 0,
+      "manifest_sha256": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+      "mode": "resume",
+      "peak_rss_bytes_macos": 2249916416,
+      "population_sha256": "9d64839e065953d94511dde19b29b2240f91c6a08bdec6b6aa3902f60553f9c6",
+      "release_eligible": false,
+      "resolved_weights": {
+        "family": {
+          "kind": "importance",
+          "total": 143306277.22302914
+        },
+        "household": {
+          "kind": "importance",
+          "total": 134690323.34024486
+        },
+        "marital_unit": {
+          "kind": "importance",
+          "total": 259506166.09233785
+        },
+        "person": {
+          "kind": "importance",
+          "total": 321556102.7718972
+        },
+        "spm_unit": {
+          "kind": "importance",
+          "total": 137980385.60592443
+        },
+        "tax_unit": {
+          "kind": "importance",
+          "total": 186785089.9815508
+        }
+      },
+      "rows": {
+        "family": 17212,
+        "household": 17004,
+        "marital_unit": 30917,
+        "person": 38604,
+        "spm_unit": 17079,
+        "tax_unit": 23179
+      },
+      "sample_fraction": 0.01,
+      "sample_seed": 578,
+      "scope": "assembly_geography_development",
+      "source_sha256": {
+        "acs_household": "8281008e53de98f0ef81e7a2ee5a8725991dda1ecfd2713ead73246425e515d0",
+        "acs_person": "afdc6d90c6e2f0bab365ed32d95ba4c4d8ac651162f46ac7861295b2dc469894",
+        "asec_raw_stage": "e2f2b7495bfcf1448dfb0acb0a17e93f86a6ab8bef8a70ec0a2981983028cbb5",
+        "congressional_district_vintage_crosswalk": "c7cb040b1f57ca2ea2adcbfe60cc2b250ca23acbc4b640cd421e766fa54c1aec",
+        "puma_ladder": "39a2ab2abeab07a88362af7ab2940e0e1d50a297c919e4bbc6fb65bab51147d8"
+      },
+      "started_at_utc": "2026-09-05T06:08:19.976711+00:00",
+      "status": "passed_engineering_checks",
+      "wall_time_seconds": 26.970482542004902
+    }
+  },
+  "concentration_scope": "Row-weight concentration, not survey-design variance or independent lineage coverage",
+  "execution_status": "completed",
+  "reference_usage": "S0101 geography names and roster only; no reference estimates, targets, MOEs or heldout cells evaluated",
+  "release_eligible": false,
+  "run_id": "us-graph-f001-geography-20260905-v1",
+  "scope": "assembly_geography_development"
+}

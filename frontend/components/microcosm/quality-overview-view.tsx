@@ -56,6 +56,10 @@ const evidenceLinks: Partial<Record<EvidenceFamily, string>> = {
   validation_reach: "/microcosm/model-coverage",
   support: "/microcosm/quality#support",
   distributions: "/microcosm/quality#distributions",
+  // The Pipeline page reads this same run-scoped attachment to associate the
+  // candidate with the receipts its build recorded. The link carries the
+  // candidate, so the receipts that open are this manifest's, not the latest.
+  build_manifest: "/microcosm/pipeline",
 };
 const fmt = (value: number | null | undefined, digits = 1) =>
   value == null
