@@ -644,7 +644,7 @@ export function ReceiptGraphSurface({
             ))}
             <Field label="Outputs">
               {payload.comparison.output_identity.identical
-                ? `Identical across both executions: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
+                ? `Identical across every recorded execution: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
                 : `${payload.comparison.output_identity.differences.length} differences across ${payload.comparison.output_identity.compared_nodes} receipts.`}
             </Field>
             <Field label="Kernel calls">

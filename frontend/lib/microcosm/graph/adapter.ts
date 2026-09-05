@@ -1082,10 +1082,12 @@ export function buildReceiptGraph(
     // Read from the publisher's gate capabilities, not from this candidate. A
     // run whose gates name no writer for any column gets the second sentence,
     // because there is then no published slice to point at.
-    "One narrow slice of column ownership is published: the build evidence names, for the four household columns inside the gate's declared tolerance scope, which steps wrote each of them. It is not drawn either, because it describes that gate's scope rather than the graph.",
+    toleranceColumns.length
+      ? `One narrow slice of column ownership is published: the build evidence names, for the ${countWord(toleranceColumns.length)} ${toleranceEntity ? `${toleranceEntity} ` : ""}${plural(toleranceColumns.length, "column")} inside the ${gateRecords.length === 1 ? "gate's declared tolerance scope" : "gates' declared tolerance scopes"}, which steps wrote each of them. It is not drawn either, because it describes that scope rather than the graph.`
+      : "No column ownership is published alongside that declaration: the build evidence records no writer for any column inside a gate's declared tolerance scope, so nothing here names which step wrote a column.",
     "Stage names are plain renderings of the native node ids, which are shown next to them.",
     "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
-    "Completed execution and release eligibility are separate: this candidate completed and is excluded from release.",
+    `Recorded execution and release eligibility are separate readings: the candidate manifest records this run's execution as ${statedAs(manifest.execution_status)} and its release eligibility as ${statedAs(manifest.release_eligibility.status)}.`,
     "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
     // Precise in both directions. How many executions there were, and how many
     // kernel calls each computed, is the publisher's own record: one check
@@ -1095,7 +1097,7 @@ export function buildReceiptGraph(
     // manifest digest is the shared content key, so it pins no byte digest.
     // The closing clause names source digests only where receipts declared a
     // source pin for that binding to have happened to.
-    "The publisher's build evidence records two executions of this run, one computing four kernel calls and one computing none. It does not pin either recorded run manifest's byte digest — its own manifest digest is the content key the two share — so which bytes shown here belong to which execution is paired by this projection, not published. The population, implementation, content-key and source digests checked above are bound by that same build evidence.",
+    `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "the two share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
     ...(divergentPins.length
       ? [
           `The recorded executions disagree about the frame or weight key on ${divergentPins.join(", ")}. Both readings are kept.`,
@@ -1166,8 +1168,8 @@ export function buildReceiptGraph(
       // gate that recorded an outcome without one produced `records: 1` beside
       // the sentence "No gate record in this run" — the payload contradicting
       // itself. A gate is still a gate record when it declared no scope.
-      note: gateScopes.length
-        ? `One gate record in this run, scoped to ${gateScopes.join(", ")}. It attests to its own scope and to nothing else here.`
+      note: gateRecords.length
+        ? `${opening(countWord(gateRecords.length))} ${plural(gateRecords.length, "gate record")} in this run, ${gateScopes.length ? `scoped to ${gateScopes.join(", ")}` : "with no declared scope"}. ${gateRecords.length === 1 ? "It attests to its own scope" : "They attest to their own scopes"} and to nothing else here.`
         : "No gate record in this run. That is not a pass.",
     },
     comparison: {
@@ -1182,9 +1184,14 @@ export function buildReceiptGraph(
       // one run's execution count is stated in one place. Verification has
       // already forced the byte digests apart and the content keys together,
       // so the only thing that varies between runs is how many there were.
-      title: "Same computation, two executions",
+      title:
+        executionCount === 1
+          ? "One recorded execution"
+          : `Same computation, ${countWord(executionCount)} executions`,
       execution_note:
-        "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. That there were two is also the publisher's own record — its build evidence carries a check for each, one computing four kernel calls and one computing none. What it does not pin is either manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.",
+        executionCount === 1
+          ? `One recorded run manifest, so this is a single recorded execution${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The publisher's build evidence carries one check for it. What it does not pin is that manifest's bytes: its own manifest digest is the content key, so which bytes belong to this execution is paired by this projection.`
+          : `The recorded run manifests have different byte digests, so these are ${countWord(executionCount)} executions; the shared content key says the computation and its outputs were the same. That there were ${countWord(executionCount)} is also the publisher's own record — its build evidence carries a check for each${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. What it does not pin is ${executionCount === 2 ? "either" : "any"} manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.`,
       output_identity: comparison,
       cache_differences: cacheDifferences,
     },
