@@ -579,6 +579,14 @@ export function normalizeGraphAttachment(
         equal(o.artifact_key, a.artifact_key);
         equal(o.type, a.type);
         equal(o.type_version, a.type_version);
+        // The reproducibility reading a consumer records for an artifact is a
+        // property of the artifact, not of the consumer. Root's invented
+        // mismatch -- an input claiming a different numeric mode from the
+        // output its own named producer declared -- was accepted, and the
+        // inspector showed both readings side by side as if both were true.
+        // Both fields are nullable in the wire contract, so two nulls agree.
+        equal(o.numeric, a.numeric);
+        equal(o.tolerance, a.tolerance);
         dependencies.get(n.id)!.add(a.producer as string);
       }
     }

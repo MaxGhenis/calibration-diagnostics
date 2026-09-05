@@ -357,3 +357,38 @@ describe("invented typed dependency cycles", () => {
     expect(p.edges.map(e => [e.from, e.to])).toEqual([["a", "b"], ["b", "c"]]);
   });
 });
+
+describe("invented consumed artifact reproducibility agreement", () => {
+  test("refuses a numeric mode the named producer did not declare", () => {
+    refusal(x => {
+      for (const e of x.graph.executions)
+        e.nodes[1].typed_inputs[0].numeric = "different";
+    });
+    refusal(x => {
+      for (const e of x.graph.executions)
+        e.nodes[1].typed_inputs[0].numeric = null;
+    });
+  });
+  test("refuses a tolerance the named producer did not declare", () => {
+    refusal(x => {
+      for (const e of x.graph.executions)
+        e.nodes[1].typed_inputs[0].tolerance = 0.5;
+    });
+    refusal(x => {
+      for (const e of x.graph.executions)
+        e.nodes[1].typed_inputs[0].tolerance = null;
+    });
+  });
+  test("accepts a null numeric and tolerance declared on both sides", () => {
+    const x = inventedGraph();
+    for (const e of x.graph.executions)
+      for (const n of e.nodes)
+        for (const a of [...n.typed_inputs, ...n.typed_outputs]) {
+          a.numeric = null;
+          a.tolerance = null;
+        }
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.edges.map(e => [e.from, e.to])).toEqual([["a", "b"], ["b", "c"]]);
+    expect(p.nodes.every(n => n.typed_inputs.every(a => a.numeric === null && a.tolerance === null))).toBe(true);
+  });
+});
