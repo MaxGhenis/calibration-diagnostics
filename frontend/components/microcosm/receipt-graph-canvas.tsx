@@ -11,6 +11,12 @@
 // technology, and this one holds real controls — the zoom buttons and the
 // attribution link — that a keyboard reaches and would then find unannounced.
 // A group keeps the one-sentence label and leaves those controls addressable.
+//
+// Being a group also exposes what it contains, so the drawing itself is marked
+// decorative on the cards. Otherwise a screen reader reads the six receipts a
+// second time, as loose text with none of the relationships that are the only
+// reason to draw them. What the picture says is in the group's label; what the
+// receipts say is in the list; the controls stay real controls.
 
 import { useEffect, useMemo } from "react";
 import ReactFlow, {
@@ -66,6 +72,14 @@ const TONE_BORDER: Record<string, string> = {
 function ReceiptCard({ data }: NodeProps<CardData>) {
   return (
     <div
+      // The card is the drawing. Every word on it — the stage name, the native
+      // id, the group, whether a gate was recorded — is in the list beside the
+      // canvas, which is the keyboard and screen-reader path. Exposing it here
+      // as well reads the same six receipts a second time, without the
+      // relationships the picture is carrying, so the picture is announced by
+      // the group's one-sentence label and its cards are decorative. They are
+      // not focusable either: `nodesFocusable` is off.
+      aria-hidden="true"
       style={{
         width: NODE_WIDTH,
         height: NODE_HEIGHT,

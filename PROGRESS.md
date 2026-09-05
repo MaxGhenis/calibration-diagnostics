@@ -65,14 +65,25 @@ What each fix is, and what it is red against:
   shipped manifests record an empty `known_failures`, so nothing here is
   triggered by this candidate; the case is built in a test.
 
-  *Not verified this session:* the review attributed the collision to
-  `known_failures` sweeping in gates whose outcome is `unreached`, citing
-  `manifest.py:583-595`. That file was not found in any repository reachable
-  from here, and the derivation of `known_failures` is not defined in this
-  repository — the generator carries the list through as recorded. The fix
-  therefore rests on the narrower premise that a per-node record from the
-  executor is more direct than a run-level list, which is true whatever
-  populates the list. Comments and tests were rewritten to claim only that.
+  *Verified, after this record twice said otherwise:* the review attributed the
+  collision to `known_failures` sweeping in gates whose outcome is `unreached`,
+  citing `manifest.py:583-595`. An earlier commit on this branch said that file
+  "was not found in any repository reachable from here" and narrowed every
+  comment accordingly. That was wrong. It is
+  `packages/microcosm-graph/src/microcosm/graph/manifest.py` on `origin/main` of
+  the local microcosm clone at `/Users/maxghenis/PolicyEngine/microcosm`, and
+  read there this session, `Manifest.known_failures` collects every gate node
+  whose outcome is outside `_CERTIFYING_GATE_OUTCOMES = {"pass",
+  "not_applicable"}`, plus any node explicitly rejected. `unreached` is outside
+  that set, so an unreached gate does land in the list, exactly as the review
+  said. The comments say that now, with the file named.
+
+  Two things are still not established and are not claimed: the line numbers
+  there are 526–539, not 583–595, so the revision read is not the one the review
+  read; and which revision produced the two shipped manifests was not
+  determined. The comment states what that file defines today, not what the run
+  did. The behaviour is unchanged either way — the per-node record is read
+  first — but the reason given for it is now the true one.
 - **Finding 4, `not_applicable`.** A gate outcome of `not_applicable` had been
   folded into the passing state. It is its own `GateState` now, worded "Gate not
   applicable", neutral tone, and it withholds nothing — it certified nothing and
@@ -186,6 +197,43 @@ the projection at head still derives from the bytes it names.
 `graph.json` beside the run evidence was re-hashed in this pass and is
 `7d4e1502a89475726f3bc87f47f310e855e850343b6cd8da73c174a842ab94ac`, the digest
 recorded in the correction below. Nothing reads it at runtime or in a test.
+
+### Found while verifying, and fixed: four defects in the fixes themselves
+
+Red at `0a9d4eb`, green at `e28c0f8`. None of these was in the review.
+
+- **The gate marker vanished for a gate that did not apply.** The canvas card
+  shows "· gate" when the gate reading's tone is not neutral. Giving
+  `not_applicable` a neutral tone therefore took the marker away, so on the
+  canvas that receipt looked exactly like one that recorded no gate at all —
+  the confusion the separate gate axis exists to prevent. `gateRecorded` decides
+  it now, which is a question about the record rather than about the tone.
+- **"It certified nothing" contradicted the producer.**
+  `_CERTIFYING_GATE_OUTCOMES` is `{"pass", "not_applicable"}`, so the producer
+  groups the two. The help text now says the producer counts it alongside a
+  pass, so it is not a failure, and that it attested nothing about the step,
+  which is why it is still not shown as a pass. Keeping it distinct from a pass
+  was the review's point and is unchanged.
+- **`releaseEligibilityReading` worded two of four statuses**, and its comment
+  called them "the two statuses this evidence uses". `EligibilityStatus`
+  declares `not_evaluated`, `eligible`, `ineligible` and `excluded`; this
+  evidence carries only `excluded`, in all three candidate manifests in the
+  quality directory. All four are worded now and the comment says which one is
+  actually present.
+- **Both readings ended in a `default` branch**, which is precisely how
+  `not_applicable` came to be read as a pass: the next member added is absorbed
+  in silence. Each is exhaustive now over an `unread(state: never)` guard.
+  Verified by adding a member to `GateState` and reading
+  `TS2345 ... not assignable to parameter of type 'never'` at
+  `presentation.ts:141`, then restoring it.
+
+The canvas is also decorative on its cards now. `role="group"` fixed the
+review's note — the zoom controls are no longer buried in a `role="img"`
+subtree — but a group exposes what it contains, so a screen reader read the six
+receipts a second time as loose text, without the relationships that are the
+only reason to draw them. The cards carry `aria-hidden`, the group keeps its
+one-sentence label, and the controls stay real controls. `nodesFocusable` and
+`edgesFocusable` were already off, so the list remains the only keyboard path.
 
 ### Found while verifying, and fixed: adapter.ts read as a binary file
 
