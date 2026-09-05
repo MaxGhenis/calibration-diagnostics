@@ -563,8 +563,11 @@ export function MicrocosmCompareView() {
   const releases = releaseData?.releases ?? [];
 
   const [defaultB, setDefaultB] = useState("");
-  const a = quality.selection.incumbent;
   const b = quality.release || defaultB;
+  // B may be the implicit Latest rather than an explicit selection, so the
+  // global selection cannot rule this out on its own: a comparison of a release
+  // with itself is no comparison, and A stays unset.
+  const a = quality.selection.incumbent === b ? "" : quality.selection.incumbent;
   const setA = (value: string) => quality.setSelection({ incumbent: value });
   const setB = (value: string) => {
     if (value.startsWith("candidate:")) {
@@ -660,7 +663,10 @@ export function MicrocosmCompareView() {
               label="Incumbent (A)"
               value={a}
               onChange={setA}
-              options={[{ value: "", label: "Select an incumbent" }, ...options]}
+              options={[
+                { value: "", label: "Select an incumbent" },
+                ...options.filter((option) => option.value !== b),
+              ]}
             />
             <span className="text-muted-foreground">→</span>
             <ToolbarSelect label="B (compare)" value={b} onChange={setB} options={options} />

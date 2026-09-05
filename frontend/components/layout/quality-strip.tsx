@@ -72,7 +72,9 @@ export function QualityStrip() {
           >
             <option value="">No comparison selected</option>
             {options
-              .filter((option) => option.value)
+              .filter(
+                (option) => option.value && option.value !== context.release,
+              )
               .map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

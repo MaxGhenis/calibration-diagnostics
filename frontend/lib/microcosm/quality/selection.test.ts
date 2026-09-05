@@ -98,3 +98,45 @@ test("a copied candidate release token selects the same global evidence context"
     "b".repeat(64),
   );
 });
+
+test("a population is never compared against itself", () => {
+  const token = `candidate:candidate-26:${sha}`;
+  const url = (search: string) => `https://example.test/microcosm/compare?${search}`;
+  // A hand-authored URL naming the current population as its own incumbent
+  // reports no comparison rather than a false one.
+  expect(
+    selectionFromSearch(
+      new URLSearchParams({
+        candidate: "candidate-26",
+        manifest_sha256: sha,
+        incumbent: token,
+      }),
+      "us",
+    ).incumbent,
+  ).toBe("");
+  expect(
+    selectionFromSearch(
+      new URLSearchParams({ release: "build-p", incumbent: "build-p" }),
+      "us",
+    ).incumbent,
+  ).toBe("");
+  // Selecting the population an incumbent already names drops the incumbent.
+  for (const [search, patch] of [
+    ["incumbent=build-p", { release: "build-p" }],
+    [
+      `incumbent=${token}`,
+      { candidate: "candidate-26", manifest_sha256: sha },
+    ],
+  ] as const)
+    expect(
+      new URL(selectionUrl(url(search), "us", patch)).searchParams.has(
+        "incumbent",
+      ),
+    ).toBe(false);
+  // A different population still compares.
+  expect(
+    new URL(
+      selectionUrl(url("incumbent=build-p"), "us", { release: "build-q" }),
+    ).searchParams.get("incumbent"),
+  ).toBe("build-p");
+});

@@ -34,7 +34,7 @@ export function selectionFromSearch(
   // while unrelated default evaluation remains selected.
   const token = parseCandidateToken(release);
   const candidate = matches ? params.get("candidate") || token?.candidate || "" : "";
-  return {
+  return withoutSelfComparison({
     country,
     candidate,
     manifest_sha256: matches
@@ -44,7 +44,20 @@ export function selectionFromSearch(
       : "",
     release: candidate ? "" : release,
     incumbent: matches ? (params.get("incumbent") ?? "") : "",
-  };
+  });
+}
+
+// An incumbent names a DIFFERENT population to compare against. A selection
+// whose incumbent is its own population describes no comparison, however it was
+// authored, so it resolves to none here rather than overlaying a population on
+// itself and labelling one copy Incumbent.
+export function withoutSelfComparison(
+  selection: QualitySelection,
+): QualitySelection {
+  const current = candidateReleaseToken(selection) || selection.release;
+  return selection.incumbent && selection.incumbent === current
+    ? { ...selection, incumbent: "" }
+    : selection;
 }
 
 export function candidateReleaseToken(selection: QualitySelection): string {
@@ -71,11 +84,14 @@ export function selectionUrl(
 ): string {
   const url = new URL(current);
   const previous = selectionFromSearch(url.searchParams, country);
-  const next = { ...previous, ...patch };
+  let next = { ...previous, ...patch };
   if (patch.release !== undefined && !patch.candidate) {
     next.candidate = "";
     next.manifest_sha256 = "";
   } else if (patch.candidate) next.release = "";
+  // Selecting the population an existing incumbent already names leaves no
+  // comparison to draw, so the incumbent goes with it.
+  next = withoutSelfComparison(next);
   const populationChanged =
     candidateReleaseToken(previous) !== candidateReleaseToken(next) ||
     previous.release !== next.release;
