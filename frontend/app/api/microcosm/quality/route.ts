@@ -8,6 +8,7 @@ import {
   requirePopulationAttachment,
 } from "@/lib/microcosm/quality/source";
 import {
+  AggregateContractError,
   validateDistributions,
   validateSupport,
 } from "@/lib/microcosm/quality/aggregates";
@@ -91,18 +92,27 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    // Only messages this feature authors deliberately are public. Every other
+    // failure — an ENOENT naming the configured server directory, a DNS or TLS
+    // error, a bug — becomes one fixed sentence, because the index view is
+    // polled from every page and renders its detail to any visitor.
+    const publicError =
+      error instanceof ArtifactError
+        ? { detail: error.message, artifact_error: error.code }
+        : error instanceof AggregateContractError
+          ? { detail: error.message, artifact_error: "malformed_artifact" }
+          : null;
+    if (!publicError) console.error("Candidate quality request failed", error);
+    const detail =
+      publicError?.detail ??
+      "Candidate evidence could not be read from its configured source.";
     if (view === "index")
       return NextResponse.json(
         { available: false, freshness: "unknown", detail },
         { headers: { "Cache-Control": "no-store" } },
       );
     return NextResponse.json(
-      {
-        detail,
-        artifact_error:
-          error instanceof ArtifactError ? error.code : "unavailable",
-      },
+      { detail, artifact_error: publicError?.artifact_error ?? "unavailable" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

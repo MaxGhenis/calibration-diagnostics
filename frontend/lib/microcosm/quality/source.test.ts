@@ -336,3 +336,37 @@ test("model reach checks nested model identity before displaying another model v
     artifact_error: "stale_artifact",
   });
 });
+
+test("unexpected read failures stay generic while authored contract messages remain public", async () => {
+  const f = await bundle();
+  await f.attach("support", {
+    schema_version: "microcosm.population_support.v1",
+    candidate_release_id: "fixture-only",
+    population_sha256: "a".repeat(64),
+    period: "2024",
+    entity: "household",
+    weight_entity: "household",
+    weight_basis: "calibrated",
+    rows: {},
+  });
+  const digest = await f.save();
+  const ask = (query: string) =>
+    GET(new Request(`http://localhost/api/microcosm/quality?country=us${query}`));
+
+  // No index.json was ever published, so the underlying failure is an ENOENT
+  // naming the configured directory — and every page polls this view.
+  const discovery = await (await ask("")).json();
+  expect(discovery.available).toBe(false);
+  expect(discovery.detail).not.toInclude(f.root);
+  expect(discovery.detail).not.toInclude("ENOENT");
+
+  const bound = `&candidate=fixture-only&manifest_sha256=${digest}`;
+  expect(await (await ask(`&view=distributions${bound}`)).json()).toMatchObject({
+    artifact_error: "partial_artifact",
+    detail: "distributions has not been published for this candidate.",
+  });
+  expect(await (await ask(`&view=support${bound}`)).json()).toMatchObject({
+    artifact_error: "malformed_artifact",
+    detail: "Aggregate rows must be an array.",
+  });
+});

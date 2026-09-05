@@ -83,14 +83,29 @@ export function supportDefinition(support: PopulationSupport): string {
   ]);
 }
 
+/** A supplied aggregate violates its published contract. These messages describe
+ * the artifact rather than the server, so the API shows them verbatim; anything
+ * else reaching the route is treated as an unexpected server failure. This
+ * module stays free of server-only imports because the views parse the same
+ * definitions in the browser. */
+export class AggregateContractError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AggregateContractError";
+  }
+}
+function invalid(message: string): never {
+  throw new AggregateContractError(message);
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Aggregate must be an object.");
+    invalid("Aggregate must be an object.");
   return value as Record<string, unknown>;
 }
 function string(value: unknown): string {
   if (typeof value !== "string" || !value.trim())
-    throw new Error("Aggregate identity and labels must be nonempty strings.");
+    invalid("Aggregate identity and labels must be nonempty strings.");
   return value;
 }
 function number(value: unknown, integer = false): number {
@@ -100,12 +115,12 @@ function number(value: unknown, integer = false): number {
     value < 0 ||
     (integer && !Number.isSafeInteger(value))
   )
-    throw new Error("Aggregate weights/counts must be finite and nonnegative.");
+    invalid("Aggregate weights/counts must be finite and nonnegative.");
   return value;
 }
 function rows(value: unknown): unknown[] {
   if (!Array.isArray(value))
-    throw new Error("Aggregate rows must be an array.");
+    invalid("Aggregate rows must be an array.");
   return value;
 }
 function geo(value: unknown): AggregateGeography {
@@ -120,7 +135,7 @@ function geo(value: unknown): AggregateGeography {
 function common(raw: Record<string, unknown>): PopulationAggregateIdentity {
   const sha = string(raw.population_sha256);
   if (!/^[a-f0-9]{64}$/.test(sha))
-    throw new Error("Aggregate population digest is invalid.");
+    invalid("Aggregate population digest is invalid.");
   return {
     candidate_release_id: string(raw.candidate_release_id),
     population_sha256: sha,
@@ -139,7 +154,7 @@ function near(a: number, b: number): boolean {
 export function validateSupport(value: unknown): PopulationSupport {
   const raw = record(value);
   if (raw.schema_version !== "microcosm.population_support.v1")
-    throw new Error("Unsupported population support schema.");
+    invalid("Unsupported population support schema.");
   const seen = new Set<string>();
   return {
     schema_version: "microcosm.population_support.v1",
@@ -151,7 +166,7 @@ export function validateSupport(value: unknown): PopulationSupport {
       const row = record(value);
       const geography = geo(row.geography);
       const key = geographyKey(geography);
-      if (seen.has(key)) throw new Error("Duplicate support geography.");
+      if (seen.has(key)) invalid("Duplicate support geography.");
       seen.add(key);
       const record_count = number(row.record_count, true);
       const positive_weight_count = number(row.positive_weight_count, true);
@@ -160,7 +175,7 @@ export function validateSupport(value: unknown): PopulationSupport {
         positive_weight_count > record_count ||
         weight_sum > 0 !== positive_weight_count > 0
       )
-        throw new Error("Support counts and weight mass disagree.");
+        invalid("Support counts and weight mass disagree.");
       const effective_sample_size =
         row.effective_sample_size === null
           ? null
@@ -177,7 +192,7 @@ export function validateSupport(value: unknown): PopulationSupport {
             max_weight_share <= 0 ||
             max_weight_share > 1
       )
-        throw new Error(
+        invalid(
           "Invalid support concentration or effective sample size.",
         );
       if (effective_sample_size !== null && max_weight_share !== null) {
@@ -198,7 +213,7 @@ export function validateSupport(value: unknown): PopulationSupport {
           (q < minimum && !near(q, minimum)) ||
           (q > maximum && !near(q, maximum))
         ) {
-          throw new Error(
+          invalid(
             "Effective sample size and largest weight share are inconsistent.",
           );
         }
@@ -218,7 +233,7 @@ export function validateSupport(value: unknown): PopulationSupport {
 export function validateDistributions(value: unknown): PopulationDistributions {
   const raw = record(value);
   if (raw.schema_version !== "microcosm.population_distributions.v1")
-    throw new Error("Unsupported population distribution schema.");
+    invalid("Unsupported population distribution schema.");
   const identity = common(raw);
   const seen = new Set<string>();
   return {
@@ -230,14 +245,14 @@ export function validateDistributions(value: unknown): PopulationDistributions {
       const missing_weight = number(row.missing_weight);
       const rawBins = rows(row.bins);
       if (!rawBins.length)
-        throw new Error("Distribution bins must be declared.");
+        invalid("Distribution bins must be declared.");
       let previousUpper: number | null | undefined;
       const bins = rawBins.map((value, index) => {
         const bin = record(value);
         const bound = (value: unknown): number | null => {
           if (value === null) return null;
           if (typeof value !== "number" || !Number.isFinite(value))
-            throw new Error("Invalid bin boundary.");
+            invalid("Invalid bin boundary.");
           return value;
         };
         const lower = bound(bin.lower);
@@ -248,7 +263,7 @@ export function validateDistributions(value: unknown): PopulationDistributions {
           (lower !== null && upper !== null && lower >= upper) ||
           (index > 0 && lower !== previousUpper)
         )
-          throw new Error("Distribution bins must be ordered and contiguous.");
+          invalid("Distribution bins must be ordered and contiguous.");
         previousUpper = upper;
         const weight = number(bin.weight);
         const share = bin.share === null ? null : number(bin.share);
@@ -257,7 +272,7 @@ export function validateDistributions(value: unknown): PopulationDistributions {
             ? share !== null
             : share === null || share > 1 || !near(share, weight / total_weight)
         )
-          throw new Error(
+          invalid(
             "Distribution share disagrees with its declared total weight.",
           );
         return { label: string(bin.label), lower, upper, weight, share };
@@ -268,7 +283,7 @@ export function validateDistributions(value: unknown): PopulationDistributions {
           total_weight,
         )
       )
-        throw new Error(
+        invalid(
           "Distribution bins and missing values do not account for total weight.",
         );
       const series = {
@@ -284,7 +299,7 @@ export function validateDistributions(value: unknown): PopulationDistributions {
         total_weight,
       };
       const key = distributionDefinition(series, identity.period);
-      if (seen.has(key)) throw new Error("Duplicate distribution series.");
+      if (seen.has(key)) invalid("Duplicate distribution series.");
       seen.add(key);
       return series;
     }),

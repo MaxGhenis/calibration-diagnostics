@@ -88,7 +88,10 @@ export function configuredQualitySource(
         signal: AbortSignal.timeout(20_000),
       });
       if (!response.ok)
-        throw new Error(`Candidate evidence returned HTTP ${response.status}.`);
+        throw new ArtifactError(
+          "partial_artifact",
+          `Candidate evidence returned HTTP ${response.status}.`,
+        );
       if (Number(response.headers.get("content-length")) > MAX_ARTIFACT_BYTES)
         throw new ArtifactError(
           "malformed_artifact",
