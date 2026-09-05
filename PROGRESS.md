@@ -202,10 +202,12 @@ test, and the immutable candidate was not touched.
 
 ### Verified
 
-Every row below was run at the head this record describes, not at an earlier
-commit and then carried forward. The red row is the older head, `5627aac`;
-later commits added tests of their own, each red before its fix and named in
-the sections above.
+`bun test`, `tsc`, `bun run build` and the projection regeneration were all run
+at the final head. The browser pass ran at `456cc64`, the last commit that
+changed anything a browser executes: everything after it touches `PROGRESS.md`
+or the generated `next-env.d.ts` and nothing else. The red row is the older
+head `5627aac`; the commits after it added tests of their own, each red before
+its fix and named in the sections above.
 
 | Command | Result |
 | --- | --- |
