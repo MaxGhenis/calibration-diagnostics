@@ -12,6 +12,10 @@ Plan SHA256: 45544637213278dca2b2e126fcda78af1f8c77e849bf5bb454f69de92e088d15.
 - Confirmed existing servers 4397/4488/4403/4404; none changed.
 - Original root journals preserved; this author owns only this journal.
 
+- Dashboard captured exact original F001 normalized response before code changes.
+- Added invented three-node aggregate fixture (two implementation hashes, one cold computation and two cache hits), shared contract negative tests before implementation.
+- Copied unchanged D dependencies into private frontend node_modules; initial symlink was removed before build.
+
 ## Next
 - Agree shared ProjectionExecution/Node attachment contract.
 - Commit invented fixtures, implement pure exporter and shared dashboard verifier in parallel.

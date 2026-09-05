@@ -1,0 +1,1171 @@
+{
+  "schema_version": "microcosm.dashboard.receipt_graph.v1",
+  "available": true,
+  "projection": {
+    "schema_version": "microcosm.dashboard.receipt_projection.v1",
+    "version": 1,
+    "is_publisher_attachment": false,
+    "note": "A local reduction of the producer's preserved graph run manifests. Not a publisher attachment: the dashboard re-verifies its association with the immutable candidate manifest and the published build evidence on every request.",
+    "label_basis": "Stage names are plain renderings of the native node ids, which are shown alongside them. Groups are taken from the text before the first dot in each id."
+  },
+  "candidate": {
+    "country": "us",
+    "id": "us-graph-f001-geography-20260905-v1",
+    "run_id": "us-graph-f001-geography-20260905-v1",
+    "execution_status": "completed",
+    "release_eligibility": {
+      "reason": "Uncalibrated 1% development assembly with verified geography assignment. Direct, graph and cache-only replay checkpoints match. The displayed support and age distributions describe this intermediate population; year alignment, imputation, calibration and national/CD acceptance remain unfinished. This population is excluded from release.",
+      "status": "excluded"
+    },
+    "population": {
+      "entity": "person",
+      "period": "mixed-source assembly (development)",
+      "sha256": "9d64839e065953d94511dde19b29b2240f91c6a08bdec6b6aa3902f60553f9c6"
+    },
+    "geography": {
+      "levels": [
+        "national",
+        "state",
+        "congressional_district"
+      ],
+      "vintage": "119th_congress"
+    }
+  },
+  "binding": {
+    "candidate_manifest_sha256": "ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885",
+    "build_evidence_sha256": "1d3b94d8720b07cb1be22fe65efd88eba31787742c090b411d28938e40abbf6b",
+    "population_sha256": "9d64839e065953d94511dde19b29b2240f91c6a08bdec6b6aa3902f60553f9c6",
+    "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+    "computation_content_key": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+    "checks": [
+      {
+        "label": "Candidate manifest",
+        "detail": "Authenticated by its own digest and read for us-graph-f001-geography-20260905-v1."
+      },
+      {
+        "label": "Build evidence",
+        "detail": "Read through the published run-scoped attachment the candidate manifest binds, and verified against its digest."
+      },
+      {
+        "label": "Population",
+        "detail": "The projection, the candidate manifest and every recorded execution name one population digest."
+      },
+      {
+        "label": "Implementation",
+        "detail": "All recorded receipt implementation hashes agree with the candidate manifest and publisher summary. This checks identity agreement, not authentication of complete receipt bytes."
+      },
+      {
+        "label": "Cold run receipts",
+        "detail": "4 computed and 2 served from cache; the computed count matches the published kernel-call count. 2 projected source pins agree with the candidate's build evidence. The gate outcome, scope, passed verdict and checks agree with the published evidence."
+      },
+      {
+        "label": "Required replay receipts",
+        "detail": "0 computed and 6 served from cache; the computed count matches the published kernel-call count. 2 projected source pins agree with the candidate's build evidence. The gate outcome, scope, passed verdict and checks agree with the published evidence."
+      }
+    ]
+  },
+  "executions": [
+    {
+      "mode": "cold",
+      "label": "Cold run",
+      "description": "The graph run recorded with an empty result cache for the geography phase.",
+      "manifest_sha256": "3467a00d64cd786f4351f298fe6d41ef2d144fc6f3cd41a1e30e824df2330070",
+      "content_key": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+      "kernel_calls": 4,
+      "computed_count": 4,
+      "cache_hit_count": 2,
+      "receipt_count": 6,
+      "wall_time_seconds": 2.877
+    },
+    {
+      "mode": "replay",
+      "label": "Required replay",
+      "description": "The cache-only replay the producer required after the cold run, recorded under the build-evidence mode `resume`.",
+      "manifest_sha256": "20c963e2cb6989ad1df396a03f8494fb566a47e3a6d8055fe20d85035b91161b",
+      "content_key": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+      "kernel_calls": 0,
+      "computed_count": 0,
+      "cache_hit_count": 6,
+      "receipt_count": 6,
+      "wall_time_seconds": 1.869
+    }
+  ],
+  "nodes": [
+    {
+      "id": "assign_us_puma_ladder",
+      "label": "Geography assignment",
+      "group": "assign_us_puma_ladder",
+      "group_label": "Geography",
+      "role": "compute",
+      "kernel_ref": "us.production.geography_assign@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "seeded",
+      "numeric": "platform_bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [
+        "numpy",
+        "pandas"
+      ],
+      "seed": "3256092676407900830",
+      "phase": "assign_us_puma_ladder",
+      "typed_inputs": [
+        {
+          "name": "crosswalk",
+          "artifact": "crosswalk",
+          "type": "microcosm.us.cd_crosswalk_csv",
+          "type_version": 1,
+          "artifact_key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c",
+          "numeric": "platform_bitwise",
+          "tolerance": null,
+          "producer": "assign_us_puma_ladder.lookup",
+          "producer_key": "4b6c29a1396f9c2afa2ecd3509f1e9527bc36e86e8ebbc650a417f4ffb585735"
+        },
+        {
+          "name": "frame_context",
+          "artifact": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67",
+          "numeric": "platform_bitwise",
+          "tolerance": null,
+          "producer": "assemble_stacked_spine",
+          "producer_key": "25921441631b36a16b6a975b48365f51f74add0ded9e4b7779714e91aa8f7fec"
+        },
+        {
+          "name": "ladder",
+          "artifact": "ladder",
+          "type": "microcosm.us.puma_ladder_npz",
+          "type_version": 1,
+          "artifact_key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2",
+          "numeric": "platform_bitwise",
+          "tolerance": null,
+          "producer": "assign_us_puma_ladder.lookup",
+          "producer_key": "4b6c29a1396f9c2afa2ecd3509f1e9527bc36e86e8ebbc650a417f4ffb585735"
+        }
+      ],
+      "typed_outputs": [
+        {
+          "name": "frame_context",
+          "artifact": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "575ea54b3ac8cf4d8bcbc4643caa680c09aa2502bc328800fb07bd398326bdab",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        }
+      ],
+      "opaque_artifact_keys": [
+        {
+          "name": "frame_context",
+          "key": "575ea54b3ac8cf4d8bcbc4643caa680c09aa2502bc328800fb07bd398326bdab"
+        }
+      ],
+      "column_artifact_counts": [
+        {
+          "entity": "household",
+          "count": 3
+        }
+      ],
+      "column_artifact_total": 3,
+      "measures": [
+        {
+          "key": "district_vintage",
+          "label": "District vintage",
+          "value": "119th_congress"
+        },
+        {
+          "key": "target_district_count",
+          "label": "Target district count",
+          "value": 436
+        },
+        {
+          "key": "summary.household_rows",
+          "label": "Household rows",
+          "value": 17004
+        },
+        {
+          "key": "summary.assigned_puma_values",
+          "label": "Distinct PUMAs assigned",
+          "value": 2448
+        },
+        {
+          "key": "summary.assigned_county_fips_values",
+          "label": "Distinct counties assigned",
+          "value": 2296
+        },
+        {
+          "key": "summary.assigned_congressional_district_geoid_values",
+          "label": "Distinct districts assigned",
+          "value": 436
+        },
+        {
+          "key": "summary.puma_nonempty_weighted_share",
+          "label": "PUMA coverage (weighted)",
+          "value": 1
+        },
+        {
+          "key": "summary.county_fips_nonempty_weighted_share",
+          "label": "County coverage (weighted)",
+          "value": 1
+        },
+        {
+          "key": "summary.congressional_district_geoid_nonempty_weighted_share",
+          "label": "District coverage (weighted)",
+          "value": 1
+        },
+        {
+          "key": "summary.ladder_pumas",
+          "label": "PUMAs in the ladder",
+          "value": 2462
+        },
+        {
+          "key": "summary.sampling_basis",
+          "label": "Sampling basis",
+          "value": "population"
+        }
+      ],
+      "source_pins": [],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "computed",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "1bfee959459e67197135ab13da6b5365c9b8f77621a8674428888cfa51bb5a92",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "575ea54b3ac8cf4d8bcbc4643caa680c09aa2502bc328800fb07bd398326bdab"
+            }
+          ],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.1971
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "1bfee959459e67197135ab13da6b5365c9b8f77621a8674428888cfa51bb5a92",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "575ea54b3ac8cf4d8bcbc4643caa680c09aa2502bc328800fb07bd398326bdab"
+            }
+          ],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.0408
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": false
+    },
+    {
+      "id": "assemble_stacked_spine",
+      "label": "Spine harmonization",
+      "group": "assemble_stacked_spine",
+      "group_label": "Assembly",
+      "role": "compute",
+      "kernel_ref": "us.production.spine_harmonize@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "deterministic",
+      "numeric": "platform_bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [
+        "numpy",
+        "pandas"
+      ],
+      "seed": "17711177053124776724",
+      "phase": "assemble_stacked_spine",
+      "typed_inputs": [
+        {
+          "name": "frame_context",
+          "artifact": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540",
+          "numeric": "platform_bitwise",
+          "tolerance": null,
+          "producer": "assemble_stacked_spine.prepare",
+          "producer_key": "389e45152e18b23483d1090355431ff0cc254931e67d7fb57a70d99695687a27"
+        },
+        {
+          "name": "preparation",
+          "artifact": "preparation",
+          "type": "microcosm.us.stacked_spine_preparation",
+          "type_version": 1,
+          "artifact_key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7",
+          "numeric": "platform_bitwise",
+          "tolerance": null,
+          "producer": "assemble_stacked_spine.prepare",
+          "producer_key": "389e45152e18b23483d1090355431ff0cc254931e67d7fb57a70d99695687a27"
+        }
+      ],
+      "typed_outputs": [
+        {
+          "name": "frame_context",
+          "artifact": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        }
+      ],
+      "opaque_artifact_keys": [
+        {
+          "name": "frame_context",
+          "key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67"
+        }
+      ],
+      "column_artifact_counts": [
+        {
+          "entity": "family",
+          "count": 5
+        },
+        {
+          "entity": "household",
+          "count": 23
+        },
+        {
+          "entity": "marital_unit",
+          "count": 5
+        },
+        {
+          "entity": "person",
+          "count": 203
+        },
+        {
+          "entity": "spm_unit",
+          "count": 6
+        },
+        {
+          "entity": "tax_unit",
+          "count": 6
+        }
+      ],
+      "column_artifact_total": 248,
+      "measures": [
+        {
+          "key": "assembly.version",
+          "label": "Assembly receipt version",
+          "value": 4
+        },
+        {
+          "key": "assembly.sample_fraction",
+          "label": "Sample fraction",
+          "value": 0.01
+        },
+        {
+          "key": "assembly.sample_seed",
+          "label": "Sample seed",
+          "value": 578
+        },
+        {
+          "key": "assembly.mass_anchor_channel",
+          "label": "Mass anchor channel",
+          "value": "asec"
+        },
+        {
+          "key": "assembly.household_mass_shares.acs",
+          "label": "ACS household mass share",
+          "value": 0.5
+        },
+        {
+          "key": "assembly.household_mass_shares.asec",
+          "label": "ASEC household mass share",
+          "value": 0.5
+        },
+        {
+          "key": "mass.policy",
+          "label": "Weight mass policy",
+          "value": "declared"
+        },
+        {
+          "key": "mass.before",
+          "label": "Person weight mass before",
+          "value": 658387475.264073
+        },
+        {
+          "key": "mass.after",
+          "label": "Person weight mass after",
+          "value": 321556102.7718972
+        }
+      ],
+      "source_pins": [],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "25921441631b36a16b6a975b48365f51f74add0ded9e4b7779714e91aa8f7fec",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67"
+            }
+          ],
+          "frame_key": "e5a52f773f0dd5cef4a691be6b43c4daeb1ce9b32e54c2bed28d4bff44e2f18d",
+          "weight_key": "b2c056dc34ac60bb6259a6e475c9728ad571bde504454bd015c0219ca2ea9f65",
+          "wall_time_seconds": 0.7987
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "25921441631b36a16b6a975b48365f51f74add0ded9e4b7779714e91aa8f7fec",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67"
+            }
+          ],
+          "frame_key": "e5a52f773f0dd5cef4a691be6b43c4daeb1ce9b32e54c2bed28d4bff44e2f18d",
+          "weight_key": "b2c056dc34ac60bb6259a6e475c9728ad571bde504454bd015c0219ca2ea9f65",
+          "wall_time_seconds": 0.6371
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": false
+    },
+    {
+      "id": "assign_us_puma_ladder.lookup",
+      "label": "Crosswalk and ladder lookup",
+      "group": "assign_us_puma_ladder",
+      "group_label": "Geography",
+      "role": "compute",
+      "kernel_ref": "us.production.geography_lookup@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "deterministic",
+      "numeric": "platform_bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [
+        "numpy",
+        "pandas"
+      ],
+      "seed": "2722788286091320132",
+      "phase": "assign_us_puma_ladder",
+      "typed_inputs": [],
+      "typed_outputs": [
+        {
+          "name": "crosswalk",
+          "artifact": "crosswalk",
+          "type": "microcosm.us.cd_crosswalk_csv",
+          "type_version": 1,
+          "artifact_key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        },
+        {
+          "name": "ladder",
+          "artifact": "ladder",
+          "type": "microcosm.us.puma_ladder_npz",
+          "type_version": 1,
+          "artifact_key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        }
+      ],
+      "opaque_artifact_keys": [
+        {
+          "name": "crosswalk",
+          "key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c"
+        },
+        {
+          "name": "ladder",
+          "key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2"
+        }
+      ],
+      "column_artifact_counts": [],
+      "column_artifact_total": 0,
+      "measures": [
+        {
+          "key": "district_vintage",
+          "label": "District vintage",
+          "value": "119th_congress"
+        },
+        {
+          "key": "district_count",
+          "label": "Districts in the crosswalk",
+          "value": 436
+        },
+        {
+          "key": "puma_count",
+          "label": "PUMAs in the ladder",
+          "value": 2462
+        }
+      ],
+      "source_pins": [
+        {
+          "key": "congressional_district_vintage_crosswalk",
+          "label": "Congressional district vintage crosswalk",
+          "sha256": "c7cb040b1f57ca2ea2adcbfe60cc2b250ca23acbc4b640cd421e766fa54c1aec"
+        },
+        {
+          "key": "puma_ladder",
+          "label": "PUMA ladder",
+          "sha256": "39a2ab2abeab07a88362af7ab2940e0e1d50a297c919e4bbc6fb65bab51147d8"
+        }
+      ],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "computed",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "4b6c29a1396f9c2afa2ecd3509f1e9527bc36e86e8ebbc650a417f4ffb585735",
+          "output_keys": [
+            {
+              "name": "crosswalk",
+              "artifact_key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c"
+            },
+            {
+              "name": "ladder",
+              "artifact_key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2"
+            }
+          ],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.067
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "4b6c29a1396f9c2afa2ecd3509f1e9527bc36e86e8ebbc650a417f4ffb585735",
+          "output_keys": [
+            {
+              "name": "crosswalk",
+              "artifact_key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c"
+            },
+            {
+              "name": "ladder",
+              "artifact_key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2"
+            }
+          ],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.018
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": false
+    },
+    {
+      "id": "assemble_stacked_spine.prepare",
+      "label": "Assembly preparation",
+      "group": "assemble_stacked_spine",
+      "group_label": "Assembly",
+      "role": "compute",
+      "kernel_ref": "us.production.spine_prepare@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "seeded",
+      "numeric": "platform_bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [
+        "numpy",
+        "pandas",
+        "microunit",
+        "tables",
+        "h5py"
+      ],
+      "seed": "568334277337657007",
+      "phase": "assemble_stacked_spine",
+      "typed_inputs": [],
+      "typed_outputs": [
+        {
+          "name": "frame_context",
+          "artifact": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        },
+        {
+          "name": "preparation",
+          "artifact": "preparation",
+          "type": "microcosm.us.stacked_spine_preparation",
+          "type_version": 1,
+          "artifact_key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7",
+          "numeric": "platform_bitwise",
+          "tolerance": null
+        }
+      ],
+      "opaque_artifact_keys": [
+        {
+          "name": "frame_context",
+          "key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540"
+        },
+        {
+          "name": "preparation",
+          "key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7"
+        }
+      ],
+      "column_artifact_counts": [
+        {
+          "entity": "family",
+          "count": 5
+        },
+        {
+          "entity": "household",
+          "count": 23
+        },
+        {
+          "entity": "marital_unit",
+          "count": 5
+        },
+        {
+          "entity": "person",
+          "count": 203
+        },
+        {
+          "entity": "spm_unit",
+          "count": 6
+        },
+        {
+          "entity": "tax_unit",
+          "count": 6
+        }
+      ],
+      "column_artifact_total": 248,
+      "measures": [
+        {
+          "key": "preparation.schema",
+          "label": "Preparation schema",
+          "value": "microcosm.us.stacked-spine-preparation.v1"
+        },
+        {
+          "key": "preparation.stacked_manifest_version",
+          "label": "Stacked manifest version",
+          "value": 4
+        },
+        {
+          "key": "preparation.sampling.sample_fraction",
+          "label": "Sample fraction",
+          "value": 0.01
+        },
+        {
+          "key": "preparation.sampling.sample_seed",
+          "label": "Sample seed",
+          "value": 578
+        },
+        {
+          "key": "preparation.sampling.survey_samples.acs.realized_household_count",
+          "label": "ACS households sampled",
+          "value": 15316
+        },
+        {
+          "key": "preparation.sampling.survey_samples.acs.eligible_household_count",
+          "label": "ACS households eligible",
+          "value": 1531614
+        },
+        {
+          "key": "preparation.sampling.survey_samples.asec.realized_household_count",
+          "label": "ASEC households sampled",
+          "value": 1688
+        },
+        {
+          "key": "preparation.sampling.survey_samples.asec.eligible_household_count",
+          "label": "ASEC households eligible",
+          "value": 168852
+        },
+        {
+          "key": "preparation.mass_anchor_channel",
+          "label": "Mass anchor channel",
+          "value": "asec"
+        }
+      ],
+      "source_pins": [],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "389e45152e18b23483d1090355431ff0cc254931e67d7fb57a70d99695687a27",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540"
+            },
+            {
+              "name": "preparation",
+              "artifact_key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7"
+            }
+          ],
+          "frame_key": "e34f14b28f78c18959e1cbb6335d25c99d91b6076d8083dcc33011d6c7be0151",
+          "weight_key": null,
+          "wall_time_seconds": 0.6646
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "usable",
+          "outputs_usable": true,
+          "outputs_reason": "This receipt recorded its own outputs and its own gate, if any, allowed them.",
+          "node_key": "389e45152e18b23483d1090355431ff0cc254931e67d7fb57a70d99695687a27",
+          "output_keys": [
+            {
+              "name": "frame_context",
+              "artifact_key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540"
+            },
+            {
+              "name": "preparation",
+              "artifact_key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7"
+            }
+          ],
+          "frame_key": "e34f14b28f78c18959e1cbb6335d25c99d91b6076d8083dcc33011d6c7be0151",
+          "weight_key": null,
+          "wall_time_seconds": 0.5022
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": false
+    },
+    {
+      "id": "assign_us_puma_ladder.boundary",
+      "label": "Geography boundary step",
+      "group": "assign_us_puma_ladder",
+      "group_label": "Geography",
+      "role": "compute",
+      "kernel_ref": "us.production.geography_boundary@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "deterministic",
+      "numeric": "bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [],
+      "seed": "14156589572271846065",
+      "phase": null,
+      "typed_inputs": [],
+      "typed_outputs": [],
+      "opaque_artifact_keys": [],
+      "column_artifact_counts": [
+        {
+          "entity": "family",
+          "count": 5
+        },
+        {
+          "entity": "household",
+          "count": 23
+        },
+        {
+          "entity": "marital_unit",
+          "count": 5
+        },
+        {
+          "entity": "person",
+          "count": 203
+        },
+        {
+          "entity": "spm_unit",
+          "count": 6
+        },
+        {
+          "entity": "tax_unit",
+          "count": 6
+        }
+      ],
+      "column_artifact_total": 248,
+      "measures": [
+        {
+          "key": "mass.policy",
+          "label": "Weight mass policy",
+          "value": "conserve"
+        },
+        {
+          "key": "mass.before",
+          "label": "Person weight mass before",
+          "value": 321556102.7718972
+        },
+        {
+          "key": "mass.after",
+          "label": "Person weight mass after",
+          "value": 321556102.7718972
+        }
+      ],
+      "source_pins": [],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "computed",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "no_typed_artifact",
+          "outputs_usable": false,
+          "outputs_reason": "This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from. It did record 248 per-column artifacts, which the saved manifests do not name a consumer for.",
+          "node_key": "e6a8e1218537337d69f0d8d1f84238520036c3109fe09a9305f3929877b96d78",
+          "output_keys": [],
+          "frame_key": "e9a95206a62f28f7ebd890434100deac74b82f74e13954a140be93b13b128485",
+          "weight_key": null,
+          "wall_time_seconds": 1.0462
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "no_gate_record",
+          "gate_record": null,
+          "outputs": "no_typed_artifact",
+          "outputs_usable": false,
+          "outputs_reason": "This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from. It did record 248 per-column artifacts, which the saved manifests do not name a consumer for.",
+          "node_key": "e6a8e1218537337d69f0d8d1f84238520036c3109fe09a9305f3929877b96d78",
+          "output_keys": [],
+          "frame_key": "e9a95206a62f28f7ebd890434100deac74b82f74e13954a140be93b13b128485",
+          "weight_key": null,
+          "wall_time_seconds": 0.654
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": true
+    },
+    {
+      "id": "assign_us_puma_ladder.gate",
+      "label": "Geography integrity gate",
+      "group": "assign_us_puma_ladder",
+      "group_label": "Geography",
+      "role": "gate",
+      "kernel_ref": "us.production.geography_gate@1",
+      "kernel_impl_hash": "18e1570b739557c70f3133988542747149c6a5977f7cb75ef492f7b4dba658d0",
+      "determinism": "deterministic",
+      "numeric": "platform_bitwise",
+      "tolerance": null,
+      "runtime_dependencies": [
+        "numpy",
+        "pandas"
+      ],
+      "seed": "14368364689951577271",
+      "phase": null,
+      "typed_inputs": [],
+      "typed_outputs": [],
+      "opaque_artifact_keys": [],
+      "column_artifact_counts": [],
+      "column_artifact_total": 0,
+      "measures": [],
+      "source_pins": [],
+      "states": [
+        {
+          "mode": "cold",
+          "execution": "recorded",
+          "cache": "computed",
+          "gate": "pass",
+          "gate_record": {
+            "outcome": "pass",
+            "scope": "geography_assignment_integrity",
+            "passed": true,
+            "checks": [
+              {
+                "name": "us_puma_ladder",
+                "passed": true,
+                "failures": [],
+                "details": [
+                  {
+                    "key": "nyc_weighted_household_share",
+                    "value": 0.02769910116255789
+                  },
+                  {
+                    "key": "nyc_weighted_share_of_new_york",
+                    "value": 0.4129110204519946
+                  }
+                ]
+              }
+            ]
+          },
+          "outputs": "no_typed_artifact",
+          "outputs_usable": false,
+          "outputs_reason": "This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from.",
+          "node_key": "ee41e93496de41882495d010fb5f9b13e96dd7b28f7ac798aed15e93acabe4cf",
+          "output_keys": [],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.1039
+        },
+        {
+          "mode": "replay",
+          "execution": "recorded",
+          "cache": "hit",
+          "gate": "pass",
+          "gate_record": {
+            "outcome": "pass",
+            "scope": "geography_assignment_integrity",
+            "passed": true,
+            "checks": [
+              {
+                "name": "us_puma_ladder",
+                "passed": true,
+                "failures": [],
+                "details": [
+                  {
+                    "key": "nyc_weighted_household_share",
+                    "value": 0.02769910116255789
+                  },
+                  {
+                    "key": "nyc_weighted_share_of_new_york",
+                    "value": 0.4129110204519946
+                  }
+                ]
+              }
+            ]
+          },
+          "outputs": "no_typed_artifact",
+          "outputs_usable": false,
+          "outputs_reason": "This receipt recorded no typed or opaque artifact, which is what a recorded dependency is drawn from.",
+          "node_key": "ee41e93496de41882495d010fb5f9b13e96dd7b28f7ac798aed15e93acabe4cf",
+          "output_keys": [],
+          "frame_key": null,
+          "weight_key": null,
+          "wall_time_seconds": 0.0173
+        }
+      ],
+      "identity_differs": false,
+      "unconnected": true
+    }
+  ],
+  "edges": [
+    {
+      "kind": "execution",
+      "basis": "typed_artifact",
+      "from": "assemble_stacked_spine.prepare",
+      "to": "assemble_stacked_spine",
+      "modes": [
+        "cold",
+        "replay"
+      ],
+      "artifacts": [
+        {
+          "name": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "bd650de2e97f108b2fc2c0006d746140f403be0a43b86e46ecce215d96c05540"
+        },
+        {
+          "name": "preparation",
+          "type": "microcosm.us.stacked_spine_preparation",
+          "type_version": 1,
+          "artifact_key": "d67ea49394ae06e0f10c271d108fc8abc1a120da20f6df762a16513ee19cf9c7"
+        }
+      ]
+    },
+    {
+      "kind": "execution",
+      "basis": "typed_artifact",
+      "from": "assign_us_puma_ladder.lookup",
+      "to": "assign_us_puma_ladder",
+      "modes": [
+        "cold",
+        "replay"
+      ],
+      "artifacts": [
+        {
+          "name": "crosswalk",
+          "type": "microcosm.us.cd_crosswalk_csv",
+          "type_version": 1,
+          "artifact_key": "c6f279a615b8f1db9bf676fafb1628b928f457639a804ea8b5bc2b5c05be1d9c"
+        },
+        {
+          "name": "ladder",
+          "type": "microcosm.us.puma_ladder_npz",
+          "type_version": 1,
+          "artifact_key": "7255e2e89f6c7a9a766c9f064675fa525c741906d6c39d4288ce4e63d40d95f2"
+        }
+      ]
+    },
+    {
+      "kind": "execution",
+      "basis": "typed_artifact",
+      "from": "assemble_stacked_spine",
+      "to": "assign_us_puma_ladder",
+      "modes": [
+        "cold",
+        "replay"
+      ],
+      "artifacts": [
+        {
+          "name": "frame_context",
+          "type": "microcosm.us.frame_context",
+          "type_version": 1,
+          "artifact_key": "a09ae4ce29453f68c50714e6a54a9d7c366f1eac63de66237aea0b8804853c67"
+        }
+      ]
+    }
+  ],
+  "edge_families": [
+    {
+      "kind": "provenance",
+      "label": "Documentary citation",
+      "state": "unresolved",
+      "reason": "No documentary citation is recorded against any receipt in this run, so none is drawn.",
+      "edges": []
+    },
+    {
+      "kind": "semantic_alignment",
+      "label": "Semantic alignment",
+      "state": "unresolved",
+      "reason": "No concept alignment is recorded against any receipt in this run, so none is drawn.",
+      "edges": []
+    }
+  ],
+  "coverage": {
+    "complete": false,
+    "basis": "run_manifest_typed_artifacts",
+    "reason": "The preserved run manifests record typed artifact inputs and outputs receipt by receipt, not the compiled structural declaration of the graph. Column-level data flow, population-version and base relationships, source edges, the canonical order and column ownership are all part of the compiled graph and none of them are serialized into a run manifest. A receipt that declares no typed artifact therefore cannot be connected to any other, so this is a partial view of the run.",
+    "connected_nodes": 4,
+    "unconnected_nodes": 2,
+    "recorded_edges": 3
+  },
+  "gates": {
+    "records": 1,
+    "note": "One gate record in this run, scoped to geography_assignment_integrity. It attests to its own scope and to nothing else here."
+  },
+  "comparison": {
+    "same_computation_content_key": true,
+    "content_key": "73639eb8dee60b18f0da3a77aa058aba25bac3c57260ac2ccee3d488cf73e02a",
+    "content_key_note": "One content key identifies the computation and its outputs. It is taken over the node payloads with the run-level fields removed — whether each node was a cache hit, and how long it took — so two executions of the same computation share it and it does not identify an execution. The executions below are told apart by the byte digest of each recorded run manifest.",
+    "distinct_executions": true,
+    "title": "Same computation, two executions",
+    "execution_note": "The recorded run manifests have different byte digests, so these are two executions; the shared content key says the computation and its outputs were the same. That there were two is also the publisher's own record — its build evidence carries a check for each, one computing four kernel calls and one computing none. What it does not pin is either manifest's bytes: its own manifest digest is the content key they share, so which bytes belong to which execution is paired by this projection.",
+    "output_identity": {
+      "identical": true,
+      "compared_nodes": 6,
+      "compared_artifacts": 12,
+      "differences": []
+    },
+    "cache_differences": [
+      {
+        "id": "assign_us_puma_ladder",
+        "label": "Geography assignment",
+        "states": [
+          {
+            "mode": "cold",
+            "cache": "computed"
+          },
+          {
+            "mode": "replay",
+            "cache": "hit"
+          }
+        ]
+      },
+      {
+        "id": "assign_us_puma_ladder.lookup",
+        "label": "Crosswalk and ladder lookup",
+        "states": [
+          {
+            "mode": "cold",
+            "cache": "computed"
+          },
+          {
+            "mode": "replay",
+            "cache": "hit"
+          }
+        ]
+      },
+      {
+        "id": "assign_us_puma_ladder.boundary",
+        "label": "Geography boundary step",
+        "states": [
+          {
+            "mode": "cold",
+            "cache": "computed"
+          },
+          {
+            "mode": "replay",
+            "cache": "hit"
+          }
+        ]
+      },
+      {
+        "id": "assign_us_puma_ladder.gate",
+        "label": "Geography integrity gate",
+        "states": [
+          {
+            "mode": "cold",
+            "cache": "computed"
+          },
+          {
+            "mode": "replay",
+            "cache": "hit"
+          }
+        ]
+      }
+    ]
+  },
+  "mappings": [
+    {
+      "key": "calibration",
+      "label": "Calibration diagnostic",
+      "state": "missing",
+      "reason": "Not evaluated for this uncalibrated intermediate population; no reference, heldout or release acceptance is claimed."
+    },
+    {
+      "key": "target_binding",
+      "label": "Target and measurement binding",
+      "state": "unresolved",
+      "reason": "This graph view records no link from a calibration target or measurement to a step; it has not inspected calibration attachment contents."
+    },
+    {
+      "key": "chronicle_fact",
+      "label": "Chronicle published fact",
+      "state": "unresolved",
+      "reason": "This graph view records no link from a step to a Chronicle fact and has not inspected attachment contents for fact metadata. Nothing here is ingested into Chronicle."
+    },
+    {
+      "key": "concept_alignment",
+      "label": "Semantic concept alignment",
+      "state": "unresolved",
+      "reason": "This graph view records no semantic concept alignment; it does not infer one from an attachment or a stage name."
+    },
+    {
+      "key": "cross_dataset",
+      "label": "Cross-dataset evaluation",
+      "state": "missing",
+      "reason": "Not evaluated for this uncalibrated intermediate population; no reference, heldout or release acceptance is claimed."
+    }
+  ],
+  "limits": [
+    "The preserved run manifests record typed artifact inputs and outputs receipt by receipt, not the compiled structural declaration of the graph. Column-level data flow, population-version and base relationships, source edges, the canonical order and column ownership are all part of the compiled graph and none of them are serialized into a run manifest. A receipt that declares no typed artifact therefore cannot be connected to any other, so this is a partial view of the run.",
+    "The producer also compiles a structural declaration of the graph, holding the base and population relationships, the column-level flow and the source edges that a run manifest does not carry. No publisher attachment pins its bytes, so this view neither reads it nor draws from it: the relationships it records are absent here, not absent from the run.",
+    "One narrow slice of column ownership is published: the build evidence names, for the four household columns inside the gate's declared tolerance scope, which steps wrote each of them. It is not drawn either, because it describes that scope rather than the graph.",
+    "Stage names are plain renderings of the native node ids, which are shown next to them.",
+    "Cache state, execution state and gate state are read separately. A gate covers only its own declared scope and attests to nothing else in the run.",
+    "Recorded execution and release eligibility are separate readings: the candidate manifest records this run's execution as completed and its release eligibility as excluded.",
+    "The numeric-reproducibility platform tag recorded on each artifact is deliberately not carried into this view.",
+    "The publisher's build evidence records two executions of this run, one computing four kernel calls and one computing none. It does not pin either recorded run manifest's byte digest — its own manifest digest is the content key they share — so which bytes shown here belong to which execution is paired by this projection, not published. The population, implementation, content-key and source digests checked above are bound by that same build evidence."
+  ]
+}
