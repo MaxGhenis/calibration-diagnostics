@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 import { GlobalLoader } from "./global-loader";
@@ -10,7 +10,6 @@ import { SiteHeader } from "./site-header";
 import { SiteFooter } from "./site-footer";
 import { QualityStrip } from "./quality-strip";
 import { useQualityContext } from "./quality-context";
-import { navDrawerReducer } from "./nav-drawer";
 
 // The dashboard chrome, skinned to microcosm.institute. We deliberately do NOT use
 // ui-kit's <DashboardShell>/<Header> here: the shell paints an opaque bg-muted
@@ -19,64 +18,75 @@ import { navDrawerReducer } from "./nav-drawer";
 // (app/globals.css body::before + .site-grain) shows through, and the header /
 // footer come from the microcosm.institute-style components.
 //
-// Below `lg` the w-56 sidebar has nowhere to shrink to, so it becomes an
-// off-canvas drawer (absolutely positioned within .app-viewport, toggled by
-// the Menu button) instead of squeezing <main> down to a sliver.
+// Below `lg` the w-56 sidebar has nowhere to shrink to, so navigation instead
+// lives in a native <dialog>, opened modally by the Menu button. A <dialog>
+// without `open` is UA `display: none` -- invisible and unreachable by Tab or
+// AT with no extra markup -- and showModal() gives us the rest for free: the
+// background becomes inert (real focus containment, not just a visual scrim),
+// Escape and backdrop clicks close it, and focus returns to the invoking
+// button on close. That native machinery only engages for whichever control
+// currently calls showModal()/close(), so it can't reach into desktop's
+// always-static <aside> below and make it inert too. Desktop (`lg:` and up)
+// renders that separate, permanently-visible sidebar instead of the dialog.
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { country } = useCountry();
   const { release } = useQualityContext();
   const pathname = usePathname();
-  const [navOpen, dispatchNav] = useReducer(navDrawerReducer, false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const navToggleRef = useRef<HTMLButtonElement>(null);
 
-  // The drawer only exists below `lg`; leave it closed for the next route
-  // rather than carrying an open overlay across navigations.
+  // The dialog only exists below `lg`; leave it closed for the next route
+  // rather than carrying an open modal across navigations. close() on an
+  // already-closed dialog is a documented no-op, so this is safe every time.
   useEffect(() => {
-    dispatchNav({ type: "navigate" });
+    dialogRef.current?.close();
   }, [pathname]);
 
+  // If the viewport crosses into desktop while the dialog is still open
+  // (e.g. rotating a tablet, or resizing the window), close it explicitly
+  // rather than letting `lg:hidden` merely paint over a still-modal dialog --
+  // that would leave the rest of the page inert with nothing visible to
+  // close it.
   useEffect(() => {
-    if (!navOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      dispatchNav({ type: "escape" });
-      navToggleRef.current?.focus();
+    const query = window.matchMedia("(min-width: 1024px)");
+    const onChange = (event: MediaQueryListEvent) => {
+      if (event.matches) dialogRef.current?.close();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navOpen]);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
-  const closeNav = () => dispatchNav({ type: "close" });
+  const closeNav = () => dialogRef.current?.close();
+  const openNav = () => dialogRef.current?.showModal();
 
   return (
     <div className="flex min-h-screen flex-col text-foreground">
       <GlobalLoader />
       <SiteHeader />
       <div className="app-viewport relative flex">
-        {navOpen ? (
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={closeNav}
-            className="absolute inset-0 z-30 cursor-default bg-[var(--scrim)] backdrop-blur-[2px] lg:hidden"
-          />
-        ) : null}
-        <aside
-          id="nav-drawer"
-          className={`absolute inset-y-0 left-0 z-40 w-64 max-w-[80vw] transform overflow-y-auto border-r border-border-light bg-card shadow-lg backdrop-blur-sm transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-56 lg:max-w-none lg:translate-x-0 lg:bg-card/50 lg:shadow-none lg:transition-none ${
-            navOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <NavSidebar onNavigate={closeNav} />
+        <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border-light bg-card/50 lg:block">
+          <NavSidebar />
         </aside>
-        <main className="flex min-w-0 flex-1 flex-col overflow-auto">
-          <div className="flex items-center border-b border-border-light px-4 py-2 lg:hidden">
+        <dialog
+          ref={dialogRef}
+          aria-labelledby="nav-drawer-title"
+          onClose={() => navToggleRef.current?.focus()}
+          onClick={(event) => {
+            if (event.target === dialogRef.current) closeNav();
+          }}
+          className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none w-64 max-w-[80vw] border-0 border-r border-border-light bg-card p-0 shadow-lg open:flex open:flex-col backdrop:bg-[var(--scrim)] backdrop:backdrop-blur-[2px] lg:hidden"
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-border-light px-4 py-2">
+            <span
+              id="nav-drawer-title"
+              className="font-mono text-xs font-medium uppercase tracking-[0.08em] text-foreground/60"
+            >
+              Navigation
+            </span>
             <button
-              ref={navToggleRef}
               type="button"
-              aria-expanded={navOpen}
-              aria-controls="nav-drawer"
-              onClick={() => dispatchNav({ type: "toggle" })}
+              autoFocus
+              onClick={closeNav}
               className="inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs font-medium uppercase tracking-[0.08em] text-foreground/80 hover:text-foreground"
             >
               <svg
@@ -89,13 +99,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 strokeWidth="2"
                 strokeLinecap="round"
               >
-                {navOpen ? (
-                  <path d="M6 6l12 12M18 6l-12 12" />
-                ) : (
-                  <path d="M4 6h16M4 12h16M4 18h16" />
-                )}
+                <path d="M6 6l12 12M18 6l-12 12" />
               </svg>
-              {navOpen ? "Close menu" : "Menu"}
+              Close menu
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <NavSidebar onNavigate={closeNav} />
+          </div>
+        </dialog>
+        <main className="flex min-w-0 flex-1 flex-col overflow-auto">
+          <div className="flex items-center border-b border-border-light px-4 py-2 lg:hidden">
+            <button
+              ref={navToggleRef}
+              type="button"
+              aria-haspopup="dialog"
+              onClick={openNav}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 font-mono text-xs font-medium uppercase tracking-[0.08em] text-foreground/80 hover:text-foreground"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Menu
             </button>
           </div>
           <div key={`${country}:${release}`} className="min-w-0 flex-1 p-6 pt-0"><QualityStrip />{children}</div>
