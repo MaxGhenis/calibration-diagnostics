@@ -45,15 +45,24 @@ const object = (value: unknown): RecordValue => {
   return value as RecordValue;
 };
 
+/** Folded before matching, exactly as the exporter's `safe_text` matches
+ * against `value.lower()`. The exporter's `/`, `\` and `/users/` markers are
+ * covered by the control and separator class below, which rejects both slashes
+ * outright; the last three markers are this side's additions and are folded
+ * with the rest. Only the comparison is folded: the publisher's own text is
+ * returned and rendered exactly as it was published. */
+const TEXT_MARKERS = [
+  ".local",
+  ".h5",
+  "macbook",
+  "person_id",
+  "household_id",
+  "_buildo-runtime"
+];
 const text = (value: unknown, max = 160): void => {
-  assert(typeof value === "string" && value.length > 0 && value.length <= max && !/[\x00-\x1f\x7f/\\]/.test(value) && ![
-    ".local",
-    ".h5",
-    "MacBook",
-    "person_id",
-    "household_id",
-    "_buildo-runtime"
-  ].some(s => value.includes(s)));
+  assert(typeof value === "string" && value.length > 0 && value.length <= max && !/[\x00-\x1f\x7f/\\]/.test(value));
+  const folded = (value as string).toLowerCase();
+  assert(!TEXT_MARKERS.some(marker => folded.includes(marker)));
 };
 
 const id: Check = value => {
@@ -105,6 +114,18 @@ function shape(value: unknown, fields: Record<string, Check>): RecordValue {
 }
 
 const unique = (values: unknown[]) => assert(new Set(values).size === values.length);
+/** What the per-node source-pin check actually covered in this execution. The
+ * unconditional "source pins agree" sentence was true of the invented fixture
+ * and vacuous for the genuine export, whose four receipts declare no pin at
+ * all. Zero says so, and still says what was bound, because the two artifacts'
+ * source maps are compared whether or not any receipt pins one. */
+const sourcePinReading = (pins: number): string =>
+  pins === 0
+    ? "These receipts declare no per-node source pin; the aggregate source map this attachment carries is the one the build summary carries."
+    : pins === 1
+      ? "The one recorded node source pin agrees with the bound aggregate source map."
+      : `All ${pins} recorded node source pins agree with the bound aggregate source map.`;
+
 /** Typed inputs name a producer recorded in the same execution, so what they
  * declare is a directed graph. The exporter emits its nodes in a strict
  * topological order, but nothing in the wire contract required one, and a
@@ -582,12 +603,15 @@ export function normalizeGraphAttachment(
       for (const field of ["direct_checkpoint_table_weight_parity", "direct_real_engine_array_parity", "money_33_fields_all_axes_parity"])
         equal(c[field], true);
     const nodes = new Map(e.nodes.map(n => [n.id, n]));
+    let sourcePins = 0;
     for (const n of e.nodes) {
       const declared = graph.implementation_set.by_node[n.id];
       equal(n.kernel_ref, declared.kernel_ref);
       equal(n.kernel_impl_hash, declared.kernel_impl_hash);
-      for (const p of n.source_pins)
+      for (const p of n.source_pins) {
         equal(p.sha256, graph.source_sha256[p.key]);
+        sourcePins++;
+      }
       for (const a of n.typed_inputs) {
         const producer = a.producer ? nodes.get(a.producer) : undefined;
         assert(producer && producer.id !== n.id && producer.node_key === a.producer_key && a.producer_key !== null);
@@ -619,7 +643,7 @@ export function normalizeGraphAttachment(
     }
     checks.push({
       label: `${e.label} receipts`,
-      detail: `${computed} computed and ${hits} served from cache; ${e.source_preparation_calls} source preparation calls are counted separately. Exact execution-manifest byte digest and computation content key agree with the build summary. Source pins agree with the bound aggregate source map.`
+      detail: `${computed} computed and ${hits} served from cache; ${e.source_preparation_calls} source preparation calls are counted separately. Exact execution-manifest byte digest and computation content key agree with the build summary. ${sourcePinReading(sourcePins)}`
     });
   }
   assertAcyclic(dependencies);

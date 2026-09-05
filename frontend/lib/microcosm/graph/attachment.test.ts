@@ -479,3 +479,61 @@ describe("invented cross-execution typed input contracts", () => {
     expect(p.nodes.find(n => n.id === "c")!.states.map(s => s.execution)).toEqual(["recorded", "not_evidenced"]);
   });
 });
+
+describe("invented publisher text folding and source pin wording", () => {
+  // Every one of these was accepted at the frozen head, which matched the
+  // markers verbatim while the exporter matched them against value.lower().
+  const varied = [
+    "Host.LOCAL",
+    "Frame.H5",
+    "MACBOOK-pro",
+    "macbook-pro",
+    "Person_ID column",
+    "HOUSEHOLD_ID column",
+    "_BuildO-Runtime"
+  ];
+  test("folds every marker before matching a node label", () => {
+    for (const label of varied)
+      refusal(x => {
+        x.graph.executions[0].nodes[0].label = label;
+      });
+  });
+  test("folds every marker before matching a publisher reason", () => {
+    for (const value of varied)
+      expect(() => safePublisherReason(value)).toThrow();
+  });
+  test("renders accepted publisher text with its original casing", () => {
+    expect(safePublisherReason("Aggregate Graph Evidence Pending.")).toBe("Aggregate Graph Evidence Pending.");
+    const x = inventedGraph();
+    for (const e of x.graph.executions)
+      e.nodes[0].label = "Invented CREATE Step";
+    const v = verified(x), p = buildReceiptGraph(v.projection, x.manifest, x.build, v.checks);
+    expect(p.nodes.find(n => n.id === "a")!.label).toBe("Invented CREATE Step");
+  });
+  test("counts the source pins each execution actually recorded", () => {
+    // Every one of the three invented receipts pins the one invented source.
+    expect(verified().checks.find(c => c.label === "Invented cold receipts")!.detail)
+      .toContain("All 3 recorded node source pins agree");
+    const two = inventedGraph();
+    for (const e of two.graph.executions)
+      e.nodes[1].source_pins = [];
+    expect(verified(two).checks.find(c => c.label === "Invented cold receipts")!.detail)
+      .toContain("All 2 recorded node source pins agree");
+    const single = inventedGraph();
+    for (const e of single.graph.executions)
+      for (const n of e.nodes.slice(1))
+        n.source_pins = [];
+    expect(verified(single).checks.find(c => c.label === "Invented cold receipts")!.detail)
+      .toContain("The one recorded node source pin agrees");
+  });
+  test("says no per-node pin without implying nothing was checked", () => {
+    const x = inventedGraph();
+    for (const e of x.graph.executions)
+      for (const n of e.nodes)
+        n.source_pins = [];
+    const detail = verified(x).checks.find(c => c.label === "Invented cold receipts")!.detail;
+    expect(detail).toContain("declare no per-node source pin");
+    expect(detail).toContain("the one the build summary carries");
+    expect(detail).not.toContain("Source pins agree");
+  });
+});
