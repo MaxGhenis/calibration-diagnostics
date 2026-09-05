@@ -81,7 +81,27 @@ export function candidateId(value: unknown): string {
 }
 function date(value: unknown, field: string): string {
   const result = text(value, field);
-  if (!/^\d{4}-\d\d-\d\dT/.test(result) || !Number.isFinite(Date.parse(result)))
+  const parts =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(
+      result,
+    );
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    parts ? parts.slice(1).map((part) => Number(part ?? 0)) : [];
+  const calendar = new Date(0);
+  calendar.setUTCFullYear(year, month - 1, day);
+  if (
+    !parts ||
+    year < 1 ||
+    calendar.getUTCFullYear() !== year ||
+    calendar.getUTCMonth() !== month - 1 ||
+    calendar.getUTCDate() !== day ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59 ||
+    offsetHour > 23 ||
+    offsetMinute > 59 ||
+    !Number.isFinite(Date.parse(result))
+  )
     throw new ArtifactError(
       "malformed_artifact",
       `${field} must be an ISO timestamp.`,
@@ -123,7 +143,20 @@ function strings(value: unknown): Record<string, string> {
 }
 function json(raw: string): ObjectValue {
   try {
-    return object(JSON.parse(raw));
+    const result = object(JSON.parse(raw));
+    const pending: unknown[] = [result];
+    while (pending.length) {
+      const value = pending.pop();
+      if (typeof value === "number" && !Number.isFinite(value))
+        throw new ArtifactError(
+          "malformed_artifact",
+          "Quality JSON numbers must be finite.",
+        );
+      if (value && typeof value === "object") {
+        for (const child of Object.values(value)) pending.push(child);
+      }
+    }
+    return result;
   } catch (error) {
     if (error instanceof ArtifactError) throw error;
     throw new ArtifactError(
@@ -138,6 +171,90 @@ function assertSame(actual: unknown, expected: string, description: string) {
       "stale_artifact",
       `${description} does not match the selected candidate.`,
     );
+}
+
+type BindingContext = Pick<
+  CandidateQualityManifest,
+  "country" | "candidate_release_id" | "run_id" | "population" | "provenance"
+>;
+
+function identityBindings(
+  manifest: BindingContext,
+  scope: EvidenceAttachment["scope"],
+  name: string,
+  identity?: EvidenceIdentity,
+): Record<string, string> {
+  const expected: Record<string, string> =
+    scope === "model"
+      ? Object.fromEntries(
+          Object.entries(manifest.provenance).filter(([key]) =>
+            ["model_package", "model_version", "model_commit"].includes(key),
+          ),
+        )
+      : {
+          ...manifest.provenance,
+          candidate_release_id: manifest.candidate_release_id,
+          release_id: manifest.candidate_release_id,
+          run_id: manifest.run_id,
+        };
+  if (scope !== "model" && manifest.provenance.chronicle_snapshot_id)
+    expected.snapshot_id = manifest.provenance.chronicle_snapshot_id;
+  if (scope === "population" && manifest.population)
+    expected.population_sha256 = manifest.population.sha256;
+  expected.country = manifest.country;
+  if (name === "cross_dataset" && scope === "population") {
+    // This evaluation has its own run and snapshot, independent of calibration.
+    delete expected.run_id;
+    delete expected.snapshot_id;
+    delete expected.chronicle_snapshot_id;
+    if (identity?.snapshot_id)
+      expected.chronicle_snapshot_id = identity.snapshot_id;
+  }
+  return expected;
+}
+
+function validatePayloadIdentity(
+  manifest: BindingContext,
+  entry: EvidenceAttachment,
+  name: string,
+  payload: ObjectValue,
+): void {
+  const forbidden =
+    entry.scope === "model"
+      ? ["population_sha256", "candidate_release_id", "release_id"]
+      : entry.scope === "run"
+        ? ["population_sha256"]
+        : [];
+  if (forbidden.some((key) => Object.hasOwn(payload, key)))
+    throw new ArtifactError(
+      "stale_artifact",
+      "Embedded attachment claims an incompatible scope.",
+    );
+  const expected: Record<string, string> = {
+    ...identityBindings(manifest, entry.scope, name, entry.identity),
+    ...entry.identity,
+  };
+  if (
+    name === "cross_dataset" &&
+    entry.scope === "population" &&
+    entry.identity?.snapshot_id
+  )
+    expected.chronicle_snapshot_id = entry.identity.snapshot_id;
+  for (const [key, value] of Object.entries(expected)) {
+    if (!Object.hasOwn(payload, key)) continue;
+    let actual = payload[key];
+    if (
+      key === "country" &&
+      actual &&
+      typeof actual === "object" &&
+      !Array.isArray(actual)
+    ) {
+      // The existing presentation block uses code; its label is not an identity.
+      if (!Object.hasOwn(actual, "code")) continue;
+      actual = (actual as ObjectValue).code;
+    }
+    assertSame(actual, value, `${name} ${key}`);
+  }
 }
 
 /** The digest names an artifact's exact bytes, so it is taken before anything is
@@ -228,11 +345,18 @@ export class CandidateQualityReader {
           "malformed_artifact",
           "Candidate manifest must use its content-addressed path.",
         );
+      const status = execution(entry.execution_status);
+      const releaseEligibility = eligibility(entry.release_eligibility);
+      if (releaseEligibility.status === "eligible" && status !== "completed")
+        throw new ArtifactError(
+          "malformed_artifact",
+          "Eligible index entry requires completion.",
+        );
       return {
         candidate_release_id: id,
         run_id: text(entry.run_id, "run_id"),
-        execution_status: execution(entry.execution_status),
-        release_eligibility: eligibility(entry.release_eligibility),
+        execution_status: status,
+        release_eligibility: releaseEligibility,
         updated_at: date(entry.updated_at, "updated_at"),
         manifest: { path, sha256: hash },
       };
@@ -274,6 +398,14 @@ export class CandidateQualityReader {
         }
       : null;
     const provenance = strings(raw.provenance);
+    const runId = text(raw.run_id, "run_id");
+    const context: BindingContext = {
+      country: this.options.country,
+      candidate_release_id: id,
+      run_id: runId,
+      population,
+      provenance,
+    };
     const attachments: Record<string, EvidenceAttachment> = {};
     for (const [name, value] of Object.entries(
       object(raw.attachments, "attachments"),
@@ -320,7 +452,11 @@ export class CandidateQualityReader {
       } else if (entry.scope === "model") {
         text(identity.model_package, `${name} model package`);
         text(identity.model_version, `${name} model version`);
-        if (identity.population_sha256 || identity.candidate_release_id)
+        if (
+          identity.population_sha256 ||
+          identity.candidate_release_id ||
+          identity.release_id
+        )
           throw new ArtifactError(
             "malformed_artifact",
             "Model-only evidence must not claim population scope.",
@@ -346,6 +482,11 @@ export class CandidateQualityReader {
           "malformed_artifact",
           `Available ${name} evidence requires population, model or run scope.`,
         );
+      const bindings = identityBindings(context, entry.scope, name, identity);
+      for (const [key, value] of Object.entries(identity)) {
+        if (Object.hasOwn(bindings, key))
+          assertSame(value, bindings[key], `${name} ${key}`);
+      }
       attachments[name] = {
         status: "available",
         scope: entry.scope,
@@ -382,7 +523,7 @@ export class CandidateQualityReader {
       schema_version: QUALITY_SCHEMA,
       country: this.options.country,
       candidate_release_id: id,
-      run_id: text(raw.run_id, "run_id"),
+      run_id: runId,
       created_at: date(raw.created_at, "created_at"),
       execution_status: status,
       release_eligibility,
@@ -405,15 +546,7 @@ export class CandidateQualityReader {
           `${name.replaceAll("_", " ")} has not been published for this candidate.`,
       );
     const raw = json(await this.verified(entry.path!, entry.sha256!));
-    for (const [key, value] of Object.entries(entry.identity ?? {})) {
-      if (raw[key] !== undefined) assertSame(raw[key], value, `${name} ${key}`);
-    }
-    if (entry.scope === "population" && raw.release_id !== undefined)
-      assertSame(
-        raw.release_id,
-        manifest.candidate_release_id,
-        `${name} release identity`,
-      );
+    validatePayloadIdentity(manifest, entry, name, raw);
     return raw;
   }
 }

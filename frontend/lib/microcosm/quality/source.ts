@@ -1,4 +1,5 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
 import path from "node:path";
 import {
   ArtifactError,
@@ -24,6 +25,52 @@ export interface QualitySource {
   readText: (relativePath: string) => Promise<string>;
 }
 
+async function readRegularArtifact(resolved: string): Promise<Uint8Array> {
+  // NONBLOCK lets fstat reject a FIFO without waiting for a writer to open it.
+  const file = await open(
+    resolved,
+    constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW,
+  );
+  try {
+    const before = await file.stat({ bigint: true });
+    if (!before.isFile() || before.size > BigInt(MAX_ARTIFACT_BYTES))
+      throw new ArtifactError(
+        "malformed_artifact",
+        "Evidence must be a regular aggregate file (at most 64 MiB).",
+      );
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (size <= MAX_ARTIFACT_BYTES) {
+      const chunk = Buffer.allocUnsafe(
+        Math.min(64 * 1024, MAX_ARTIFACT_BYTES + 1 - size),
+      );
+      const { bytesRead } = await file.read(chunk, 0, chunk.length, null);
+      if (!bytesRead) break;
+      size += bytesRead;
+      if (size > MAX_ARTIFACT_BYTES)
+        throw new ArtifactError(
+          "malformed_artifact",
+          "Evidence exceeds the aggregate artifact size limit.",
+        );
+      chunks.push(chunk.subarray(0, bytesRead));
+    }
+    const after = await file.stat({ bigint: true });
+    if (
+      BigInt(size) !== before.size ||
+      after.size !== before.size ||
+      after.mtimeNs !== before.mtimeNs ||
+      after.ctimeNs !== before.ctimeNs
+    )
+      throw new ArtifactError(
+        "malformed_artifact",
+        "Evidence changed while being read.",
+      );
+    return Buffer.concat(chunks);
+  } finally {
+    await file.close();
+  }
+}
+
 export function configuredQualitySource(
   country: MicrocosmCountry,
 ): QualitySource {
@@ -44,20 +91,22 @@ export function configuredQualitySource(
   if (directory) {
     readBytes = async (relativePath) => {
       const root = await realpath(directory);
-      const resolved = await realpath(
-        path.resolve(root, safeArtifactPath(relativePath)),
-      );
+      const requested = path.resolve(root, safeArtifactPath(relativePath));
+      if (
+        relativePath === "index.json" &&
+        (await lstat(requested)).isSymbolicLink()
+      )
+        throw new ArtifactError(
+          "malformed_artifact",
+          "Candidate index must not be a symlink.",
+        );
+      const resolved = await realpath(requested);
       if (!resolved.startsWith(`${root}${path.sep}`))
         throw new ArtifactError(
           "malformed_artifact",
           "Artifact path escaped the configured directory.",
         );
-      if ((await stat(resolved)).size > MAX_ARTIFACT_BYTES)
-        throw new ArtifactError(
-          "malformed_artifact",
-          "Evidence must be a compact aggregate artifact (at most 64 MiB).",
-        );
-      return readFile(resolved);
+      return readRegularArtifact(resolved);
     };
   } else {
     let base: URL;

@@ -121,11 +121,24 @@ test("candidate calibration uses existing readers without a latest or staging po
 test("candidate tree resolves exact geography identities and refuses an ambiguous old label", async () => {
   const f = await bundle();
   await f.attach("calibration_diagnostics", {
-    schema_version: 7, release_id: "fixture-only",
-    dimensions: { region: { role: "geography", label: "Region", level: "region", values: { north: "Shared", south: "Shared" } } },
+    schema_version: 7,
+    release_id: "fixture-only",
+    dimensions: {
+      region: {
+        role: "geography",
+        label: "Region",
+        level: "region",
+        values: { north: "Shared", south: "Shared" },
+      },
+    },
     targets: ["north", "south"].map((id) => ({
-      name: `invented.${id}@2024`, source: { id: "invented" }, variable: { id: "population", measure: "count" },
-      dimensions: { region: id }, target: 100, initial_estimate: 90, final_estimate: 100,
+      name: `invented.${id}@2024`,
+      source: { id: "invented" },
+      variable: { id: "population", measure: "count" },
+      dimensions: { region: id },
+      target: 100,
+      initial_estimate: 90,
+      final_estimate: 100,
     })),
   });
   const digest = await f.save();
@@ -149,7 +162,9 @@ test("candidate tree resolves exact geography identities and refuses an ambiguou
   url.searchParams.set("path_geography", "Shared");
   const ambiguous = await targetTreeGET(new Request(url));
   expect(ambiguous.status).toBe(400);
-  expect((await ambiguous.json()).detail).toContain("more than one geographic identity");
+  expect((await ambiguous.json()).detail).toContain(
+    "more than one geographic identity",
+  );
   expect(url.searchParams.get("release")).toBe(release);
   const candidate = await loadCandidate("us", "fixture-only", digest);
   expect(candidate.manifest.population?.sha256).toBe("a".repeat(64));
@@ -392,7 +407,9 @@ test("unexpected read failures stay generic while authored contract messages rem
   });
   const digest = await f.save();
   const ask = (query: string) =>
-    GET(new Request(`http://localhost/api/microcosm/quality?country=us${query}`));
+    GET(
+      new Request(`http://localhost/api/microcosm/quality?country=us${query}`),
+    );
 
   // No index.json was ever published, so the underlying failure is an ENOENT
   // naming the configured directory — and every page polls this view.
@@ -402,10 +419,12 @@ test("unexpected read failures stay generic while authored contract messages rem
   expect(discovery.detail).not.toInclude("ENOENT");
 
   const bound = `&candidate=fixture-only&manifest_sha256=${digest}`;
-  expect(await (await ask(`&view=distributions${bound}`)).json()).toMatchObject({
-    artifact_error: "partial_artifact",
-    detail: "distributions has not been published for this candidate.",
-  });
+  expect(await (await ask(`&view=distributions${bound}`)).json()).toMatchObject(
+    {
+      artifact_error: "partial_artifact",
+      detail: "distributions has not been published for this candidate.",
+    },
+  );
   expect(await (await ask(`&view=support${bound}`)).json()).toMatchObject({
     artifact_error: "malformed_artifact",
     detail: "Aggregate rows must be an array.",
@@ -569,4 +588,73 @@ test("candidate target diagnostics preserves geography identities and immutable 
   const unchanged = await loadCandidate("us", "fixture-only", digest);
   expect(unchanged.manifest.population?.sha256).toBe("a".repeat(64));
   expect(unchanged.manifest.release_eligibility.status).toBe("excluded");
+});
+
+test("actual candidate target route refuses embedded identity conflicts before showing targets", async () => {
+  for (const [field, value] of [
+    ["run_id", "other-run"],
+    ["model_version", "2"],
+    ["snapshot_id", "other-snapshot"],
+    ["country", "uk"],
+  ]) {
+    const f = await bundle();
+    f.manifest.provenance = {
+      model_version: "1",
+      chronicle_snapshot_id: "calibration-snapshot",
+    };
+    await f.attach("calibration_diagnostics", {
+      schema_version: 7,
+      [field]: value,
+      targets: [
+        {
+          name: "invented.population@2024",
+          target: 10,
+          initial_estimate: 8,
+          final_estimate: 9,
+        },
+      ],
+    });
+    const digest = await f.save();
+    const response = await targetDiagnosticsGET(
+      new Request(
+        `http://example.test/api/microcosm/target-diagnostics?country=us&release=candidate:fixture-only:${digest}`,
+      ),
+    );
+    expect(response.status).not.toBe(200);
+    expect((await response.json()).detail).toContain(
+      "does not match the selected candidate",
+    );
+  }
+});
+
+test("local discovery cannot follow an index symlink", async () => {
+  const f = await bundle();
+  await writeFile(path.join(f.root, "outside-index.json"), "{}");
+  await symlink(
+    path.join(f.root, "outside-index.json"),
+    path.join(f.root, "index.json"),
+  );
+  await expect(
+    configuredQualitySource("us").reader.index(),
+  ).rejects.toMatchObject({ code: "malformed_artifact" });
+});
+
+test("local aggregate read refuses a FIFO in a bounded subprocess", async () => {
+  if (process.platform === "win32") return;
+  const f = await bundle();
+  const fifo = path.join(f.root, "aggregate.json");
+  expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
+  const sourceModule = path.join(import.meta.dir, "source.ts");
+  const code = `import { configuredQualitySource } from ${JSON.stringify(sourceModule)};
+    const timeout = setTimeout(() => process.exit(3), 1000);
+    try { await configuredQualitySource("us").readBytes("aggregate.json"); process.exitCode = 1; }
+    catch (error) { if (error.code === "malformed_artifact") console.log("refused"); else process.exitCode = 2; }
+    clearTimeout(timeout);`;
+  const child = Bun.spawn([process.execPath, "-e", code], {
+    env: { MICROCOSM_QUALITY_US_DIR: f.root },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(await child.exited).toBe(0);
+  expect(await new Response(child.stdout).text()).toContain("refused");
 });

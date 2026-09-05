@@ -9,7 +9,7 @@ Set exactly one source for each country used:
 - `MICROCOSM_QUALITY_US_DIR`: an absolute directory containing `index.json`, `manifests/` and aggregate attachments.
 - `MICROCOSM_QUALITY_US_BASE_URL`: a server-configured HTTP(S) directory with the same layout. Redirects, embedded credentials, query strings and fragments are refused.
 
-Use the corresponding registered country code for other countries. These are server settings, never browser query parameters. Local reads enforce the configured directory after resolving symlinks. Attachment paths must be safe relative paths; individual JSON artifacts are limited to 64 MiB. Do not place population microdata in this directory.
+Use the corresponding registered country code for other countries. These are server settings, never browser query parameters. Local reads enforce the configured directory after resolving symlinks, open only bounded regular files and refuse files that change during a read. The discovery index cannot be a symlink. Attachment paths must be safe relative paths; individual JSON artifacts, including manifests and indexes, are limited to 64 MiB. Do not place population microdata in this directory.
 
 Configure the ordinary Cross-dataset source separately when inspecting its historical/default view, following [the existing configuration contract](cross-dataset-api.md#configure-the-application). Candidate Cross-dataset evidence uses its bound attachment and never falls back to that default source.
 
@@ -51,7 +51,9 @@ Unavailable attachments contain `status: "pending" | "missing" | "failed"` and a
 
 Initial families are `calibration_diagnostics`, `support`, `distributions`, `cross_dataset`, `validation_reach`, `reform_validation`, `build_manifest`, `release_manifest` and `demographics`. The consumer preserves existing calibration and Cross-dataset schemas. The expected descriptor list is broader than the currently rendered evidence views: build/release/demographics feed calibration provenance, and reform validation remains owned by the scorecard.
 
-Population attachments with embedded `release_id`, `candidate_release_id` or population digests must match their binding. Every embedded identity field also present in its descriptor must agree. Validation reach additionally checks nested `source.version` and `source.commit` against its declared model identity. Only population-scoped optional build/release/demographics artifacts enter legacy calibration shaping, which derives population-specific coverage, target status and loss semantics from them. Run/model artifacts remain declared in the quality manifest without supplying those metrics.
+Present payload identities must match their scope and the manifest's known provenance, including when the descriptor omits an optional field. This covers candidate/release aliases, population digest, build run, model, snapshot and country; existing country presentation objects bind through `country.code`. Missing optional identities remain missing. Model inspection runs and snapshots may be independent of the population build. Validation reach additionally checks nested `source.version` and `source.commit` against its declared model identity. Only population-scoped optional build/release/demographics artifacts enter legacy calibration shaping, which derives population-specific coverage, target status and loss semantics from them. Run/model artifacts remain declared in the quality manifest without supplying those metrics.
+
+JSON numbers must remain finite after parsing, including exponent values. Timestamps require a real calendar date with `T`, seconds and `Z` or a numeric timezone. Geography names must contain non-whitespace text. Safe paths use ASCII letters, digits, `.`, `_`, `-` and `/`, start with a letter or digit, and contain no empty, `.` or `..` segments. These checks reject unsupported representations without rewriting authenticated bytes.
 
 ### Cross-dataset bundles
 
