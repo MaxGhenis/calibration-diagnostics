@@ -640,6 +640,13 @@ describe("binding the projection to the selected candidate", () => {
       /claims to be a publisher attachment/,
     ],
     [
+      "a projection claiming an authenticated attachment basis",
+      ({ projection }) => {
+        projection.basis = "authenticated_attachment";
+      },
+      /claims an authenticated attachment basis/,
+    ],
+    [
       "a projection written to an unsupported schema",
       ({ projection }) => {
         projection.schema_version = "microcosm.dashboard.receipt_projection.v99";
@@ -1833,6 +1840,19 @@ describe("the modules a reviewer has to read are plain text", () => {
 
 // Snapshot captured from the unchanged base adapter before attachment support.
 // Only these two additive fields are authorized on the shared legacy payload.
+test("a local projection may declare its own basis explicitly or leave it absent", () => {
+  const absent = projection();
+  expect(absent.basis).toBeUndefined();
+  expect(verifyProjectionBinding(absent, manifest(), CANDIDATE_MANIFEST_SHA, evidence()).length)
+    .toBeGreaterThan(0);
+  const declared = projection();
+  declared.basis = "local_projection";
+  expect(verifyProjectionBinding(declared, manifest(), CANDIDATE_MANIFEST_SHA, evidence()).length)
+    .toBeGreaterThan(0);
+  expect(buildReceiptGraph(declared, manifest(), evidence(), []).projection.basis)
+    .toBe("local_projection");
+});
+
 test("F001 complete response is byte-identical except explicit basis and set", () => {
   const response = graph();
   expect(response.projection.basis).toBe("local_projection");

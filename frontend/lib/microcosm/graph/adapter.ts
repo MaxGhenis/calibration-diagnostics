@@ -285,6 +285,15 @@ export function verifyProjectionBinding(
     refuse("The stored receipt projection uses an unsupported schema.");
   if (projection.is_publisher_attachment !== false)
     refuse("The stored receipt projection claims to be a publisher attachment.");
+  // The flag above and this basis are two separate claims, and only the flag
+  // was pinned. A registered projection declaring `authenticated_attachment`
+  // reached `projectionBasisReading`, which labels it an authenticated
+  // aggregate graph attachment -- exactly what a local projection is not.
+  // Registered projections are local and reviewed, so this is defence in
+  // depth; the shipped F001 projection declares no basis at all, and an absent
+  // basis still reads as `local_projection` below.
+  if (projection.basis !== undefined && projection.basis !== "local_projection")
+    refuse("The stored receipt projection claims an authenticated attachment basis.");
   if (projection.country !== manifest.country)
     refuse("The stored receipt projection is for a different country.");
   if (projection.candidate_release_id !== manifest.candidate_release_id)
