@@ -111,22 +111,20 @@ export function useResolvedComparison(): ResolvedComparison {
   const incumbentManifest = useQuery(
     manifestOptions(selection.country, incumbentToken),
   );
-  // The pointer names a release, not a population, so the implicit Latest
-  // selection is resolved to the concrete id the picker labels it with before
-  // either side of the comparison is identified.
+  // The pointer names a release, not a population, so the selected side is
+  // resolved to the concrete id the picker labels it with -- from the empty
+  // default or from a written-out "latest" -- before either side is identified.
   const latest =
     releases.data?.latest_release_id ||
     releases.data?.releases?.[0]?.release_id ||
     "";
+  const selectedRelease = selected ? "" : resolvedReleaseId(release, latest);
   return resolveComparison({
     requested: requestedIncumbent,
     incumbent: selection.incumbent,
     selected: selected
       ? candidatePopulationIdentity(selection.country, selectedManifest.data)
-      : publishedPopulationIdentity(
-          selection.country,
-          resolvedReleaseId(release, latest),
-        ),
+      : publishedPopulationIdentity(selection.country, selectedRelease),
     against: incumbentToken
       ? candidatePopulationIdentity(selection.country, incumbentManifest.data)
       : publishedPopulationIdentity(selection.country, selection.incumbent),
@@ -134,7 +132,7 @@ export function useResolvedComparison(): ResolvedComparison {
       Boolean(requestedIncumbent) &&
       (selectedManifest.isLoading ||
         incumbentManifest.isLoading ||
-        (!selected && !selection.release && releases.isLoading)),
+        (!selected && !selectedRelease && releases.isLoading)),
   });
 }
 
