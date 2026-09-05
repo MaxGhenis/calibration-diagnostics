@@ -41,11 +41,15 @@ export function PageHeader({
   // sibling of the description rather than wrapped in a short <header>, so the
   // sticky bar's containing block is the tall page content and it stays pinned
   // to the top through the whole scroll.
+  //
+  // The background is fully opaque rather than a translucent wash: the bar
+  // stays pinned over long scrolling tables, and at 75-85% opacity the rows
+  // passing underneath read straight through the page title.
   return (
     <>
       <div
         ref={headerRef}
-        className="sticky top-0 z-20 -mx-6 flex flex-wrap items-start justify-between gap-4 border-b border-border bg-background/85 px-6 pb-3 pt-6 backdrop-blur supports-[backdrop-filter]:bg-background/75"
+        className="sticky top-0 z-20 -mx-6 flex flex-wrap items-start justify-between gap-4 border-b border-border bg-background px-6 pb-3 pt-6"
       >
         <div className="min-w-0 flex-1">
           <div className="site-eyebrow mb-1">{eyebrow}</div>
