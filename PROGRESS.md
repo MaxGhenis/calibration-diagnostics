@@ -136,7 +136,23 @@ identifiers from both the route body and the rendered markup.
 Quality's "Build provenance" attachment row now links to the Pipeline page
 through `QualityLink`, so the candidate travels with the reader.
 
+### Exercised in a real browser
+
+WebKit (Playwright 1.56, `p.webkit`), against `bun run dev` on port 4471 with
+`MICROCOSM_QUALITY_US_DIR` pointed at the real quality directory. Ports 4397 and
+4398 were left alone. 26 of 26 checks pass: six receipts listed and six cards
+drawn with three edges; partial coverage stated; Enter, ArrowUp/Down, Home/End,
+Escape and focus restoration; the candidate surviving every move; the execution
+toggle; the folded, dated July overview and its ACS rent notice; reduced motion;
+390px with no horizontal overflow, no desktop-only blocker and the inspector
+stacked above the canvas; and an unsupported candidate reading unavailable
+without showing this one. No console or page errors.
+
+That pass found one real defect, now fixed: `graphSelectionUrl` returned a bare
+pathname, and the router prepends the app's base path, so selecting a step
+navigated to a doubled path and a 404. It returns an absolute URL now, the same
+shape `selectionUrl` already returned for the candidate selector.
+
 ## Next
 
-1. WebKit pass on a port that is not 4397 or 4398.
-2. Author report and patch.
+1. Author report and patch.

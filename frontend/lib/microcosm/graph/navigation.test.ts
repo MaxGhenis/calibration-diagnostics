@@ -55,14 +55,14 @@ describe("a link that carries a reading", () => {
 });
 
 describe("writing the reading back into the URL", () => {
+  // The dashboard is served under a base path, and the router prepends it, so
+  // what goes back to the router has to keep its origin rather than be reduced
+  // to a pathname that would end up doubled.
   const current =
-    "http://dashboard.test/microcosm/pipeline?country=us&candidate=us-graph-f001-geography-20260905-v1&manifest_sha256=ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885&incumbent=candidate%3Aother%3Aabc";
+    "http://dashboard.test/calibration/dashboard/microcosm/pipeline?country=us&candidate=us-graph-f001-geography-20260905-v1&manifest_sha256=ff2f231bbe96267bbb230264cece5131314edab449d9cdd03b85aa452535b885&incumbent=candidate%3Aother%3Aabc";
 
   test("leaves the candidate selection exactly as it was", () => {
-    const next = new URL(
-      graphSelectionUrl(current, { node: "assign_us_puma_ladder" }),
-      "http://dashboard.test",
-    );
+    const next = new URL(graphSelectionUrl(current, { node: "assign_us_puma_ladder" }));
     expect(next.searchParams.get("country")).toBe("us");
     expect(next.searchParams.get("candidate")).toBe(
       "us-graph-f001-geography-20260905-v1",
@@ -76,20 +76,19 @@ describe("writing the reading back into the URL", () => {
 
   test("drops its own key rather than writing an empty one", () => {
     const withNode = graphSelectionUrl(current, { node: "assemble_stacked_spine" });
-    const cleared = new URL(
-      graphSelectionUrl(`http://dashboard.test${withNode}`, { node: "" }),
-      "http://dashboard.test",
-    );
+    const cleared = new URL(graphSelectionUrl(withNode, { node: "" }));
     expect(cleared.searchParams.has("node")).toBe(false);
     expect(cleared.searchParams.get("candidate")).toBe(
       "us-graph-f001-geography-20260905-v1",
     );
   });
 
-  test("returns a same-origin path, never an absolute URL", () => {
-    expect(graphSelectionUrl(current, { execution: "replay" })).toStartWith(
-      "/microcosm/pipeline?",
+  test("keeps the base path the router will prepend to", () => {
+    const next = graphSelectionUrl(current, { execution: "replay" });
+    expect(next).toStartWith(
+      "http://dashboard.test/calibration/dashboard/microcosm/pipeline?",
     );
+    expect(new URL(next).pathname).toBe("/calibration/dashboard/microcosm/pipeline");
   });
 
   test("keeps the fragment the reader arrived on", () => {

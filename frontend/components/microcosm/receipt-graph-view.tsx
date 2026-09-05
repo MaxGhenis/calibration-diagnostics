@@ -538,7 +538,7 @@ export function ReceiptGraphSurface({
         </p>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(220px,270px)_minmax(0,1fr)_minmax(260px,330px)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(196px,240px)_minmax(0,1fr)_minmax(248px,312px)]">
         <div className="order-1 flex min-w-0 flex-col gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-foreground">

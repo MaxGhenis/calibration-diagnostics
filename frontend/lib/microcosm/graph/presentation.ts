@@ -14,8 +14,8 @@ import type {
   ReceiptGraphNode,
 } from "./types";
 
-export const NODE_WIDTH = 224;
-export const NODE_HEIGHT = 78;
+export const NODE_WIDTH = 184;
+export const NODE_HEIGHT = 76;
 
 export interface AxisReading {
   label: string;
@@ -175,7 +175,7 @@ export function layoutReceiptGraph(
   const connected = nodes.filter((node) => !node.unconnected);
   const unconnected = nodes.filter((node) => node.unconnected);
   const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: "LR", ranksep: 96, nodesep: 30, marginx: 8, marginy: 8 });
+  graph.setGraph({ rankdir: "LR", ranksep: 64, nodesep: 26, marginx: 8, marginy: 8 });
   graph.setDefaultEdgeLabel(() => ({}));
   for (const node of connected)
     graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
@@ -198,8 +198,8 @@ export function layoutReceiptGraph(
   unconnected.forEach((node, index) => {
     placed.push({
       id: node.id,
-      x: index * (NODE_WIDTH + 30) + 8,
-      y: bottom + 72,
+      x: index * (NODE_WIDTH + 26) + 8,
+      y: bottom + 48,
     });
   });
   return placed;
