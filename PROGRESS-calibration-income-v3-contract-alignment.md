@@ -62,3 +62,36 @@ export, does not install any genuine candidate, and writes no approval.
 - The exporter's own test fixture renames the 19 evidence columns to
   `EVIDENCE_0…18`, which hides the dotted real names. This lane uses the real
   roster instead.
+
+## Ground truth established (this session)
+
+The corrected exporter was run through its own fixture helper with the real
+production 28-column roster substituted, by
+`R/calibration-income-v3-contract-alignment-generate-export.py`. Re-run this
+session: the two artifacts reproduce **byte-identically**
+(`graph-receipts.json` `44f09ca7…`, `build-summary.json` `7a33f6df…`), so the
+shape below is read off real exporter output, not hand-maintained.
+
+| contract point | exporter output |
+|---|---|
+| `reported_income.basis` | `price_basis=census_ccpiu_annual_2024`, `price_target_year="2024"`, `price_basis_resource_sha256=88cec207…`; **no `price_target`** |
+| `quality.missing` | 9 items, **no `prior_wages`** |
+| `reported_income.not_claimed` | 5 items, **includes `prior_wages`** |
+| `scope.note` | "Fifteen sampled households from three source cohorts. This small engineering sample does not establish population accuracy." |
+| `accounting_columns[0]` | `{name: "person_id", dtype: "<i8", sha256: …}` — 28 entries, `name`/`dtype`/`sha256` only |
+| producer roster | `INPUT_PRODUCERS`: accounting may consume `create` + `select_households`, **never** `engine_current_money` |
+
+The 28 names were computed from production `graph_asec_income.py`
+(`COORDINATES + RESULT_COLUMNS + EVIDENCE_COLUMNS`) and match, in order, the
+roster independently recorded in `R/us-income-v3-505hh-identity-probe.json`
+under `sides/{I,K}/contracts/ACCOUNTING_COLUMNS`. Row width 91 = 8x9 + 19.
+
+Zero-origin bound: the exporter requires `sum(signed classes) == 52` per result
+column but sets **no** bound on zero-origin class counts. The reader's
+`bounded(0, 52)` is legitimate — the classes are a per-person-per-year
+classification and the exporter's contract accounts exactly 52 people. Per-cohort
+*person* counts are not published, so the bound stays 52 and is not narrowed.
+
+`upstream/main` re-verified current this session against GitHub
+(`210f8a3f…`, 2026-08-30). `git fetch upstream` still fails with the pre-existing
+"pack has 90 unresolved deltas"; the cached ref is unchanged and correct.
