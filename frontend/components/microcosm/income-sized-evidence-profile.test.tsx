@@ -175,9 +175,20 @@ describe("the measurement evidence is drawn, because a measured size needs it", 
     expect(WIDE.markup).toContain("per source cohort");
     expect(WIDE.markup).toContain("41 selected from 4,100 eligible");
     expect(SMALL.markup).toContain("9 selected from 900 eligible");
-    // The publisher's own rule token is still shown, beneath the reading.
-    for (const { markup } of [SMALL, WIDE])
+    // The publisher's own rule token is still shown, beneath the reading, and
+    // now with the recorded decimal beside it. That is what makes "1%" checkable
+    // from the page: floored against a cohort's eligible count drawn above, it
+    // lands on that cohort's own household count.
+    for (const { markup } of [SMALL, WIDE]) {
       expect(markup).toContain("floor(fraction * eligible)");
+      expect(markup).toContain("fraction = 0.01");
+    }
+    const measurement = WIDE.payload.evidence_profile!.scope.measurement!;
+    for (const cohort of WIDE.payload.evidence_profile!.scope
+      .households_by_source_cohort)
+      expect(
+        Math.floor(measurement.sampling_fraction * cohort.eligible_households!),
+      ).toBe(cohort.households);
   });
 
   test("eligible households are drawn beside the realised cohorts", () => {

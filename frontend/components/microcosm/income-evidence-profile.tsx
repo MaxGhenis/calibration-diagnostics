@@ -325,10 +325,11 @@ function Slice({ profile }: { profile: EvidenceProfileReading }) {
 
 /** The recorded fraction as a percentage, at the precision it was recorded to.
  *
- * `0.01` is drawn as "1%" and `0.003` as "0.3%"; nothing is rounded away, so a
- * fraction with more digits keeps them. The publisher's own decimal is shown
- * beside the reading, the way the price basis token is, so the reading can be
- * checked rather than taken. */
+ * `0.01` is drawn as "1%" and `0.003` as "0.3%", to twelve significant digits --
+ * a fraction carrying more than that would be rounded here, which no recorded
+ * sampling fraction is anywhere near. The reading is a reading: the publisher's
+ * own decimal is drawn beneath it beside the rule token, so the percentage can
+ * be checked against the number it came from rather than taken. */
 function fractionReading(fraction: number): string {
   const percent = fraction * 100;
   return `${percent.toPrecision(12).replace(/\.?0+$/, "")}%`;
@@ -367,9 +368,12 @@ function Measurement({
       </p>
       <dl className="mt-2 divide-y divide-border/60">
         <Row label="Selection">
-          {/* The rule in words with its operands, then the publisher's own rule
-              token beneath it. A reader who cannot audit the size from the page
-              has been shown a method rather than evidence. */}
+          {/* The rule in words with its operands, then the publisher's own
+              rule token and recorded fraction beneath it. With the eligible
+              count drawn per cohort above, that is everything the rule needs:
+              a reader can floor the fraction against a cohort's eligible count
+              and land on the cohort's own number. A reader who cannot audit the
+              size from the page has been shown a method rather than evidence. */}
           <span>
             {fractionReading(measurement.sampling_fraction)} of eligible
             households, {tokenReading(measurement.selection_rule_scope)}
@@ -379,7 +383,8 @@ function Measurement({
             {countReading(measurement.eligible_households)} eligible
           </span>
           <span className="mt-0.5 block text-muted-foreground">
-            <Mono>{measurement.selection_rule}</Mono>
+            <Mono>{measurement.selection_rule}</Mono>{" "}
+            <Mono>fraction = {measurement.sampling_fraction}</Mono>
           </span>
         </Row>
         {measurement.nesting.length === 0 ? null : (
