@@ -1,0 +1,11 @@
+{
+  "path": "manifests/8d3665e19692c9f96d4e0892887c5877d91e9742cf9498e3301d64e0566a89f2.json",
+  "sha256": "8d3665e19692c9f96d4e0892887c5877d91e9742cf9498e3301d64e0566a89f2",
+  "profile": "us_combined_asec_acs_national_age_v1",
+  "graph_receipts_sha256": "b9b0e78c7504aebfdf94e284cb3f3366237878eac21d2c433f0d1197858d0c83",
+  "build_summary_sha256": "91470e36f5173d153730530a78e016ec92fe16520b34ecefdd9d85418cc54a3b",
+  "population_sha256": "efcf9e2005ecbb53c6224ef14d9463bc1c43e4b4be844c8dc8b216e4c5aef0ad",
+  "households": 200,
+  "persons": 340,
+  "index_updated": false
+}

@@ -1,3 +1,4 @@
+import type { CombinedAgeProfile } from "./combined-age-types";
 // Turn a checked-in receipt projection into the payload the view draws, but
 // only once the projection has been shown to describe the selected immutable
 // candidate. The projection is local evidence data, not a publisher attachment,
@@ -112,6 +113,7 @@ export interface ReceiptProjection {
   /** Only an authenticated attachment that declared a publisher evidence
    * profile carries one. A checked-in local projection never does. */
   evidence_profile?: EvidenceProfileReading | null;
+  combined_age_profile?: CombinedAgeProfile;
   executions: ProjectionExecution[];
 }
 
@@ -1079,14 +1081,15 @@ export function buildReceiptGraph(
     {
       key: "calibration",
       label: "Calibration diagnostic",
-      ...attachmentMapping(manifest, "calibration_diagnostics", "calibration diagnostic"),
+      ...(projection.combined_age_profile ? { state: "present" as const, reason: "The authenticated combined profile contains recorded national age estimates, support and weight diagnostics. Its column provenance binds the diagnostics digest; launch validation remains incomplete." } : attachmentMapping(manifest, "calibration_diagnostics", "calibration diagnostic")),
     },
     {
       key: "target_binding",
       label: "Target and measurement binding",
       state: "unresolved",
-      reason:
-        "This graph view records no link from a calibration target or measurement to a step; it has not inspected calibration attachment contents.",
+      reason: projection.combined_age_profile
+        ? "The combined profile verifies all 18 S0101 cell identifiers, age measures and published targets. No additional target-to-step edge is drawn beyond the manifest’s recorded typed producer references."
+        : "This graph view records no link from a calibration target or measurement to a step; it has not inspected calibration attachment contents.",
     },
     {
       key: "chronicle_fact",
@@ -1137,7 +1140,9 @@ export function buildReceiptGraph(
     // manifest digest is the shared content key, so it pins no byte digest.
     // The closing clause names source digests only where receipts declared a
     // source pin for that binding to have happened to.
-    attached
+    projection.combined_age_profile
+      ? "The authenticated combined attachment binds four execution-manifest byte digests to their phase content keys through matched provenance. Source preparation calls are counted separately from kernel calls. This reader checks aggregate attachments; it does not read raw manifests or population arrays and does not infer a scientific pass from cache reuse."
+      : attached
       ? "The authenticated publisher attachment declares aggregate graph structure. The build summary binds each exact execution-manifest byte digest separately from its computation content key. These are pointers to recorded raw execution evidence; this dashboard has not independently interpreted those raw manifest bytes or recomputed array parity. Source preparation is a separate recorded call count, never a graph node. No scientific gate is inferred from parity or cache equality."
       : `The publisher's build evidence records ${countWord(executionCount)} ${plural(executionCount, "execution")} of this run${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. It does not pin ${executionCount === 1 ? "the recorded run manifest's" : executionCount === 2 ? "either recorded run manifest's" : "any recorded run manifest's"} byte digest — its own manifest digest is the content key ${executionCount === 1 ? "it uses" : "they share"} — so which bytes shown here belong to ${executionCount === 1 ? "that execution" : "which execution"} is paired by this projection, not published. The population, implementation${projectedSourcePins ? ", content-key and source digests" : " and content-key digests"} checked above are bound by that same build evidence.`,
     ...(divergentPins.length
@@ -1228,12 +1233,14 @@ export function buildReceiptGraph(
       // one run's execution count is stated in one place. Verification has
       // already forced the byte digests apart and the content keys together,
       // so the only thing that varies between runs is how many there were.
-      title:
-        executionCount === 1
+      title: projection.combined_age_profile
+        ? "Composition and calibration, four recorded executions"
+        : executionCount === 1
           ? "One recorded execution"
           : `Same computation, ${countWord(executionCount)} executions`,
-      execution_note:
-        attached
+      execution_note: projection.combined_age_profile
+        ? "Composition and calibration have distinct computation content keys. Cold and warm composition share one key; the calibration extension and replay share the other. All four execution-manifest byte digests remain distinct, and the nine composition node identities stay unchanged in the calibration passes. Checkpoint materialization is provenance only."
+        : attached
           ? `The publisher authenticates ${countWord(executionCount)} recorded ${plural(executionCount, "execution")} with distinct execution-manifest byte digests and a shared computation content key${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The build summary binds both identities for each execution. This authenticates aggregate evidence and its declared pointers; the browser does not independently interpret the raw execution manifests.`
           : executionCount === 1
           ? `One recorded run manifest, so this is a single recorded execution${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The publisher's build evidence carries one check for it. What it does not pin is that manifest's bytes: its own manifest digest is the content key, so which bytes belong to this execution is paired by this projection.`
@@ -1243,6 +1250,7 @@ export function buildReceiptGraph(
     },
     mappings,
     ...(projection.evidence_profile ? { evidence_profile: projection.evidence_profile } : {}),
+    ...(projection.combined_age_profile ? { combined_age_profile: projection.combined_age_profile } : {}),
     limits,
   };
 }

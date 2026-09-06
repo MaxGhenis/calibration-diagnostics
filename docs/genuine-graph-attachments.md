@@ -15,3 +15,8 @@ The shared state, gate, edge and renderer functions are reused. Failed, absent, 
 `projection.basis` exhaustively distinguishes `local_projection` from `authenticated_attachment`. The F001 source and projection fixtures remain unchanged; a full response snapshot asserts every legacy response field is unchanged after removing only `projection.basis` and `binding.implementation_set`.
 
 Tests use invented aggregate fixtures and private ephemeral evidence directories with direct immutable URLs. They do not publish a discovery index or register a real run. Production browser checks and output-only real-run integration are recorded separately in the author receipt.
+
+The combined ASEC+ACS national age profile has its own closed attachment reader
+and evidence panel. See [Combined survey national age evidence](combined-age-evidence-profile.md)
+for its four-pass ancestry, calibrated checkpoint identity, support and solver
+diagnostics, and explicit development scope.

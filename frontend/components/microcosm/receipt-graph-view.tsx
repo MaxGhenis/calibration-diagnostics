@@ -17,6 +17,7 @@ import { useSearchParams } from "next/navigation";
 
 import { useQualityContext } from "@/components/layout/quality-context";
 import { EmptyState } from "@/components/shared/empty-state";
+import { CombinedAgeEvidenceProfile } from "@/components/microcosm/combined-age-evidence-profile";
 import { IncomeEvidenceProfile } from "@/components/microcosm/income-evidence-profile";
 import { StatusPill } from "@/components/shared/status-pill";
 import { useReceiptGraph } from "@/lib/api/hooks/use-receipt-graph";
@@ -493,6 +494,7 @@ export function ReceiptGraphSurface({
 
   return (
     <div className="flex flex-col gap-4" onKeyDown={onSurfaceKeyDown}>
+      {payload.combined_age_profile ? <CombinedAgeEvidenceProfile profile={payload.combined_age_profile} nodes={payload.nodes} /> : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <fieldset className="flex flex-wrap items-center gap-2">
           <legend className="sr-only">Recorded execution</legend>

@@ -1,3 +1,4 @@
+import type { CombinedAgeProfile } from "./combined-age-types";
 // The contract between the receipt graph route and the view. Everything here is
 // safe to send to a browser: aggregate counts, content keys, enumerated states
 // and authored sentences. No filesystem path, host, artifact payload, person
@@ -459,6 +460,7 @@ export interface ReceiptGraphAvailable {
    * answer with exactly the payload they answered with before profiles
    * existed -- the key is absent rather than null. */
   evidence_profile?: EvidenceProfileReading;
+  combined_age_profile?: CombinedAgeProfile;
   limits: string[];
 }
 

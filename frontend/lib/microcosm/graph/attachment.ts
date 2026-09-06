@@ -2,6 +2,7 @@
 // ProjectionExecution/Node path. No raw manifests, source files or array values
 // are read here. Shape validation is closed before any publisher text is drawn.
 import { createHash } from "node:crypto";
+import { COMBINED_AGE_PROFILE, normalizeCombinedAgeAttachment } from "./combined-age";
 import { CandidateQualityReader } from "../quality/artifact";
 import type { CandidateQualityManifest } from "../quality/types";
 import {
@@ -1295,6 +1296,8 @@ export function normalizeGraphAttachment(
   boundedArtifact(rawBuild);
   digest(manifestSha256);
   verifyGraphManifestPresentation(manifest);
+  if (object(raw).profile === COMBINED_AGE_PROFILE || object(rawBuild).profile === COMBINED_AGE_PROFILE)
+    return normalizeCombinedAgeAttachment(raw, manifest, manifestSha256, rawBuild, { node, implementation });
   const profile = declaredProfile(raw, rawBuild);
   const profileCommon = profileCommonFields(profile);
   const graph = shape(raw, {
