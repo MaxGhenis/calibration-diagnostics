@@ -29,7 +29,7 @@ identity and aggregate arithmetic. Nine composition nodes occur in composition
 cold/warm passes. The calibration extension reuses those nine and computes two
 new nodes; calibration replay hits all eleven. Composition and calibration have
 distinct content keys. Recorded geography failure is retained without inventing
-an executor exception. Materialization is an inspectable provenance digest and
+an executor exception; this profile refuses any executor-exception flag. Materialization is an inspectable provenance digest and
 never a fifth public execution. The candidate population identity is the actual
 calibrated checkpoint file digest, separately from the composition checkpoint
 and calibrated weight digest.
@@ -49,3 +49,16 @@ assertions. They include a zero-support age band, distinct phase keys, and a
 recorded geography-gate failure. The route test uses the explicit identity with
 no discovery index. Existing profile and graph navigation tests provide backward
 compatibility checks.
+
+A connected receipt roster does not establish complete graph coverage. When all
+combined-profile receipts are connected, the pill reports recorded dependencies
+and the connected receipt count; unrecorded relationships remain out of scope.
+The calibration mapping identifies its evidence as the `graph_receipts`
+attachment and separately states the candidate manifest's
+`calibration_diagnostics` family status. A missing family is not relabeled as an
+independently published diagnostic artifact.
+
+An unknown manifest digest with no stored file retains the shared route's HTTP
+503 `partial_artifact` response and `no-store` header. This transport condition
+is distinct from an authenticated artifact's digest mismatch. The regression
+test asserts the exact sanitized response without exposing private paths.

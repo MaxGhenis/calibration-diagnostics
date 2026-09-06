@@ -519,7 +519,9 @@ export function ReceiptGraphSurface({
           <StatusPill tone={payload.coverage.complete ? "info" : "warning"}>
             {payload.coverage.complete
               ? "Full recorded coverage"
-              : `Partial graph · ${payload.coverage.connected_nodes} of ${payload.nodes.length} connected`}
+              : payload.combined_age_profile && payload.coverage.connected_nodes === payload.nodes.length
+                ? `Recorded dependencies · all ${payload.nodes.length} receipts connected`
+                : `Partial graph · ${payload.coverage.connected_nodes} of ${payload.nodes.length} connected`}
           </StatusPill>
           <StatusPill tone="neutral">
             {payload.candidate.execution_status} execution

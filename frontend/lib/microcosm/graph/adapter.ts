@@ -1077,11 +1077,15 @@ export function buildReceiptGraph(
     0,
   );
 
+  const diagnosticsFamily = manifest.attachments.calibration_diagnostics;
   const mappings: MappingAxis[] = [
     {
       key: "calibration",
-      label: "Calibration diagnostic",
-      ...(projection.combined_age_profile ? { state: "present" as const, reason: "The authenticated combined profile contains recorded national age estimates, support and weight diagnostics. Its column provenance binds the diagnostics digest; launch validation remains incomplete." } : attachmentMapping(manifest, "calibration_diagnostics", "calibration diagnostic")),
+      label: projection.combined_age_profile ? "Age diagnostics in graph attachment" : "Calibration diagnostic",
+      ...(projection.combined_age_profile ? {
+        state: "present" as const,
+        reason: `The graph_receipts attachment supplies the recorded national age estimates, support and weight diagnostics shown above. The separate calibration_diagnostics family is ${diagnosticsFamily?.status ?? "not declared"} in the candidate manifest. ${diagnosticsFamily?.status === "available" ? "This graph view has not loaded that separate artifact." : "No separate available diagnostics artifact is published."} Column provenance binds the diagnostics digest; launch validation remains incomplete.`,
+      } : attachmentMapping(manifest, "calibration_diagnostics", "calibration diagnostic")),
     },
     {
       key: "target_binding",

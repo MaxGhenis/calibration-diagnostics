@@ -32,6 +32,8 @@ describe("sealed combined-age exporter contract",() => {
       expect(p.comparison.title).toBe("Composition and calibration, four recorded executions");
       expect(p.comparison.execution_note).not.toContain("a shared computation content key");
       expect(p.mappings.find(m=>m.key==="calibration")?.state).toBe("present");
+      expect(p.mappings.find(m=>m.key==="calibration")?.reason).toContain("graph_receipts attachment");
+      expect(p.mappings.find(m=>m.key==="calibration")?.reason).toContain("calibration_diagnostics family is missing");
     });
   }
 });
@@ -77,6 +79,14 @@ const mutations:Record<string,(f:ReturnType<typeof writtenCombinedAge>)=>void>={
   "swapped cap anchor":f=>f.graph.age_calibration.caps.executor.anchor="incoming_importance",
   "cap exceeded":f=>f.graph.age_calibration.caps.solver.realized=999,
   "manufactured convergence":f=>f.graph.age_calibration.solver.convergence_status="converged",
+  "complete trajectory length differs from solver epochs":f=>f.graph.age_calibration.solver.epochs+=1,
+  "fabricated executor exception with coherent summaries":f=>{
+    for(const e of f.graph.executions) {
+      e.nodes[5].gate_exception=true;
+      e.nodes[5].execution_record={state:"gate_exception",blocked_by:[],unavailable_artifacts:[]};
+      e.gate_exception_node_ids=[e.nodes[5].id];
+    }
+  },
   "trajectory summary mismatch":f=>f.graph.age_calibration.trajectory.summary.last+=1,
   "interpolated summary trajectory":f=>f.graph.age_calibration.trajectory.kind="recorded_summary",
   "column provenance mismatch":f=>f.graph.age_calibration.column_provenance[0].source_sha256="0".repeat(64),

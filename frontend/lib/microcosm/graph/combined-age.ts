@@ -174,8 +174,8 @@ export function normalizeCombinedAgeAttachment(raw:unknown, manifest:CandidateQu
     equal(e.failed_node_ids,e.nodes.filter((n:Obj) => n.failed).map((n:Obj) => n.id));
     for (const n of e.nodes as ProjectionNode[]) {
       equal(n.cache,index === 0 || index === 2 && COMBINED_AGE_NODES.indexOf(n.id as any) >= 9 ? "computed" : "hit");
-      require(n.receipt_present && !n.blocked && n.node_key !== null);
-      require(!n.failed && !n.gate_exception || n.id === "assign_us_puma_ladder.gate" && n.failed);
+      require(n.receipt_present && !n.blocked && !n.gate_exception && n.node_key !== null);
+      require(!n.failed || n.id === "assign_us_puma_ladder.gate");
       equal(n.failed,n.receipt_outcome === "fail");
       if (n.id === "assign_us_puma_ladder.gate") {
         require(n.gate !== null && ["pass","fail"].includes(n.receipt_outcome!));

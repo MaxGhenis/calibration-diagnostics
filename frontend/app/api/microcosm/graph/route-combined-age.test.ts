@@ -1,4 +1,4 @@
-import { test,expect } from "bun:test";
+import { test,expect,spyOn } from "bun:test";
 import { join } from "node:path";
 import { writtenCombinedAge } from "@/lib/microcosm/graph/fixtures/combined-age-exporter-written/read";
 import { GET } from "./route";
@@ -14,7 +14,20 @@ test("combined profile is reachable by exact candidate and manifest with no disc
     expect(payload.candidate.population.sha256).toBe(f.reference.population_sha256);
     expect(payload.executions).toHaveLength(4);
     const wrong=await (await ask("other-candidate")).json();expect(wrong.available).toBe(false);
-    const wrongSha=await ask(f.manifest.candidate_release_id,"0".repeat(64));expect(wrongSha.status).not.toBe(200);
+    // A digest with no stored manifest is a transport-unavailable response,
+    // distinct from an authenticated artifact whose bytes fail its hash.
+    const log=spyOn(console,"error").mockImplementation(()=>{});
+    try {
+      const missingDigest="0".repeat(64);
+      const wrongSha=await ask(f.manifest.candidate_release_id,missingDigest);
+      expect(wrongSha.status).toBe(503);
+      expect(wrongSha.headers.get("Cache-Control")).toBe("no-store");
+      expect(await wrongSha.json()).toEqual({
+        detail:`Candidate evidence could not be read: manifests/${missingDigest}.json.`,
+        artifact_error:"partial_artifact",
+      });
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
   } finally {
     if(savedDir===undefined)delete process.env.MICROCOSM_QUALITY_US_DIR;else process.env.MICROCOSM_QUALITY_US_DIR=savedDir;
     if(savedUrl===undefined)delete process.env.MICROCOSM_QUALITY_US_BASE_URL;else process.env.MICROCOSM_QUALITY_US_BASE_URL=savedUrl;
