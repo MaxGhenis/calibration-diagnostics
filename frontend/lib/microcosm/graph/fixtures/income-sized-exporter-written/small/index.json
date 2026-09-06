@@ -4,8 +4,8 @@
       "candidate_release_id": "us-asec-income-sized-invented-small-equal-cohorts-v1",
       "execution_status": "completed",
       "manifest": {
-        "path": "manifests/5f78a895dc0c34d0ccf7cfb256419023792232aebd0633a1fe8df5e507f05b34.json",
-        "sha256": "5f78a895dc0c34d0ccf7cfb256419023792232aebd0633a1fe8df5e507f05b34"
+        "path": "manifests/f91d2c286d3c1300e85eac3f4922b8790103189475df4cf4d22a940f18dbc3b4.json",
+        "sha256": "f91d2c286d3c1300e85eac3f4922b8790103189475df4cf4d22a940f18dbc3b4"
       },
       "release_eligibility": {
         "reason": "Invented target 2024 engineering slice. Uncalibrated and excluded from release claims.",

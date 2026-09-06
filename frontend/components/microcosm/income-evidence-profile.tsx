@@ -256,14 +256,113 @@ function Slice({ profile }: { profile: EvidenceProfileReading }) {
         </div>
       </div>
       <dl className="mt-3 divide-y divide-border/60">
+        {scope.entity_rows === undefined ? null : (
+          <Row label="Entity rows">
+            {scope.entity_rows
+              .map(
+                (row) => `${tokenReading(row.entity)}: ${countReading(row.rows)}`,
+              )
+              .join(" · ")}
+          </Row>
+        )}
         <Row label="Money field axes">{countReading(scope.money_field_axes)}</Row>
         <Row label="Housing universe fields">
           {countReading(scope.housing_universe_evidence_fields)} evidence fields ·{" "}
           {countReading(scope.housing_universe_carried_cells)} carried cells
         </Row>
         <Row label="Loaded modules">{countReading(scope.loaded_module_count)}</Row>
+        {scope.producer_schema === undefined ? null : (
+          <Row label="Producer schema">{tokenReading(scope.producer_schema)}</Row>
+        )}
       </dl>
+      {scope.measurement === undefined ? null : (
+        <Measurement measurement={scope.measurement} />
+      )}
     </Card>
+  );
+}
+
+/** How the size was arrived at.
+ *
+ * The fifteen-household profile never needed this block: its size was a
+ * constant the reader also held, so there was nothing to show. A measured size
+ * has to be assessable, and a number on its own is not — what makes it
+ * assessable is how many separate places inside the run wrote it down and which
+ * places those were. Both are the publisher's own; nothing here is derived. */
+function Measurement({
+  measurement,
+}: {
+  measurement: NonNullable<EvidenceProfileReading["scope"]["measurement"]>;
+}) {
+  return (
+    <div className="mt-4 rounded-md border border-border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <div className="text-[11px] font-medium text-foreground">
+          How this size was measured
+        </div>
+        <StatusPill tone="neutral">{tokenReading(measurement.basis)}</StatusPill>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+        {measurement.note}
+      </p>
+      <dl className="mt-2 divide-y divide-border/60">
+        <Row label="Selection rule">
+          <Mono>{measurement.selection_rule}</Mono> per source cohort
+        </Row>
+        {measurement.nesting.length === 0 ? null : (
+          <Row label="Units within one household">
+            {measurement.nesting
+              .map(
+                (entry) =>
+                  `${tokenReading(entry.entity)}: ${countReading(entry.rows)}`,
+              )
+              .join(" · ")}
+          </Row>
+        )}
+      </dl>
+      <table className="mt-2 w-full border-separate border-spacing-0 text-[11px]">
+        <caption className="sr-only">
+          Each measured count and the places inside the run that recorded it
+        </caption>
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th scope="col" className="pb-1 pr-3 font-medium">
+              Fact
+            </th>
+            <th scope="col" className="pb-1 pr-3 text-right font-medium">
+              Count
+            </th>
+            <th scope="col" className="pb-1 font-medium">
+              Recorded in
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {measurement.independent_recordings.map((entry) => (
+            <tr key={entry.fact} className="align-top">
+              <th
+                scope="row"
+                className="border-t border-border/60 py-1 pr-3 text-left font-normal text-foreground"
+              >
+                {tokenReading(entry.fact)}
+              </th>
+              <td className="border-t border-border/60 py-1 pr-3 text-right tabular-nums text-foreground">
+                {countReading(entry.count)}
+              </td>
+              <td className="border-t border-border/60 py-1 text-muted-foreground">
+                {entry.recordings === 1
+                  ? "1 place"
+                  : `${countReading(entry.recordings)} places`}
+                <span className="sr-only">: </span>
+                <span className="block break-words">
+                  {entry.sources.join(" · ")}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

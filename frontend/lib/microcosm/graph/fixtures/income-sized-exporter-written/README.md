@@ -80,4 +80,4 @@ no claim: every value in it is copied from the manifest.
 
 then open
 
-    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-asec-income-sized-invented-wide-unequal-cohorts-v1&manifest_sha256=31e4cff839d4e4cd1068b791bb555c1b9f05d9f313f2585281d7430e90bb1101
+    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-asec-income-sized-invented-wide-unequal-cohorts-v1&manifest_sha256=fdeef19a9c1f01cbe3ff4abdfab077a7dbe2c390334ca6153c23294839bab207
