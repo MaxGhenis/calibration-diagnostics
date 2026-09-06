@@ -26,6 +26,7 @@ import {
   type OutputState,
   type ReceiptGraphAvailable,
   type ReceiptGraphNode,
+  type EvidenceProfileReading,
   type TypedArtifactRef,
 } from "./types";
 
@@ -108,6 +109,9 @@ export interface ReceiptProjection {
   kernel_impl_hash: string | null;
   computation_content_key: string;
   content_key_note: string;
+  /** Only an authenticated attachment that declared a publisher evidence
+   * profile carries one. A checked-in local projection never does. */
+  evidence_profile?: EvidenceProfileReading | null;
   executions: ProjectionExecution[];
 }
 
@@ -1238,6 +1242,7 @@ export function buildReceiptGraph(
       cache_differences: cacheDifferences,
     },
     mappings,
+    ...(projection.evidence_profile ? { evidence_profile: projection.evidence_profile } : {}),
     limits,
   };
 }

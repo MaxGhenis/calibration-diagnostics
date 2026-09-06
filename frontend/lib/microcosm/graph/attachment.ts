@@ -12,7 +12,7 @@ import {
   type ProjectionExecution,
   type ReceiptProjection,
 } from "./adapter";
-import type { BindingCheck, ImplementationSet } from "./types";
+import type { BindingCheck, EvidenceProfileReading, ImplementationSet } from "./types";
 export const MAX_GRAPH_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 export const GRAPH_RECEIPTS_SCHEMA = "microcosm.graph_receipts.v1";
 const BUILD_SCHEMA = "microcosm.graph_build_summary.v1";
@@ -431,19 +431,337 @@ const commonFields = {
   source_sha256: sourceMap
 };
 
-const executionCheck: Check = v => {
-  shape(v, {
-    population_sha256: digest,
-    receipt_sha256: digest,
-    execution_manifest_sha256: digest,
-    computation_content_key: digest,
-    kernel_calls: count,
-    source_preparation_calls: count,
-    direct_checkpoint_table_weight_parity: bool,
-    direct_real_engine_array_parity: bool,
-    money_33_fields_all_axes_parity: bool
+const EXECUTION_CHECK_FIELDS = {
+  population_sha256: digest,
+  receipt_sha256: digest,
+  execution_manifest_sha256: digest,
+  computation_content_key: digest,
+  kernel_calls: count,
+  source_preparation_calls: count,
+  direct_checkpoint_table_weight_parity: bool,
+  direct_real_engine_array_parity: bool,
+  money_33_fields_all_axes_parity: bool
+};
+
+const DIRECT_CHECK_FIELDS = {
+  population_sha256: digest,
+  receipt_sha256: digest,
+  household_count: count,
+  person_count: count,
+  source_preparation_calls: count
+};
+
+/* ------------------------------------------------- evidence profiles */
+
+/** A second export shape, declared by name and validated field by field.
+ *
+ * The four-node contract above is the shape an attachment gets when it declares
+ * no profile, and it is unchanged: `shape()` still counts keys exactly, so an
+ * attachment cannot smuggle one of the fields below into it. A profile is not a
+ * relaxation and not a passthrough for unknown fields. It names a closed set of
+ * additional fields, each with its own check, and both artifacts must declare
+ * the same one -- a graph carrying a profile beside a build summary that does
+ * not, or two different profiles, is refused rather than partly read.
+ *
+ * Every roster and contract number below was read from the exporter that emits
+ * these bytes, which hard-codes each of them from a closed table. They are
+ * pinned here for the same reason: this profile describes exactly one accepted
+ * run, so a payload that disagrees about how many households it holds, or which
+ * columns it accounts, is not a variant of it. */
+export const INCOME_V3_PROFILE = "us_asec_income_v3_five_node_15hh";
+const PROFILES = [INCOME_V3_PROFILE];
+
+const INCOME_V3 = {
+  nodes: [
+    "asec_prepared.create",
+    "asec_prepared.select_households",
+    "asec_prepared.cps_carried_current",
+    "asec_prepared.engine_current_money",
+    "asec_prepared.reported_income"
+  ],
+  phase: "prepare_asec_current_money_slice",
+  modes: ["cold", "warm"],
+  households: 15,
+  persons: 52,
+  taxUnits: 25,
+  incomeYears: ["2022", "2023", "2024"],
+  moneyFieldAxes: 33,
+  housingUniverseEvidenceFields: 7,
+  accountingColumns: 28,
+  accountingRowBytes: 91,
+  dtypeBytes: {
+    "<f8": 8,
+    "<i8": 8,
+    u1: 1
+  } as Record<string, number>,
+  arithmeticOrder: "W=WSAL_VAL;E=SEMP_VAL+FRSE_VAL;S=SSI_VAL;P=PAW_VAL_2024_price;T=PTOTVAL;U=T-(((W+E)+S)+P)",
+  resultColumns: [
+    "asec_reported_wage_income_2024_price",
+    "asec_reported_net_self_employment_income_2024_price",
+    "asec_reported_ssi_2024_price",
+    "asec_reported_cash_public_assistance_2024_price",
+    "asec_reported_total_income_2024_price",
+    "asec_reported_income_unallocated_2024_price"
+  ],
+  signClasses: ["negative", "positive", "zero"],
+  zeroClasses: [
+    "observed_amount",
+    "niu_below_receipt_age",
+    "reported_receipt_zero_amount",
+    "reported_no_receipt",
+    "niu_in_age_universe"
+  ],
+  notClaimed: [
+    "simulated_ssi",
+    "simulated_tanf",
+    "acs_other_income",
+    "completed_eight_component_acs_bridge",
+    "prior_wages"
+  ],
+  missing: [
+    "calibration",
+    "fit",
+    "holdouts",
+    "national_totals",
+    "congressional_district_pass",
+    "completed_eight_component_acs_bridge",
+    "prior_wages",
+    "distributions",
+    "support",
+    "model_validation"
+  ],
+  basis: {
+    measure: "observed_reported_source_income",
+    nominal_source: "asec_reported_nominal_amounts",
+    price_target: "cpi_u_rs_2024_price_target_year",
+    reference_period: "interview_household_one_year_after_income_year",
+    residual_meaning: "signed_source_accounting_residual_not_acs_other_income"
+  }
+};
+
+/** An exact roster, in the published order. Order is part of the contract here
+ * because the exporter writes each of these from a fixed tuple; a reordered
+ * list is a different publisher, not a rearranged one. */
+const exactList = (expected: readonly string[]): Check => value => {
+  assert(Array.isArray(value) && value.length === expected.length);
+  (value as unknown[]).forEach((entry, index) => {
+    id(entry);
+    equal(entry, expected[index]);
   });
 };
+
+/** Rows keyed by a name, one per expected key, in the expected order. */
+const keyedRows = (
+  key: string,
+  expected: readonly string[],
+  fields: Record<string, Check>
+): Check => value => {
+  assert(Array.isArray(value) && value.length === expected.length);
+  (value as unknown[]).forEach((entry, index) => {
+    const row = shape(entry, {
+      [key]: id,
+      ...fields
+    });
+    equal(row[key], expected[index]);
+  });
+};
+
+const bounded = (min: number, max: number): Check => value => {
+  count(value);
+  assert(value >= min && value <= max);
+};
+
+const incomeScope: Check = value => {
+  const s = shape(value, {
+    households: count,
+    persons: count,
+    tax_units: count,
+    households_by_source_cohort: keyedRows("income_year", INCOME_V3.incomeYears, {
+      households: count
+    }),
+    money_field_axes: count,
+    housing_universe_evidence_fields: count,
+    housing_universe_carried_cells: count,
+    loaded_module_count: bounded(1, 1024),
+    note: reason
+  });
+  equal(s.households, INCOME_V3.households);
+  equal(s.persons, INCOME_V3.persons);
+  equal(s.tax_units, INCOME_V3.taxUnits);
+  equal(s.money_field_axes, INCOME_V3.moneyFieldAxes);
+  equal(s.housing_universe_evidence_fields, INCOME_V3.housingUniverseEvidenceFields);
+  assert(
+    s.housing_universe_carried_cells >= s.housing_universe_evidence_fields &&
+    s.housing_universe_carried_cells <= 64
+  );
+  equal(
+    s.households_by_source_cohort.reduce((total: number, cohort: RecordValue) => total + cohort.households, 0),
+    s.households
+  );
+};
+
+/** No score, and the absence is the contract rather than a missing field. A
+ * profile that published a number here would be describing different evidence. */
+const incomeQuality: Check = value => {
+  shape(value, {
+    status: enumeration("incomplete"),
+    basis: enumeration("engineering_completion_only"),
+    score: enumeration(null),
+    score_reason: reason,
+    missing: exactList(INCOME_V3.missing),
+    note: reason
+  });
+};
+
+const incomeReported: Check = value => {
+  const r = shape(value, {
+    rows: count,
+    accounting_column_count: count,
+    accounting_row_bytes: count,
+    arithmetic_order: v => {
+      text(v, 256);
+      equal(v, INCOME_V3.arithmeticOrder);
+    },
+    accounting_columns: v => {
+      assert(Array.isArray(v) && v.length === INCOME_V3.accountingColumns);
+      const names: string[] = [];
+      let rowBytes = 0;
+      for (const column of v) {
+        const c = shape(column, {
+          name: id,
+          dtype: enumeration(...Object.keys(INCOME_V3.dtypeBytes)),
+          sha256: digest
+        });
+        names.push(c.name);
+        rowBytes += INCOME_V3.dtypeBytes[c.dtype];
+      }
+      unique(names);
+      // The row width is derivable from the declared dtypes, so it is derived
+      // rather than believed: 28 columns of these three widths reach 91 bytes
+      // one way, and a substituted dtype no longer does.
+      equal(rowBytes, INCOME_V3.accountingRowBytes);
+      assert(INCOME_V3.resultColumns.every(name => names.includes(name)));
+    },
+    result_column_sha256: keyedRows("column", INCOME_V3.resultColumns, {
+      sha256: digest
+    }),
+    typed_evidence_axis_count: bounded(1, 64),
+    raw_public_assistance_evidence_count: bounded(1, 32),
+    alternative_association_sha256: digest,
+    alternative_association_differs: bool,
+    signed_value_counts: keyedRows(
+      "column",
+      INCOME_V3.resultColumns,
+      Object.fromEntries(INCOME_V3.signClasses.map(name => [name, count]))
+    ),
+    zero_origin_class_counts: keyedRows(
+      "income_year",
+      INCOME_V3.incomeYears,
+      Object.fromEntries(INCOME_V3.zeroClasses.map(name => [name, bounded(0, INCOME_V3.persons)]))
+    ),
+    basis: v => {
+      shape(v, {
+        measure: enumeration(INCOME_V3.basis.measure),
+        nominal_source: enumeration(INCOME_V3.basis.nominal_source),
+        price_target: enumeration(INCOME_V3.basis.price_target),
+        reference_period: enumeration(INCOME_V3.basis.reference_period),
+        residual_meaning: enumeration(INCOME_V3.basis.residual_meaning),
+        note: reason
+      });
+    },
+    not_claimed: exactList(INCOME_V3.notClaimed)
+  });
+  equal(r.rows, INCOME_V3.persons);
+  equal(r.accounting_column_count, INCOME_V3.accountingColumns);
+  equal(r.accounting_row_bytes, INCOME_V3.accountingRowBytes);
+  // Every accounted row is classified exactly once per result column, so the
+  // three signed classes cover the person rows and nothing is unaccounted.
+  for (const row of r.signed_value_counts)
+    equal(
+      INCOME_V3.signClasses.reduce((total: number, name: string) => total + row[name], 0),
+      r.rows
+    );
+};
+
+const pathIdentity = (extra: Record<string, Check> = {}): Check => value => {
+  const o = shape(value, {
+    direct_sha256: digest,
+    graph_sha256: digest,
+    differs: bool,
+    ...extra
+  });
+  // The publisher states whether the two paths encoded the same bytes. The
+  // digests are right there, so the statement is checked rather than repeated.
+  equal(o.differs, o.direct_sha256 !== o.graph_sha256);
+};
+
+const incomePathIdentities: Check = value => {
+  shape(value, {
+    engine_evaluation: pathIdentity(),
+    reported_income: pathIdentity({
+      body_sha256: digest
+    }),
+    note: reason
+  });
+};
+
+const incomeLineage: Check = value => {
+  const o = shape(value, {
+    fields: v => {
+      assert(Array.isArray(v) && v.length >= 1 && v.length <= 16);
+      v.forEach(id);
+      unique(v);
+    },
+    count,
+    note: reason
+  });
+  equal(o.count, o.fields.length);
+};
+
+/** Carried on both artifacts, because the exporter writes one identity block
+ * into each. A build summary that omits them is a different publisher. */
+const PROFILE_COMMON_FIELDS: Record<string, Check> = {
+  profile: v => {
+    id(v);
+    assert(PROFILES.includes(v as string));
+  },
+  root_output_review_sha256: digest,
+  base_exporter_sha256: digest,
+  loaded_module_manifest_sha256: digest
+};
+
+const INCOME_V3_GRAPH_FIELDS: Record<string, Check> = {
+  scope: incomeScope,
+  quality: incomeQuality,
+  reported_income: incomeReported,
+  path_output_identities: incomePathIdentities,
+  lineage_divergence: incomeLineage
+};
+
+const INCOME_V3_DIRECT_FIELDS: Record<string, Check> = {
+  tax_unit_count: count,
+  reported_income_rows: count,
+  reported_income_body_sha256: digest
+};
+
+const INCOME_V3_EXECUTION_FIELDS: Record<string, Check> = {
+  reported_income_payload_sha256: digest,
+  reported_income_body_sha256: digest
+};
+
+/** Read the declared profile from both artifacts before either is shaped. Both
+ * must declare the same one; one profile and one silence is a contradiction, not
+ * a default. */
+function declaredProfile(raw: unknown, rawBuild: unknown): string | null {
+  const graph = object(raw), build = object(rawBuild);
+  const onGraph = Object.hasOwn(graph, "profile") ? graph.profile : null;
+  const onBuild = Object.hasOwn(build, "profile") ? build.profile : null;
+  assert(onGraph === onBuild);
+  if (onGraph === null)
+    return null;
+  PROFILE_COMMON_FIELDS.profile(onGraph);
+  return onGraph as string;
+}
 
 /** Both artifacts have already passed the unchanged candidate reader's byte and
  * embedded identity checks. This entry point adds strict shape, per-node and
@@ -461,9 +779,13 @@ export function normalizeGraphAttachment(
   boundedArtifact(rawBuild);
   digest(manifestSha256);
   verifyGraphManifestPresentation(manifest);
+  const profile = declaredProfile(raw, rawBuild);
+  const profileCommon = profile === null ? {} : PROFILE_COMMON_FIELDS;
   const graph = shape(raw, {
     schema_version: enumeration(GRAPH_RECEIPTS_SCHEMA),
     ...commonFields,
+    ...profileCommon,
+    ...(profile === INCOME_V3_PROFILE ? INCOME_V3_GRAPH_FIELDS : {}),
     population_sha256: digest,
     period: text,
     entity: id,
@@ -487,11 +809,14 @@ export function normalizeGraphAttachment(
   const build = shape(rawBuild, {
     schema_version: enumeration(BUILD_SCHEMA),
     ...commonFields,
+    ...profileCommon,
     graph_receipts_sha256: digest,
     checks: v => {
       object(v);
     }
   });
+  for (const key of Object.keys(profileCommon))
+    equal(build[key], graph[key]);
   const descriptor = manifest.attachments.graph_receipts, buildDescriptor = manifest.attachments.build_manifest;
   assert(descriptor?.status === "available" && descriptor.scope === "population");
   assert(buildDescriptor?.status === "available" && buildDescriptor.scope === "run");
@@ -535,11 +860,8 @@ export function normalizeGraphAttachment(
   assert(!executions.some(e => e.mode === "direct"));
   equal(canonical(Object.keys(build.checks).sort()), canonical(["direct", ...executions.map(e => e.mode)].sort()));
   const direct = shape(build.checks.direct, {
-    population_sha256: digest,
-    receipt_sha256: digest,
-    household_count: count,
-    person_count: count,
-    source_preparation_calls: count
+    ...DIRECT_CHECK_FIELDS,
+    ...(profile === INCOME_V3_PROFILE ? INCOME_V3_DIRECT_FIELDS : {})
   });
   equal(direct.population_sha256, graph.population_sha256);
   const expectedIds = Object.keys(graph.implementation_set.by_node).sort();
@@ -582,7 +904,10 @@ export function normalizeGraphAttachment(
   const contracts = new Map<string, string>();
   for (const e of executions) {
     const c = build.checks[e.mode];
-    executionCheck(c);
+    shape(c, {
+      ...EXECUTION_CHECK_FIELDS,
+      ...(profile === INCOME_V3_PROFILE ? INCOME_V3_EXECUTION_FIELDS : {})
+    });
     equal(c.population_sha256, graph.population_sha256);
     equal(c.execution_manifest_sha256, e.manifest_sha256);
     equal(c.computation_content_key, e.content_key);
@@ -648,6 +973,14 @@ export function normalizeGraphAttachment(
   }
   assertAcyclic(dependencies);
   assert(exceptional ? ["completed", "failed"].includes(manifest.execution_status) : manifest.execution_status === "completed");
+  const evidenceProfile = profile === INCOME_V3_PROFILE
+    ? incomeV3Reading(graph, build, direct, executions)
+    : null;
+  if (profile !== null)
+    checks.push({
+      label: "Declared evidence profile",
+      detail: `Both artifacts declare the ${profile} profile, and every field it adds -- scope, quality, the reported-income accounting, the two paths' output identities and the lineage roster -- was checked by name against this profile's own closed tables before anything was drawn.`
+    });
   return {
     projection: {
       schema_version: GRAPH_RECEIPTS_SCHEMA,
@@ -667,8 +1000,154 @@ export function normalizeGraphAttachment(
       kernel_impl_hash: null,
       computation_content_key: graph.computation_content_key,
       content_key_note: graph.content_key_note,
+      evidence_profile: evidenceProfile,
       executions
     },
     checks
+  };
+}
+
+/* --------------------------------------------- income-v3 composition */
+
+const PATH_DESCRIPTIONS: Record<string, string> = {
+  direct: "Ran the same work outside the graph. It records no execution manifest and no cache reading, so it is a comparison path here, not a third execution.",
+  cold: "Computed every graph node once, with source preparation counted separately from the kernels.",
+  warm: "Reused every recorded result in a separate process, calling no kernel."
+};
+
+/** Compose what the profile publishes into the shape the view draws, after the
+ * two artifacts have been checked against each other. Nothing is authored here
+ * beyond the three path descriptions above: every number, digest and sentence
+ * below is the publisher's own, rearranged. */
+function incomeV3Reading(
+  graph: RecordValue,
+  build: RecordValue,
+  direct: RecordValue,
+  executions: ProjectionExecution[],
+): EvidenceProfileReading {
+  const reported = graph.reported_income as RecordValue;
+  const identities = graph.path_output_identities as RecordValue;
+  const accounting = identities.reported_income as RecordValue;
+  // The accounting body is one artifact with one digest, whichever path wrote
+  // it: that is the whole point of publishing the two payload digests apart. So
+  // every path must agree about the body, and the graph paths must agree with
+  // the graph payload digest the identities block names.
+  equal(direct.reported_income_rows, reported.rows);
+  equal(direct.reported_income_body_sha256, accounting.body_sha256);
+  for (const execution of executions) {
+    const check = build.checks[execution.mode];
+    equal(check.reported_income_body_sha256, accounting.body_sha256);
+    equal(check.reported_income_payload_sha256, accounting.graph_sha256);
+  }
+  // Exactly the two recorded graph paths this profile describes, and exactly the
+  // five nodes. A run with another mode, or a sixth node, is a different run.
+  equal(canonical(executions.map(e => e.mode).sort()), canonical([...INCOME_V3.modes].sort()));
+  equal(
+    canonical(Object.keys(graph.implementation_set.by_node).sort()),
+    canonical([...INCOME_V3.nodes].sort())
+  );
+  for (const execution of executions)
+    for (const node of execution.nodes) {
+      equal(node.kernel_ref, `us.${node.id}@3`);
+      equal(node.phase, INCOME_V3.phase);
+    }
+  const warm = executions.find(e => e.mode === "warm")!, cold = executions.find(e => e.mode === "cold")!;
+  equal(warm.kernel_calls, 0);
+  equal(warm.source_preparation_calls, 0);
+  equal(cold.kernel_calls, INCOME_V3.nodes.length);
+  equal(cold.source_preparation_calls, 1);
+  const signed = new Map(
+    (reported.signed_value_counts as RecordValue[]).map(row => [row.column, row])
+  );
+  const paths = [
+    {
+      key: "direct",
+      label: "Direct path",
+      description: PATH_DESCRIPTIONS.direct,
+      graph_execution: false,
+      receipt_sha256: direct.receipt_sha256,
+      execution_manifest_sha256: null,
+      computation_content_key: null,
+      kernel_calls: null,
+      source_preparation_calls: direct.source_preparation_calls,
+      cache_hit_count: null,
+      reported_income_rows: direct.reported_income_rows,
+      reported_income_body_sha256: direct.reported_income_body_sha256,
+      reported_income_payload_sha256: accounting.direct_sha256
+    },
+    ...executions.map(execution => {
+      const check = build.checks[execution.mode];
+      return {
+        key: execution.mode,
+        label: execution.label,
+        description: PATH_DESCRIPTIONS[execution.mode] ?? execution.description,
+        graph_execution: true,
+        receipt_sha256: check.receipt_sha256,
+        execution_manifest_sha256: execution.manifest_sha256,
+        computation_content_key: execution.content_key,
+        kernel_calls: execution.kernel_calls,
+        source_preparation_calls: execution.source_preparation_calls ?? 0,
+        cache_hit_count: execution.cache_hit_count,
+        reported_income_rows: null,
+        reported_income_body_sha256: check.reported_income_body_sha256,
+        reported_income_payload_sha256: check.reported_income_payload_sha256
+      };
+    })
+  ];
+  return {
+    id: graph.profile,
+    scope: graph.scope,
+    quality: graph.quality,
+    reported_income: {
+      rows: reported.rows,
+      accounting_column_count: reported.accounting_column_count,
+      accounting_row_bytes: reported.accounting_row_bytes,
+      arithmetic_order: reported.arithmetic_order,
+      // Split at the publisher's own separator. Each statement is carried
+      // through exactly as published; none is rewritten into words.
+      arithmetic_statements: (reported.arithmetic_order as string).split(";"),
+      columns: reported.accounting_columns,
+      results: (reported.result_column_sha256 as RecordValue[]).map(entry => ({
+        column: entry.column,
+        sha256: entry.sha256,
+        negative: signed.get(entry.column)!.negative,
+        zero: signed.get(entry.column)!.zero,
+        positive: signed.get(entry.column)!.positive
+      })),
+      zero_origin: (reported.zero_origin_class_counts as RecordValue[]).map(entry => ({
+        income_year: entry.income_year,
+        classes: INCOME_V3.zeroClasses.map(key => ({
+          key,
+          count: entry[key] as number
+        })),
+        total: INCOME_V3.zeroClasses.reduce((sum, key) => sum + (entry[key] as number), 0)
+      })),
+      typed_evidence_axis_count: reported.typed_evidence_axis_count,
+      raw_public_assistance_evidence_count: reported.raw_public_assistance_evidence_count,
+      alternative_association_sha256: reported.alternative_association_sha256,
+      alternative_association_differs: reported.alternative_association_differs,
+      basis: reported.basis,
+      not_claimed: reported.not_claimed
+    },
+    path_output_identities: {
+      artifacts: ["engine_evaluation", "reported_income"].map(key => ({
+        key,
+        direct_sha256: (identities[key] as RecordValue).direct_sha256,
+        graph_sha256: (identities[key] as RecordValue).graph_sha256,
+        differs: (identities[key] as RecordValue).differs,
+        body_sha256: (identities[key] as RecordValue).body_sha256 ?? null
+      })),
+      note: identities.note
+    },
+    lineage_divergence: graph.lineage_divergence,
+    paths,
+    identities: [
+      "root_output_review_sha256",
+      "base_exporter_sha256",
+      "loaded_module_manifest_sha256"
+    ].map(key => ({
+      key,
+      sha256: graph[key]
+    }))
   };
 }

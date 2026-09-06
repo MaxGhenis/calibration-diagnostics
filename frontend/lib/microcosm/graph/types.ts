@@ -230,6 +230,130 @@ export interface ReceiptGraphComparison {
   }[];
 }
 
+/* ------------------------------------------------- evidence profiles */
+
+/** A publisher evidence profile is a closed, named extension of the aggregate
+ * wire contract: a second export shape whose extra fields are each validated by
+ * name before anything here is drawn. It is not a licence for unknown fields,
+ * and an attachment that declares none keeps the original contract exactly.
+ * `null` on the payload means the attachment declared no profile. */
+export interface EvidenceProfileScope {
+  households: number;
+  persons: number;
+  tax_units: number;
+  households_by_source_cohort: { income_year: string; households: number }[];
+  money_field_axes: number;
+  housing_universe_evidence_fields: number;
+  housing_universe_carried_cells: number;
+  loaded_module_count: number;
+  note: string;
+}
+
+/** What the publisher says this evidence does not establish. `score` is null by
+ * contract: an engineering run measures agreement with no external total, so
+ * there is no number to show and none is invented in its place. */
+export interface EvidenceProfileQuality {
+  status: string;
+  basis: string;
+  score: null;
+  score_reason: string;
+  missing: string[];
+  note: string;
+}
+
+/** What the accounted quantity is: a measure, the nominal amounts it came from,
+ * the price target it was restated to, the period it is observed over, and what
+ * the residual column does and does not mean. Every member is a published
+ * token this reader pins; none is inferred from a column name. */
+export interface ReportedIncomeBasis {
+  measure: string;
+  nominal_source: string;
+  price_target: string;
+  reference_period: string;
+  residual_meaning: string;
+  note: string;
+}
+
+export interface ReportedIncomeColumn {
+  name: string;
+  dtype: string;
+  sha256: string;
+}
+
+export interface ReportedIncomeResult {
+  column: string;
+  sha256: string;
+  negative: number;
+  zero: number;
+  positive: number;
+}
+
+export interface ReportedIncomeZeroOrigin {
+  income_year: string;
+  classes: { key: string; count: number }[];
+  total: number;
+}
+
+export interface ReportedIncomeAccounting {
+  rows: number;
+  accounting_column_count: number;
+  accounting_row_bytes: number;
+  arithmetic_order: string;
+  /** The published arithmetic string split at its own separators. Each entry is
+   * one published statement, carried through unaltered. */
+  arithmetic_statements: string[];
+  columns: ReportedIncomeColumn[];
+  results: ReportedIncomeResult[];
+  zero_origin: ReportedIncomeZeroOrigin[];
+  typed_evidence_axis_count: number;
+  raw_public_assistance_evidence_count: number;
+  alternative_association_sha256: string;
+  alternative_association_differs: boolean;
+  basis: ReportedIncomeBasis;
+  not_claimed: string[];
+}
+
+/** One artifact the direct and graph paths each encoded. The two digests are
+ * kept apart rather than forced equal, and `differs` is checked against them
+ * rather than believed. */
+export interface PathOutputIdentity {
+  key: string;
+  direct_sha256: string;
+  graph_sha256: string;
+  differs: boolean;
+  body_sha256: string | null;
+}
+
+/** One recorded path. The direct path is not a graph execution: it records no
+ * execution manifest and no cache reading, and `graph_execution` says so rather
+ * than leaving a reader to infer it from empty fields. */
+export interface EvidencePath {
+  key: string;
+  label: string;
+  description: string;
+  graph_execution: boolean;
+  receipt_sha256: string;
+  execution_manifest_sha256: string | null;
+  computation_content_key: string | null;
+  kernel_calls: number | null;
+  source_preparation_calls: number;
+  cache_hit_count: number | null;
+  reported_income_rows: number | null;
+  reported_income_body_sha256: string;
+  reported_income_payload_sha256: string;
+}
+
+export interface EvidenceProfileReading {
+  id: string;
+  scope: EvidenceProfileScope;
+  quality: EvidenceProfileQuality;
+  reported_income: ReportedIncomeAccounting;
+  path_output_identities: { artifacts: PathOutputIdentity[]; note: string };
+  lineage_divergence: { fields: string[]; count: number; note: string };
+  paths: EvidencePath[];
+  identities: { key: string; sha256: string }[];
+}
+
 export type ProjectionBasis = "local_projection" | "authenticated_attachment";
 
 export interface ImplementationSet {
@@ -277,6 +401,11 @@ export interface ReceiptGraphAvailable {
   };
   comparison: ReceiptGraphComparison;
   mappings: MappingAxis[];
+  /** Present only when the attachment declared a publisher evidence profile.
+   * An attachment that declares none, and every checked-in local projection,
+   * answer with exactly the payload they answered with before profiles
+   * existed -- the key is absent rather than null. */
+  evidence_profile?: EvidenceProfileReading;
   limits: string[];
 }
 
