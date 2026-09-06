@@ -18,8 +18,15 @@ So the exporter wrote two:
 | people | 31 | 107 |
 | tax units | 14 | 55 |
 | cohorts | 3 / 3 / 3 | **14 / 14 / 13** |
+| eligible households per cohort | 300 / 300 / 300 | 1,400 / 1,400 / 1,300 |
+| sampling fraction | 0.01 | 0.01 |
 | producer schema | `income_v3_first_genuine` | `income_v3_measured_505hh` |
 | entity structure recorded | no | yes |
+| population digest | `13973c961ea39995ac7085b2f92160485cf83abc5852685c968a34e96f1629f0` | `41c38ba897e673ae6d8de157b609f7b44e6577620157ff2fca0c14c08cd9ca83` |
+
+The two population digests differ on purpose. Both shapes previously carried one
+invented checkpoint, so the manifest's population binding was only ever exercised
+at a single value — the same blind spot a profile with its size baked in has.
 
 `wide/` has deliberately unequal cohorts. That is the structural shape the
 reviewed fifteen-household profile cannot express at all: its cohort table is a
@@ -41,15 +48,25 @@ opinion of the contract, it is the contract.
 
 ## Provenance
 
+The generator and its receipt live in this repository now. They used to sit in a
+review directory outside it, which made every line of this table unverifiable
+from a checkout — the one thing a provenance table exists to prevent.
+
 | | |
 |---|---|
-| Exporter worktree | `microcosm-us-income-sized-export-20260906` |
-| Exporter head | `981b9b175f868ec3236cdcc7164fd6a7d0f5b17a` |
-| `graph_evidence_income_sized.py` | sha256 `ac947bf761b062ee5560640618fbbd848fa8fae238ac5333602ea321ddae0268` |
+| Generator | [`frontend/scripts/write-invented-income-sized-candidates.py`](../../../../../scripts/write-invented-income-sized-candidates.py) |
+| Generator receipt | [`generated.json`](generated.json), beside these files |
+| Generator sha256 | `325a1934e8e2623ffae7289fc683dcfa573a3ac8940e1636067d544c75233a48` |
+| `graph_evidence_income_sized.py` | sha256 `97f4682bf8dd35434c7c9d0c98e899599efeeef51fc022c1c94ea547d1987369` |
+| Its test helper | `test_graph_evidence_income_sized.py`, sha256 `51b261ee2b47366f48a002fe3b1780610a29502b024fdf21a66189e1d6935705` |
 | Reviewed profile it imports | `graph_evidence_income_v3.py`, sha256 `0259cbc64af1c860beeab5f73f4ccb10618854133a6d78df0a1aa511241f7a71` |
+| Base exporter beneath both | `graph_evidence.py`, sha256 `970d95541f9f6d66f4d7adea3f7583d373bcc9b24c51fcc4324c2bf003cb055d` |
 | Producer roster read from | `us_runtime/graph_asec_income.py`, sha256 `4d2a95348310eccf0f0d52bb68faa17ff12ae28267f9c7c6bea0ac3204bd0e66` |
-| Generator | `R/us-income-sized-export-generate-fixtures.py` |
-| Generator receipt | `R/us-income-sized-export-generated-fixtures.json` |
+
+`generated.json` records all of the above plus, per shape, the candidate and
+artifact digests, the population digest, the published sampling operands and the
+recorded count locations. Every digest in the table is written by the run that
+wrote the bytes, so the table can be checked rather than believed.
 
 The generator calls the sized exporter's own `export_fixture` helper from
 `packages/microcosm-build/tests/test_graph_evidence_income_sized.py`,
@@ -60,11 +77,19 @@ the helper's stand-in names hide the real ones, and the real first column is
 `person_id` — the exact name the reader's publisher-text check refuses, and
 which the closed column roster admits by name instead.
 
+It refuses to run at all unless `graph_evidence_income_v3.py` and
+`graph_evidence.py` still hash to the accepted heads, so a fixture set cannot be
+regenerated against a quietly changed reviewed profile.
+
 Every file is named by its own sha256 and is self-addressed. The two artifacts
 reproduce byte for byte across runs; the manifest does not, because the writer
 stamps a wall-clock `created_at`. Regenerating therefore requires updating the
-manifest name, each `index.json` and the digests recorded in
-`attachment-income-sized-contract.test.ts`.
+digests recorded in `attachment-income-sized-contract.test.ts`; the generator
+rewrites each `index.json` and `generated.json` itself.
+
+    python frontend/scripts/write-invented-income-sized-candidates.py \
+      --microcosm /path/to/microcosm \
+      --out frontend/lib/microcosm/graph/fixtures/income-sized-exporter-written
 
 ## `index.json` is written here, not by the exporter
 
@@ -80,4 +105,4 @@ no claim: every value in it is copied from the manifest.
 
 then open
 
-    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-income-sized-invented-wide-v1&manifest_sha256=95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651
+    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-income-sized-invented-wide-v1&manifest_sha256=6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa

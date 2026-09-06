@@ -4,8 +4,8 @@
       "candidate_release_id": "us-income-sized-invented-wide-v1",
       "execution_status": "completed",
       "manifest": {
-        "path": "manifests/95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651.json",
-        "sha256": "95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651"
+        "path": "manifests/6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa.json",
+        "sha256": "6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa"
       },
       "release_eligibility": {
         "reason": "Invented target 2024 engineering slice. Uncalibrated and excluded from release claims.",

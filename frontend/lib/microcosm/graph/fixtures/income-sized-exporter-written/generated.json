@@ -1,0 +1,261 @@
+{
+  "accounting_columns": [
+    "person_id",
+    "income_year",
+    "A_AGE",
+    "asec_reported_wage_income_2024_price",
+    "asec_reported_net_self_employment_income_2024_price",
+    "asec_reported_ssi_2024_price",
+    "asec_reported_cash_public_assistance_2024_price",
+    "asec_reported_total_income_2024_price",
+    "asec_reported_income_unallocated_2024_price",
+    "WSAL_VAL.status",
+    "WSAL_VAL.validity",
+    "WSAL_VAL.zero_origin",
+    "SEMP_VAL.status",
+    "SEMP_VAL.validity",
+    "SEMP_VAL.zero_origin",
+    "FRSE_VAL.status",
+    "FRSE_VAL.validity",
+    "FRSE_VAL.zero_origin",
+    "SSI_VAL.status",
+    "SSI_VAL.validity",
+    "SSI_VAL.zero_origin",
+    "PTOTVAL.status",
+    "PTOTVAL.validity",
+    "PTOTVAL.zero_origin",
+    "PAW_VAL.status",
+    "PAW_VAL.validity",
+    "PAW_VAL.zero_origin",
+    "PAW_VAL.source_encoding_class"
+  ],
+  "accounting_dtypes": [
+    "<i8",
+    "<i8",
+    "<i8",
+    "<f8",
+    "<f8",
+    "<f8",
+    "<f8",
+    "<f8",
+    "<f8",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1",
+    "u1"
+  ],
+  "accounting_row_bytes": 91,
+  "base_exporter_sha256": "970d95541f9f6d66f4d7adea3f7583d373bcc9b24c51fcc4324c2bf003cb055d",
+  "evidence": "INVENTED FIXTURES ONLY - these describe no population, no ASEC data, no model output and no genuine run",
+  "generator": "frontend/scripts/write-invented-income-sized-candidates.py",
+  "generator_sha256": "325a1934e8e2623ffae7289fc683dcfa573a3ac8940e1636067d544c75233a48",
+  "producer_sha256": "4d2a95348310eccf0f0d52bb68faa17ff12ae28267f9c7c6bea0ac3204bd0e66",
+  "profile": "us_asec_income_v3_five_node_sized_v1",
+  "reviewed_exporter_sha256": "0259cbc64af1c860beeab5f73f4ccb10618854133a6d78df0a1aa511241f7a71",
+  "roster_source": "graph_asec_income source tuples, parsed without executing the module",
+  "schema": "microcosm.income_sized_generated_export_fixtures.v2",
+  "shapes": [
+    {
+      "build_summary_bytes": 5084,
+      "build_summary_sha256": "184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5",
+      "candidate_manifest_sha256": "574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5",
+      "candidate_release_id": "us-income-sized-invented-small-v1",
+      "cohorts": [
+        3,
+        3,
+        3
+      ],
+      "eligible_households_by_cohort": [
+        300,
+        300,
+        300
+      ],
+      "files": [
+        "artifacts/184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5.json",
+        "artifacts/9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818.json",
+        "index.json",
+        "manifests/574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5.json"
+      ],
+      "graph_receipts_bytes": 42822,
+      "graph_receipts_sha256": "9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818",
+      "households": 9,
+      "label": "small",
+      "persons": 31,
+      "population_sha256": "13973c961ea39995ac7085b2f92160485cf83abc5852685c968a34e96f1629f0",
+      "producer_schema": "income_v3_first_genuine",
+      "profile": "us_asec_income_v3_five_node_sized_v1",
+      "recorded_count_locations": [
+        {
+          "count": 3,
+          "fact": "cohort_2022",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 3,
+          "fact": "cohort_2023",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 3,
+          "fact": "cohort_2024",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 10,
+          "fact": "family",
+          "locations": 1,
+          "phase_restatements": 0
+        },
+        {
+          "count": 9,
+          "fact": "household",
+          "locations": 3,
+          "phase_restatements": 0
+        },
+        {
+          "count": 25,
+          "fact": "marital_unit",
+          "locations": 1,
+          "phase_restatements": 0
+        },
+        {
+          "count": 31,
+          "fact": "person",
+          "locations": 4,
+          "phase_restatements": 2
+        },
+        {
+          "count": 10,
+          "fact": "spm_unit",
+          "locations": 2,
+          "phase_restatements": 1
+        },
+        {
+          "count": 14,
+          "fact": "tax_unit",
+          "locations": 1,
+          "phase_restatements": 0
+        }
+      ],
+      "run_id": "invented-income-sized-small",
+      "sampling_fraction": 0.01,
+      "scope_note": "9 sampled households from 3 source cohorts, holding 31 people and 14 tax units. An engineering sample of this size establishes no population accuracy.",
+      "selection_rule": "floor(fraction * eligible)",
+      "selection_rule_scope": "per_source_cohort",
+      "tax_units": 14
+    },
+    {
+      "build_summary_bytes": 5085,
+      "build_summary_sha256": "324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2",
+      "candidate_manifest_sha256": "6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa",
+      "candidate_release_id": "us-income-sized-invented-wide-v1",
+      "cohorts": [
+        14,
+        14,
+        13
+      ],
+      "eligible_households_by_cohort": [
+        1400,
+        1400,
+        1300
+      ],
+      "files": [
+        "artifacts/324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2.json",
+        "artifacts/b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6.json",
+        "index.json",
+        "manifests/6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa.json"
+      ],
+      "graph_receipts_bytes": 43667,
+      "graph_receipts_sha256": "b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6",
+      "households": 41,
+      "label": "wide",
+      "persons": 107,
+      "population_sha256": "41c38ba897e673ae6d8de157b609f7b44e6577620157ff2fca0c14c08cd9ca83",
+      "producer_schema": "income_v3_measured_505hh",
+      "profile": "us_asec_income_v3_five_node_sized_v1",
+      "recorded_count_locations": [
+        {
+          "count": 14,
+          "fact": "cohort_2022",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 14,
+          "fact": "cohort_2023",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 13,
+          "fact": "cohort_2024",
+          "locations": 2,
+          "phase_restatements": 0
+        },
+        {
+          "count": 46,
+          "fact": "family",
+          "locations": 3,
+          "phase_restatements": 0
+        },
+        {
+          "count": 41,
+          "fact": "household",
+          "locations": 5,
+          "phase_restatements": 0
+        },
+        {
+          "count": 86,
+          "fact": "marital_unit",
+          "locations": 3,
+          "phase_restatements": 0
+        },
+        {
+          "count": 107,
+          "fact": "person",
+          "locations": 5,
+          "phase_restatements": 2
+        },
+        {
+          "count": 43,
+          "fact": "spm_unit",
+          "locations": 4,
+          "phase_restatements": 1
+        },
+        {
+          "count": 55,
+          "fact": "tax_unit",
+          "locations": 3,
+          "phase_restatements": 0
+        }
+      ],
+      "run_id": "invented-income-sized-wide",
+      "sampling_fraction": 0.01,
+      "scope_note": "41 sampled households from 3 source cohorts, holding 107 people and 55 tax units. An engineering sample of this size establishes no population accuracy.",
+      "selection_rule": "floor(fraction * eligible)",
+      "selection_rule_scope": "per_source_cohort",
+      "tax_units": 55
+    }
+  ],
+  "sized_exporter_sha256": "97f4682bf8dd35434c7c9d0c98e899599efeeef51fc022c1c94ea547d1987369",
+  "sized_exporter_tests_sha256": "51b261ee2b47366f48a002fe3b1780610a29502b024fdf21a66189e1d6935705",
+  "what": "Invented sized income-v3 exports produced by the sized exporter's own invented-fixture helper at two shapes, with the real production 28-column accounting roster substituted for the helper's renamed EVIDENCE_j stand-ins."
+}
