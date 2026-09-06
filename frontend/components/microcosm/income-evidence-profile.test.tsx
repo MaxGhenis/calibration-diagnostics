@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ReceiptGraphSurface } from "./receipt-graph-view";
-import { buildReceiptGraph } from "@/lib/microcosm/graph/adapter";
+import { ReceiptGraphUnavailableError, buildReceiptGraph } from "@/lib/microcosm/graph/adapter";
 import { normalizeGraphAttachment } from "@/lib/microcosm/graph/attachment";
 import { inventedGraph } from "@/lib/microcosm/graph/fixtures/invented-graph";
 import { inventedIncomeV3 } from "@/lib/microcosm/graph/fixtures/invented-income-v3";
@@ -213,6 +213,20 @@ describe("the three paths and their differences", () => {
   });
 });
 
+describe("nothing that fails the profile contract ever reaches the surface", () => {
+  test("a corrupted annotation is refused before any markup exists", () => {
+    const corrupt = inventedIncomeV3();
+    (corrupt.graph as any).quality.score = 0.94;
+    expect(() => surface(corrupt)).toThrow(ReceiptGraphUnavailableError);
+  });
+
+  test("a build summary from another profile is refused before any markup exists", () => {
+    expect(() => surface(inventedIncomeV3({ profileOnBuildOnly: true }))).toThrow(
+      ReceiptGraphUnavailableError,
+    );
+  });
+});
+
 describe("identifiers stay reachable in the section they belong to", () => {
   test("the accounting's own digests sit with the accounting", () => {
     expect(INCOME.markup).toContain("Column identifiers and evidence digests");
@@ -225,6 +239,13 @@ describe("identifiers stay reachable in the section they belong to", () => {
       "Fresh warm reuse identifiers",
     ])
       expect(INCOME.markup).toContain(label);
+  });
+
+  test("the drawn region names the profile it belongs to", () => {
+    expect(INCOME.markup).toContain(
+      'data-evidence-profile="us_asec_income_v3_five_node_15hh"',
+    );
+    expect(LEGACY.markup).not.toContain("data-evidence-profile");
   });
 
   test("the profile's own identities are named", () => {

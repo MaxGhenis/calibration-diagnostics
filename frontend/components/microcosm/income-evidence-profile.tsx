@@ -300,7 +300,7 @@ function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
           {reported.arithmetic_statements.map((statement) => (
             <li
               key={statement}
-              className="rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-[11px] text-foreground"
+              className="rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-[11px] break-all text-foreground"
             >
               {statement}
             </li>
@@ -429,7 +429,9 @@ function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
               key={column.name}
               className="flex flex-wrap items-baseline gap-x-2 text-[11px]"
             >
-              <span className="font-mono text-foreground">{column.name}</span>
+              <span className="min-w-0 break-all font-mono text-foreground">
+                {column.name}
+              </span>
               <span className="text-muted-foreground">{column.dtype}</span>
               <Mono>{column.sha256}</Mono>
             </li>
@@ -636,7 +638,7 @@ function Divergence({ profile }: { profile: EvidenceProfileReading }) {
           {lineage_divergence.fields.map((field) => (
             <li
               key={field}
-              className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-foreground"
+              className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] break-all text-foreground"
             >
               {field}
             </li>
@@ -662,7 +664,9 @@ export function IncomeEvidenceProfile({
   edges: ExecutionEdge[];
 }) {
   return (
-    <div className="flex flex-col gap-3">
+    // Named on the element, so a browser check can read what this profile says
+    // without also reading the site chrome around it.
+    <div className="flex flex-col gap-3" data-evidence-profile={profile.id}>
       <QualityBanner profile={profile} />
       <div className="grid gap-3 xl:grid-cols-2">
         <Slice profile={profile} />
