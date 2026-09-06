@@ -476,7 +476,21 @@ const DIRECT_CHECK_FIELDS = {
  * run, so a payload that disagrees about how many households it holds, or which
  * columns it accounts, is not a variant of it. */
 export const INCOME_V3_PROFILE = "us_asec_income_v3_five_node_15hh";
-const PROFILES = [INCOME_V3_PROFILE];
+/** The sample-size-aware successor.
+ *
+ * Same semantics, same five nodes, same accounting, same price basis -- the one
+ * thing that differs is that its sample size is carried by the payload and
+ * reconciled, rather than pinned here. It is a separate name because it is a
+ * separate contract: this reader validates a sized payload against its own
+ * table and refuses to read it as the fifteen-household one, and refuses a
+ * fifteen-household payload under the sized table. Neither is a relaxation of
+ * the other, and the original's checks below are untouched. */
+export const INCOME_SIZED_PROFILE = "us_asec_income_v3_five_node_sized_v1";
+const PROFILES = [INCOME_V3_PROFILE, INCOME_SIZED_PROFILE];
+/** Both income profiles share the five-node semantics, so every place that asks
+ * "is this the income shape?" asks this rather than naming one of them. */
+const isIncomeProfile = (profile: string | null): boolean =>
+  profile === INCOME_V3_PROFILE || profile === INCOME_SIZED_PROFILE;
 
 const INCOME_V3 = {
   nodes: [
@@ -702,6 +716,14 @@ const bounded = (min: number, max: number): Check =>
     assert(value >= min && value <= max);
   };
 
+/** A scope count. Positive, because a scope of zero households describes
+ * nothing, and `count` alone would accept it. */
+const positiveCount: Check = function positiveScopeCount(value) {
+  count(value);
+  assert((value as number) >= 1);
+};
+
+/** The fifteen-household scope: every count pinned, exactly as reviewed. */
 const incomeScope: Check = value => {
   const s = shape(value, {
     households: count,
@@ -731,6 +753,148 @@ const incomeScope: Check = value => {
   );
 };
 
+/** Entities the sized profile will carry a row count for, and the three it
+ * always requires. Closed, so a payload cannot invent an entity and have it
+ * drawn as if the run had counted one. */
+const SIZED_ENTITIES = [
+  "household",
+  "person",
+  "family",
+  "spm_unit",
+  "tax_unit",
+  "marital_unit"
+];
+const SIZED_REQUIRED_ENTITIES = ["household", "person", "tax_unit"];
+/** The producer schemas the exporter has explicit adapters for. Named, not
+ * open: an unrecognised producer is refused rather than read under whichever
+ * table happens to fit. */
+const SIZED_PRODUCER_SCHEMAS = ["income_v3_first_genuine", "income_v3_measured_505hh"];
+
+/** The sized scope: the same closed semantics, with the size carried and
+ * reconciled instead of pinned.
+ *
+ * Nothing here trusts a single number. The publisher states how many
+ * independent places inside its run recorded each count, the cohorts must sum
+ * to the households, the people cannot be fewer than the households, and the
+ * entity-row table must agree with the three headline counts. Everything that
+ * is *not* the size -- the money field axes, the housing evidence fields, the
+ * cohort year roster and its order -- is pinned exactly as it is for the
+ * fifteen-household profile. */
+const sizedScope: Check = value => {
+  const s = shape(value, {
+    households: positiveCount,
+    persons: positiveCount,
+    tax_units: positiveCount,
+    entity_rows: function entityRowSet(rows) {
+      assert(Array.isArray(rows) && rows.length >= SIZED_REQUIRED_ENTITIES.length && rows.length <= SIZED_ENTITIES.length);
+      const names: string[] = [];
+      for (const row of rows as unknown[]) {
+        const r = shape(row, { entity: id, rows: positiveCount });
+        assert(SIZED_ENTITIES.includes(r.entity as string));
+        names.push(r.entity as string);
+      }
+      unique(names);
+      assert(SIZED_REQUIRED_ENTITIES.every(entity => names.includes(entity)));
+    },
+    households_by_source_cohort: keyedRows("income_year", INCOME_V3.incomeYears, {
+      households: positiveCount,
+      eligible_households: positiveCount
+    }),
+    money_field_axes: count,
+    housing_universe_evidence_fields: count,
+    housing_universe_carried_cells: count,
+    loaded_module_count: bounded(1, 1024),
+    producer_schema: function producerSchema(name) {
+      id(name);
+      assert(SIZED_PRODUCER_SCHEMAS.includes(name as string));
+    },
+    measurement: sizedMeasurement,
+    note: reason
+  });
+  // Size-invariant semantics, pinned exactly as they are for the original.
+  equal(s.money_field_axes, INCOME_V3.moneyFieldAxes);
+  equal(s.housing_universe_evidence_fields, INCOME_V3.housingUniverseEvidenceFields);
+  assert(
+    s.housing_universe_carried_cells >= s.housing_universe_evidence_fields &&
+    s.housing_universe_carried_cells <= 64
+  );
+  // A sample of whole households cannot hold fewer people than households.
+  assert(s.persons >= s.households);
+  equal(
+    s.households_by_source_cohort.reduce((total: number, cohort: RecordValue) => total + cohort.households, 0),
+    s.households
+  );
+  for (const cohort of s.households_by_source_cohort as RecordValue[])
+    assert(cohort.eligible_households >= cohort.households);
+  // The entity table and the three headline counts are the same facts written
+  // twice; they have to say the same thing.
+  const rows = new Map(
+    (s.entity_rows as RecordValue[]).map(row => [row.entity as string, row.rows as number])
+  );
+  equal(rows.get("household"), s.households);
+  equal(rows.get("person"), s.persons);
+  equal(rows.get("tax_unit"), s.tax_units);
+  // Every recording the publisher claims must be one it can name.
+  const recorded = new Map(
+    ((s.measurement as RecordValue).independent_recordings as RecordValue[]).map(
+      entry => [entry.fact as string, entry]
+    )
+  );
+  for (const [entity, count_] of rows) {
+    const entry = recorded.get(entity);
+    assert(entry !== undefined);
+    equal(entry!.count, count_);
+  }
+  for (const cohort of s.households_by_source_cohort as RecordValue[]) {
+    const entry = recorded.get(`cohort_${cohort.income_year}`);
+    assert(entry !== undefined);
+    equal(entry!.count, cohort.households);
+  }
+  // Households and people are what everything else is sized by, so each must
+  // have been written down more than once inside the run.
+  for (const entity of ["household", "person"])
+    assert((recorded.get(entity)!.recordings as number) >= 2);
+};
+
+/** How the size was arrived at, as the publisher recorded it.
+ *
+ * Every entry names one fact, the count it carries, how many independent places
+ * inside the run recorded it, and which places those were. The source names are
+ * evidence, not decoration: a count with one source is a restatement and the
+ * scope check above refuses it for the two load-bearing facts. */
+function sizedMeasurement(value: unknown): void {
+  const m = shape(value, {
+    basis: enumeration("measured_from_recorded_outputs_and_reconciled"),
+    selection_rule: v => text(v, 128),
+    entity_structure_recorded: bool,
+    nesting: list(v => {
+      shape(v, {
+        entity: function nestedEntity(name) {
+          id(name);
+          assert(SIZED_ENTITIES.includes(name as string));
+        },
+        rows: positiveCount,
+        within_one_household: enumeration(true)
+      });
+    }, 8),
+    independent_recordings: list(v => {
+      const entry = shape(v, {
+        fact: id,
+        count: positiveCount,
+        recordings: bounded(1, 64),
+        sources: list(v2 => text(v2, 160), 64, 1)
+      });
+      // The claimed number of recordings is the number of places named.
+      equal(entry.recordings, (entry.sources as unknown[]).length);
+    }, 64, 1),
+    note: reason
+  });
+  unique((m.independent_recordings as RecordValue[]).map(entry => entry.fact));
+  unique((m.nesting as RecordValue[]).map(entry => entry.entity));
+  // A nesting table is recorded only when the producer wrote one.
+  assert(m.entity_structure_recorded === ((m.nesting as unknown[]).length > 0));
+}
+
 /** No score, and the absence is the contract rather than a missing field. A
  * profile that published a number here would be describing different evidence. */
 const incomeQuality: Check = value => {
@@ -744,8 +908,27 @@ const incomeQuality: Check = value => {
   });
 };
 
-const incomeReported: Check = value => {
-  const r = shape(value, {
+/** The accounting block's field table, under one of the two size policies.
+ *
+ * `pinned` keeps the reviewed profile exactly as reviewed: each zero-origin
+ * class is capped at fifty-two. `measured` reads them as plain counts and holds
+ * them to the arithmetic instead, in `reportedTotals` below. */
+const reportedFields = (measured: boolean): Record<string, Check> => {
+  const zeroOrigin: Check = keyedRows(
+    "income_year",
+    INCOME_V3.incomeYears,
+    Object.fromEntries(
+      INCOME_V3.zeroClasses.map(name => [
+        name,
+        // Deliberately unbounded under the measured policy: the producer builds
+        // these as a partition of the accounted person rows by cohort year and
+        // class, so they add up exactly or the block is contradictory. A cap
+        // against a constant would be a weaker statement, not a stronger one.
+        measured ? count : bounded(0, INCOME_V3.persons)
+      ])
+    )
+  );
+  return {
     rows: count,
     accounting_column_count: count,
     accounting_row_bytes: count,
@@ -787,11 +970,7 @@ const incomeReported: Check = value => {
       INCOME_V3.resultColumns,
       Object.fromEntries(INCOME_V3.signClasses.map(name => [name, count]))
     ),
-    zero_origin_class_counts: keyedRows(
-      "income_year",
-      INCOME_V3.incomeYears,
-      Object.fromEntries(INCOME_V3.zeroClasses.map(name => [name, bounded(0, INCOME_V3.persons)]))
-    ),
+    zero_origin_class_counts: zeroOrigin,
     basis: v => {
       shape(v, {
         measure: enumeration(INCOME_V3.basis.measure),
@@ -809,8 +988,15 @@ const incomeReported: Check = value => {
       });
     },
     not_claimed: exactList(INCOME_V3.notClaimed)
-  });
-  equal(r.rows, INCOME_V3.persons);
+  };
+};
+
+/** The totals both policies share, plus the one the measured policy adds. */
+function reportedTotals(r: RecordValue, measured: boolean): void {
+  if (measured)
+    positiveCount(r.rows);
+  else
+    equal(r.rows, INCOME_V3.persons);
   equal(r.accounting_column_count, INCOME_V3.accountingColumns);
   // Derived from the pinned roster's own dtype widths rather than restated, so
   // the published row width and the column layout have to agree with each
@@ -831,6 +1017,27 @@ const incomeReported: Check = value => {
       INCOME_V3.signClasses.reduce((total: number, name: string) => total + row[name], 0),
       r.rows
     );
+  if (measured)
+    // The same statement one axis over: each accounted row falls in exactly one
+    // zero-origin class in exactly one cohort year.
+    equal(
+      (r.zero_origin_class_counts as RecordValue[]).reduce(
+        (total: number, entry: RecordValue) =>
+          total + INCOME_V3.zeroClasses.reduce((sum, name) => sum + (entry[name] as number), 0),
+        0
+      ),
+      r.rows
+    );
+}
+
+/** Named function expressions, not arrows returned by a factory: the frame name
+ * a refusal carries is part of what the contract tests read, so each policy
+ * gets its own name and calls `shape` itself. */
+const incomeReported: Check = function incomeReported(value) {
+  reportedTotals(shape(value, reportedFields(false)), false);
+};
+const sizedReported: Check = function sizedReported(value) {
+  reportedTotals(shape(value, reportedFields(true)), true);
 };
 
 const pathIdentity = (extra: Record<string, Check> = {}): Check => value => {
@@ -894,13 +1101,27 @@ const INCOME_V3_GRAPH_FIELDS: Record<string, Check> = {
   lineage_divergence: incomeLineage
 };
 
-const INCOME_V3_DIRECT_FIELDS: Record<string, Check> = {
+/** The sized profile's own table. Same five field names, two of them under the
+ * measured policy; everything else is the identical check object, so the two
+ * profiles cannot drift apart on anything that is not the size. */
+const INCOME_SIZED_GRAPH_FIELDS: Record<string, Check> = {
+  scope: sizedScope,
+  quality: incomeQuality,
+  reported_income: sizedReported,
+  path_output_identities: incomePathIdentities,
+  lineage_divergence: incomeLineage
+};
+
+const incomeGraphFields = (profile: string): Record<string, Check> =>
+  profile === INCOME_SIZED_PROFILE ? INCOME_SIZED_GRAPH_FIELDS : INCOME_V3_GRAPH_FIELDS;
+
+const INCOME_DIRECT_FIELDS: Record<string, Check> = {
   tax_unit_count: count,
   reported_income_rows: count,
   reported_income_body_sha256: digest
 };
 
-const INCOME_V3_EXECUTION_FIELDS: Record<string, Check> = {
+const INCOME_EXECUTION_FIELDS: Record<string, Check> = {
   reported_income_payload_sha256: digest,
   reported_income_body_sha256: digest
 };
@@ -961,7 +1182,7 @@ export function normalizeGraphAttachment(
     schema_version: enumeration(GRAPH_RECEIPTS_SCHEMA),
     ...commonFields,
     ...profileCommon,
-    ...(profile === INCOME_V3_PROFILE ? INCOME_V3_GRAPH_FIELDS : {}),
+    ...(isIncomeProfile(profile) ? incomeGraphFields(profile!) : {}),
     population_sha256: digest,
     period: text,
     entity: id,
@@ -1040,7 +1261,7 @@ export function normalizeGraphAttachment(
   equal(canonical(Object.keys(build.checks).sort()), canonical(["direct", ...executions.map(e => e.mode)].sort()));
   const direct = shape(build.checks.direct, {
     ...DIRECT_CHECK_FIELDS,
-    ...(profile === INCOME_V3_PROFILE ? INCOME_V3_DIRECT_FIELDS : {})
+    ...(isIncomeProfile(profile) ? INCOME_DIRECT_FIELDS : {})
   });
   equal(direct.population_sha256, graph.population_sha256);
   const expectedIds = Object.keys(graph.implementation_set.by_node).sort();
@@ -1085,7 +1306,7 @@ export function normalizeGraphAttachment(
     const c = build.checks[e.mode];
     shape(c, {
       ...EXECUTION_CHECK_FIELDS,
-      ...(profile === INCOME_V3_PROFILE ? INCOME_V3_EXECUTION_FIELDS : {})
+      ...(isIncomeProfile(profile) ? INCOME_EXECUTION_FIELDS : {})
     });
     equal(c.population_sha256, graph.population_sha256);
     equal(c.execution_manifest_sha256, e.manifest_sha256);
@@ -1133,7 +1354,7 @@ export function normalizeGraphAttachment(
         // Both fields are nullable in the wire contract, so two nulls agree.
         equal(o.numeric, a.numeric);
         equal(o.tolerance, a.tolerance);
-        if (profile === INCOME_V3_PROFILE)
+        if (isIncomeProfile(profile))
           permittedInputProducer(n.id as string, a.producer as string);
         dependencies.get(n.id)!.add(a.producer as string);
       }
@@ -1154,8 +1375,8 @@ export function normalizeGraphAttachment(
   }
   assertAcyclic(dependencies);
   assert(exceptional ? ["completed", "failed"].includes(manifest.execution_status) : manifest.execution_status === "completed");
-  const evidenceProfile = profile === INCOME_V3_PROFILE
-    ? incomeV3Reading(graph, build, direct, executions)
+  const evidenceProfile = isIncomeProfile(profile)
+    ? incomeReading(profile!, graph, build, direct, executions)
     : null;
   if (profile !== null)
     checks.push({
@@ -1200,13 +1421,26 @@ const PATH_DESCRIPTIONS: Record<string, string> = {
  * two artifacts have been checked against each other. Nothing is authored here
  * beyond the three path descriptions above: every number, digest and sentence
  * below is the publisher's own, rearranged. */
-function incomeV3Reading(
+function incomeReading(
+  profile: string,
   graph: RecordValue,
   build: RecordValue,
   direct: RecordValue,
   executions: ProjectionExecution[],
 ): EvidenceProfileReading {
+  const scope = graph.scope as RecordValue;
+  // The build summary counts the same sample the graph scope describes. The
+  // reviewed reader validated these three as bare counts and never compared
+  // them to anything, so a summary could disagree with the scope beside it and
+  // still be drawn. They are the same facts written twice, so they are checked
+  // against each other for both profiles.
+  equal(direct.household_count, scope.households);
+  equal(direct.person_count, scope.persons);
+  equal(direct.tax_unit_count, scope.tax_units);
   const reported = graph.reported_income as RecordValue;
+  // The accounted row count is the person count, written in the accounting
+  // block rather than the scope block.
+  equal(reported.rows, scope.persons);
   const identities = graph.path_output_identities as RecordValue;
   const accounting = identities.reported_income as RecordValue;
   // The accounting body is one artifact with one digest, whichever path wrote

@@ -241,11 +241,43 @@ export interface EvidenceProfileScope {
   households: number;
   persons: number;
   tax_units: number;
-  households_by_source_cohort: { income_year: string; households: number }[];
+  households_by_source_cohort: {
+    income_year: string;
+    households: number;
+    /** Present only on the sized profile: how many households of that cohort
+     * the run recorded as eligible before selection. */
+    eligible_households?: number;
+  }[];
   money_field_axes: number;
   housing_universe_evidence_fields: number;
   housing_universe_carried_cells: number;
   loaded_module_count: number;
+  note: string;
+  /** The four fields below are the sized profile's, and only the sized
+   * profile's. They are optional rather than nullable because the
+   * fifteen-household profile publishes bytes that do not contain them at all,
+   * and the reader counts keys exactly: absent is the contract, not a gap. */
+  entity_rows?: { entity: string; rows: number }[];
+  producer_schema?: string;
+  measurement?: EvidenceScopeMeasurement;
+}
+
+/** How a sized scope's counts were arrived at.
+ *
+ * A measured size is only worth as much as the number of independent places the
+ * run wrote it down, so the publisher names them and the reader checks that the
+ * claimed number of recordings is the number of sources listed. */
+export interface EvidenceScopeMeasurement {
+  basis: string;
+  selection_rule: string;
+  entity_structure_recorded: boolean;
+  nesting: { entity: string; rows: number; within_one_household: true }[];
+  independent_recordings: {
+    fact: string;
+    count: number;
+    recordings: number;
+    sources: string[];
+  }[];
   note: string;
 }
 
