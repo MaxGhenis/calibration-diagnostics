@@ -1,17 +1,17 @@
 {
   "candidates": [
     {
-      "candidate_release_id": "us-asec-income-sized-invented-wide-unequal-cohorts-v1",
+      "candidate_release_id": "us-income-sized-invented-wide-v1",
       "execution_status": "completed",
       "manifest": {
-        "path": "manifests/fdeef19a9c1f01cbe3ff4abdfab077a7dbe2c390334ca6153c23294839bab207.json",
-        "sha256": "fdeef19a9c1f01cbe3ff4abdfab077a7dbe2c390334ca6153c23294839bab207"
+        "path": "manifests/95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651.json",
+        "sha256": "95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651"
       },
       "release_eligibility": {
         "reason": "Invented target 2024 engineering slice. Uncalibrated and excluded from release claims.",
         "status": "excluded"
       },
-      "run_id": "invented-income-sized-wide_unequal_cohorts",
+      "run_id": "invented-income-sized-wide",
       "updated_at": "2026-09-06T04:41:28+00:00"
     }
   ],

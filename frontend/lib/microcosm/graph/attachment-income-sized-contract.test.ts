@@ -25,10 +25,10 @@ const ROOT = join(import.meta.dir, "fixtures/income-sized-exporter-written");
  * test of an edit rather than of the exporter. */
 const SHAPES = {
   small: {
-    manifest: "f91d2c286d3c1300e85eac3f4922b8790103189475df4cf4d22a940f18dbc3b4",
-    graph: "8936f6348daae1bb2106f54d704d808d86eb992ed8c11bb672f0a2e22e63a4f2",
-    build: "80b2a8b8e20f587f14e07116caaa409abe5f5c65229c755350a15b1b8e7e5931",
-    candidate: "us-asec-income-sized-invented-small-equal-cohorts-v1",
+    manifest: "63e680d041b6705b434831f056ee0a1d55250c6f5719c193795445667e37803f",
+    graph: "8690788303c341a7ed41dff092b92f0b07ba56b2c70bcbedf1e718c75873ed11",
+    build: "4f1a0bea9474702770ad9b9e37f125c382c10edfc940ede2349547acb46540d9",
+    candidate: "us-income-sized-invented-small-v1",
     households: 9,
     persons: 31,
     taxUnits: 14,
@@ -38,10 +38,10 @@ const SHAPES = {
     nesting: 0,
   },
   wide: {
-    manifest: "fdeef19a9c1f01cbe3ff4abdfab077a7dbe2c390334ca6153c23294839bab207",
-    graph: "a0b136a9dff0cd21e175074cb45d2bbfcd2f45eff7e8e46707ae0294b6767cfc",
-    build: "003f48e62271afe55805b49826c745db2887e679748ce9a3373c4bfb2f9506e5",
-    candidate: "us-asec-income-sized-invented-wide-unequal-cohorts-v1",
+    manifest: "95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651",
+    graph: "62a929052a021cb5e824a3bb112ee8b5ad1d477c35dfbc7b1446554cfa6e8b3c",
+    build: "6b0da81129480abbf973d1646dea4d1ab9140895d1eae53195addba30f69a5f7",
+    candidate: "us-income-sized-invented-wide-v1",
     households: 41,
     persons: 107,
     taxUnits: 55,

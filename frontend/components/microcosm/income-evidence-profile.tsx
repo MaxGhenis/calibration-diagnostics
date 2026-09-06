@@ -320,48 +320,29 @@ function Measurement({
           </Row>
         )}
       </dl>
-      <table className="mt-2 w-full border-separate border-spacing-0 text-[11px]">
-        <caption className="sr-only">
-          Each measured count and the places inside the run that recorded it
-        </caption>
-        <thead>
-          <tr className="text-left text-muted-foreground">
-            <th scope="col" className="pb-1 pr-3 font-medium">
-              Fact
-            </th>
-            <th scope="col" className="pb-1 pr-3 text-right font-medium">
-              Count
-            </th>
-            <th scope="col" className="pb-1 font-medium">
-              Recorded in
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {measurement.independent_recordings.map((entry) => (
-            <tr key={entry.fact} className="align-top">
-              <th
-                scope="row"
-                className="border-t border-border/60 py-1 pr-3 text-left font-normal text-foreground"
-              >
-                {tokenReading(entry.fact)}
-              </th>
-              <td className="border-t border-border/60 py-1 pr-3 text-right tabular-nums text-foreground">
-                {countReading(entry.count)}
-              </td>
-              <td className="border-t border-border/60 py-1 text-muted-foreground">
+      {/* A table would be the right semantic form here, but the recording
+        * sources are long unbroken tokens and a three-column layout pushes the
+        * whole card past a 390px viewport. Each recording is one fact, so a
+        * definition list carries the same structure and wraps. */}
+      <dl className="mt-2 divide-y divide-border/60">
+        {measurement.independent_recordings.map((entry) => (
+          <div key={entry.fact} className="py-1.5">
+            <dt className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-foreground">
+              <span className="font-medium">{tokenReading(entry.fact)}</span>
+              <span className="tabular-nums">{countReading(entry.count)}</span>
+              <span className="text-muted-foreground">
+                recorded in{" "}
                 {entry.recordings === 1
                   ? "1 place"
                   : `${countReading(entry.recordings)} places`}
-                <span className="sr-only">: </span>
-                <span className="block break-words">
-                  {entry.sources.join(" · ")}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            </dt>
+            <dd className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground">
+              {entry.sources.join(" · ")}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }

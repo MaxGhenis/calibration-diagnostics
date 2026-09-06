@@ -115,7 +115,7 @@ describe("the measurement evidence is drawn, because a measured size needs it", 
       for (const source of entry.sources)
         expect(WIDE.markup).toContain(source.replace(/\./g, "."));
     }
-    expect(WIDE.markup).toContain("Recorded in");
+    expect(WIDE.markup).toContain("recorded in");
   });
 
   test("the nesting table is drawn only when the producer recorded one", () => {
