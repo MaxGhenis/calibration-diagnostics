@@ -1,0 +1,691 @@
+"use client";
+
+// What a declared publisher evidence profile adds to the receipt view: how big
+// the slice is, what the accounted quantity actually is, what the source
+// reported as against what the model produced, how the three recorded paths
+// differ, and -- first, before any of it -- that nothing here measures agreement
+// with an external total.
+//
+// Two rules the whole surface follows. Engineering completion is drawn as
+// engineering completion and never borrows the vocabulary of a passing quality
+// check: the score is absent and its absence is drawn, not omitted. And every
+// identifier stays reachable, in the section it belongs to rather than in one
+// shared block of digests at the end, because a reader checking the accounting
+// wants the accounting's digests and not the run's.
+
+import type { ReactNode } from "react";
+
+import { StatusPill } from "@/components/shared/status-pill";
+import {
+  countReading,
+  reportedColumnReading,
+  shareOf,
+  tokenReading,
+} from "@/lib/microcosm/graph/presentation";
+import type {
+  EvidencePath,
+  EvidenceProfileReading,
+  ExecutionEdge,
+  ReceiptGraphNode,
+} from "@/lib/microcosm/graph/types";
+
+/* ---------------------------------------------------------------- pieces */
+
+function Mono({ children }: { children: ReactNode }) {
+  return <span className="font-mono text-[11px] break-all">{children}</span>;
+}
+
+function Card({
+  title,
+  lede,
+  pills,
+  children,
+}: {
+  title: string;
+  lede?: string;
+  pills?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-md border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold text-foreground">{title}</h3>
+          {lede ? (
+            <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-muted-foreground">
+              {lede}
+            </p>
+          ) : null}
+        </div>
+        {pills ? <div className="flex flex-wrap gap-1.5">{pills}</div> : null}
+      </div>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details className="mt-3 rounded-md border border-border bg-muted/20 px-3 py-2">
+      <summary className="cursor-pointer text-[11px] font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        {summary}
+      </summary>
+      <div className="mt-2">{children}</div>
+    </details>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1">
+      <dt className="w-44 shrink-0 text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="min-w-[min(100%,12rem)] flex-1 break-words text-[11px] text-foreground">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="min-w-0 flex-1 px-3 py-2">
+      <div className="text-xl font-semibold tabular-nums leading-none text-foreground">
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] font-semibold uppercase leading-tight tracking-[0.1em] text-muted-foreground">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/** One hue, five tones. Segment identity never rests on the tone alone: every
+ * segment is also named and counted in the legend directly beneath it. */
+const TONES = [
+  "var(--chart-1)",
+  "var(--chart-3)",
+  "var(--chart-2)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+interface Segment {
+  key: string;
+  label: string;
+  count: number;
+}
+
+function Composition({
+  segments,
+  total,
+  caption,
+}: {
+  segments: Segment[];
+  total: number;
+  caption: string;
+}) {
+  const present = segments.filter((segment) => segment.count > 0);
+  return (
+    <div>
+      <div
+        className="flex h-2 gap-[2px] overflow-hidden rounded-full bg-muted"
+        role="img"
+        aria-label={`${caption}. ${segments
+          .map((segment) => `${segment.label}: ${countReading(segment.count)}`)
+          .join("; ")}.`}
+      >
+        {present.map((segment) => (
+          <span
+            key={segment.key}
+            className="h-full first:rounded-l-full last:rounded-r-full"
+            style={{
+              width: `${shareOf(segment.count, total)}%`,
+              background: TONES[segments.indexOf(segment) % TONES.length],
+            }}
+          />
+        ))}
+      </div>
+      <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+        {segments.map((segment, index) => (
+          <li
+            key={segment.key}
+            className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+          >
+            <span
+              aria-hidden
+              className="h-2 w-2 shrink-0 rounded-sm"
+              style={{
+                background: segment.count
+                  ? TONES[index % TONES.length]
+                  : "var(--border-strong)",
+              }}
+            />
+            <span>{segment.label}</span>
+            <span className="font-mono tabular-nums text-foreground">
+              {countReading(segment.count)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------- sections */
+
+function QualityBanner({ profile }: { profile: EvidenceProfileReading }) {
+  const { quality } = profile;
+  return (
+    <section className="rounded-md border pill-warn px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-xs font-semibold">
+            Engineering completion. Quality {quality.status}.
+          </h3>
+          <p className="mt-1 max-w-3xl text-[11px] leading-relaxed">
+            {quality.score_reason} {quality.note}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-semibold leading-none" aria-hidden>
+            —
+          </div>
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em]">
+            No score
+          </div>
+        </div>
+      </div>
+      <div className="mt-3">
+        <div className="text-[11px] font-medium">
+          Not measured here, and not measured anywhere this attachment points at
+        </div>
+        <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          {quality.missing.map((item) => (
+            <li key={item} className="inline-flex items-center gap-1.5 text-[11px]">
+              <span
+                aria-hidden
+                className="h-2 w-2 shrink-0 rounded-full border border-current"
+              />
+              <span>{tokenReading(item)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="mt-2 text-[11px] leading-relaxed">
+        The basis on record is {tokenReading(quality.basis)}. Nothing below is a
+        statement about a population, a national total or a congressional
+        district.
+      </p>
+    </section>
+  );
+}
+
+function Slice({ profile }: { profile: EvidenceProfileReading }) {
+  const { scope } = profile;
+  return (
+    <Card
+      title="The recorded slice"
+      lede={scope.note}
+      pills={<StatusPill tone="warning">Engineering slice</StatusPill>}
+    >
+      <div className="flex flex-wrap divide-x divide-border/60 rounded-md border border-border bg-muted/20">
+        <Stat value={countReading(scope.households)} label="Households" />
+        <Stat value={countReading(scope.persons)} label="People" />
+        <Stat value={countReading(scope.tax_units)} label="Tax units" />
+      </div>
+      <div className="mt-3">
+        <div className="text-[11px] font-medium text-foreground">
+          Households by source income year
+        </div>
+        <div className="mt-1.5">
+          <Composition
+            total={scope.households}
+            caption="Households by source income year"
+            segments={scope.households_by_source_cohort.map((cohort) => ({
+              key: cohort.income_year,
+              label: cohort.income_year,
+              count: cohort.households,
+            }))}
+          />
+        </div>
+      </div>
+      <dl className="mt-3 divide-y divide-border/60">
+        <Row label="Money field axes">{countReading(scope.money_field_axes)}</Row>
+        <Row label="Housing universe fields">
+          {countReading(scope.housing_universe_evidence_fields)} evidence fields ·{" "}
+          {countReading(scope.housing_universe_carried_cells)} carried cells
+        </Row>
+        <Row label="Loaded modules">{countReading(scope.loaded_module_count)}</Row>
+      </dl>
+    </Card>
+  );
+}
+
+function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
+  const reported = profile.reported_income;
+  const { basis } = reported;
+  return (
+    <Card
+      title="Reported source income, as accounted"
+      lede={basis.note}
+      pills={
+        <>
+          <StatusPill tone="neutral">{tokenReading(basis.measure)}</StatusPill>
+          <StatusPill tone="neutral">2024 price target</StatusPill>
+        </>
+      }
+    >
+      <dl className="divide-y divide-border/60">
+        <Row label="Nominal source">
+          {tokenReading(basis.nominal_source)}
+        </Row>
+        <Row label="Price target">
+          {tokenReading(basis.price_target)}
+        </Row>
+        <Row label="Reference period">
+          {tokenReading(basis.reference_period)}
+        </Row>
+        <Row label="Accounting body">
+          {countReading(reported.rows)} rows ·{" "}
+          {countReading(reported.accounting_column_count)} columns ·{" "}
+          {countReading(reported.accounting_row_bytes)} bytes a row
+        </Row>
+      </dl>
+
+      <div className="mt-3">
+        <div className="text-[11px] font-medium text-foreground">
+          The order the amounts were combined in
+        </div>
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {reported.arithmetic_statements.map((statement) => (
+            <li
+              key={statement}
+              className="rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-[11px] text-foreground"
+            >
+              {statement}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-4">
+        <div className="text-[11px] font-medium text-foreground">
+          Result columns, and how their {countReading(reported.rows)} accounted
+          values are signed
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          Each name below is shown without the{" "}
+          <span className="font-mono">asec_reported_</span> prefix and the{" "}
+          <span className="font-mono">_2024_price</span> suffix every one of them
+          carries; the full identifier is beside it. The unallocated column is{" "}
+          {tokenReading(basis.residual_meaning)}.
+        </p>
+        <ul className="mt-2 flex flex-col gap-3">
+          {reported.results.map((result) => (
+            <li key={result.column}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <span className="text-[11px] font-medium text-foreground">
+                  {reportedColumnReading(result.column)}
+                </span>
+                <Mono>{result.column}</Mono>
+              </div>
+              <div className="mt-1.5">
+                <Composition
+                  total={reported.rows}
+                  caption={`Signed values in ${result.column}`}
+                  segments={[
+                    { key: "positive", label: "positive", count: result.positive },
+                    { key: "zero", label: "zero", count: result.zero },
+                    { key: "negative", label: "negative", count: result.negative },
+                  ]}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-4">
+        <div className="text-[11px] font-medium text-foreground">
+          Where a zero came from, by source income year
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          A zero amount and an absent one are different readings, and the
+          publisher keeps them apart. These are the classes it recorded.
+        </p>
+        <ul className="mt-2 flex flex-col gap-3">
+          {reported.zero_origin.map((year) => (
+            <li key={year.income_year}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <span className="text-[11px] font-medium text-foreground">
+                  {year.income_year}
+                </span>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {countReading(year.total)} classified
+                </span>
+              </div>
+              <div className="mt-1.5">
+                <Composition
+                  total={year.total}
+                  caption={`Zero origin classes in ${year.income_year}`}
+                  segments={year.classes.map((entry) => ({
+                    key: entry.key,
+                    label: tokenReading(entry.key),
+                    count: entry.count,
+                  }))}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-4">
+        <div className="text-[11px] font-medium text-foreground">
+          Withheld, and stated as withheld
+        </div>
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {reported.not_claimed.map((claim) => (
+            <li
+              key={claim}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-2.5 py-0.5 text-[11px] text-muted-foreground"
+            >
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full border border-current"
+              />
+              {tokenReading(claim)}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <Disclosure summary="Column identifiers and evidence digests">
+        <dl className="divide-y divide-border/60">
+          <Row label="Typed evidence axes">
+            {countReading(reported.typed_evidence_axis_count)}
+          </Row>
+          <Row label="Raw public assistance evidence">
+            {countReading(reported.raw_public_assistance_evidence_count)}
+          </Row>
+          <Row label="Alternative association">
+            {reported.alternative_association_differs
+              ? "Recorded, and differs from the association above."
+              : "Recorded, and agrees with the association above."}{" "}
+            <Mono>{reported.alternative_association_sha256}</Mono>
+          </Row>
+          {reported.results.map((result) => (
+            <Row key={result.column} label={reportedColumnReading(result.column)}>
+              <Mono>{result.sha256}</Mono>
+            </Row>
+          ))}
+        </dl>
+        <div className="mt-2 text-[11px] font-medium text-foreground">
+          All {countReading(reported.accounting_column_count)} accounting columns
+        </div>
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {reported.columns.map((column) => (
+            <li
+              key={column.name}
+              className="flex flex-wrap items-baseline gap-x-2 text-[11px]"
+            >
+              <span className="font-mono text-foreground">{column.name}</span>
+              <span className="text-muted-foreground">{column.dtype}</span>
+              <Mono>{column.sha256}</Mono>
+            </li>
+          ))}
+        </ul>
+      </Disclosure>
+    </Card>
+  );
+}
+
+function SourceAgainstModel({
+  profile,
+  nodes,
+  edges,
+}: {
+  profile: EvidenceProfileReading;
+  nodes: ReceiptGraphNode[];
+  edges: ExecutionEdge[];
+}) {
+  const engine = nodes.find((node) =>
+    node.typed_outputs.some((output) => output.artifact === "engine_evaluation"),
+  );
+  const accounting = nodes.find((node) =>
+    node.typed_outputs.some((output) => output.artifact === "reported_income"),
+  );
+  const linked =
+    engine && accounting
+      ? edges.some((edge) => edge.from === engine.id && edge.to === accounting.id)
+      : false;
+  return (
+    <Card
+      title="What the source reported, and what the model produced"
+      lede="Two recorded things, kept apart. This attachment publishes no comparison between them, and none is drawn."
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+          <div className="text-[11px] font-semibold text-foreground">
+            Reported by the source
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            The accounted quantity is {tokenReading(profile.reported_income.basis.measure)},
+            taken from {tokenReading(profile.reported_income.basis.nominal_source)}.
+          </p>
+          {accounting ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Recorded by <Mono>{accounting.id}</Mono>.
+            </p>
+          ) : null}
+        </div>
+        <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+          <div className="text-[11px] font-semibold text-foreground">
+            Produced by the model
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            The engine evaluation is a separate recorded artifact. This view
+            carries its byte identity and nothing about its values.
+          </p>
+          {engine ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Recorded by <Mono>{engine.id}</Mono>.
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <p className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+        {engine && accounting
+          ? linked
+            ? "The accounting step declares a typed artifact from the engine step, so the two are connected in the recorded graph."
+            : "No recorded typed artifact runs from the engine step to the accounting step, so the accounted amounts in this run were not built from the engine's evaluation."
+          : "This run does not record both an engine evaluation and a reported-income accounting, so no relationship between them is shown."}{" "}
+        Nothing here compares the two: fit, model validation and national totals
+        are on the not-measured list above, and simulated benefit amounts are on
+        the withheld list.
+      </p>
+    </Card>
+  );
+}
+
+function PathRow({ path }: { path: EvidencePath }) {
+  return (
+    <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold text-foreground">
+          {path.label}
+        </span>
+        <StatusPill tone={path.graph_execution ? "info" : "neutral"}>
+          {path.graph_execution ? "Graph execution" : "Not a graph execution"}
+        </StatusPill>
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+        {path.description}
+      </p>
+      <dl className="mt-1.5 divide-y divide-border/60">
+        <Row label="Kernel calls">
+          {path.kernel_calls === null
+            ? "Not recorded: no graph kernel ran on this path."
+            : countReading(path.kernel_calls)}
+        </Row>
+        <Row label="Source preparations">
+          {countReading(path.source_preparation_calls)}
+        </Row>
+        <Row label="Served from cache">
+          {path.cache_hit_count === null ? "—" : countReading(path.cache_hit_count)}
+        </Row>
+        {path.reported_income_rows === null ? null : (
+          <Row label="Accounted rows">{countReading(path.reported_income_rows)}</Row>
+        )}
+      </dl>
+      <Disclosure summary={`${path.label} identifiers`}>
+        <dl className="divide-y divide-border/60">
+          <Row label="Receipt">
+            <Mono>{path.receipt_sha256}</Mono>
+          </Row>
+          <Row label="Execution manifest">
+            {path.execution_manifest_sha256 === null ? (
+              "None: this path recorded no execution manifest."
+            ) : (
+              <Mono>{path.execution_manifest_sha256}</Mono>
+            )}
+          </Row>
+          <Row label="Content key">
+            {path.computation_content_key === null ? (
+              "None: this path recorded no computation content key."
+            ) : (
+              <Mono>{path.computation_content_key}</Mono>
+            )}
+          </Row>
+          <Row label="Accounting payload">
+            <Mono>{path.reported_income_payload_sha256}</Mono>
+          </Row>
+          <Row label="Accounting body">
+            <Mono>{path.reported_income_body_sha256}</Mono>
+          </Row>
+        </dl>
+      </Disclosure>
+    </div>
+  );
+}
+
+function Paths({ profile }: { profile: EvidenceProfileReading }) {
+  return (
+    <Card
+      title="Three recorded paths"
+      lede="The same work recorded three ways. The direct path is the comparison, not a third execution: it records no execution manifest and no cache reading."
+    >
+      <div className="grid gap-3 lg:grid-cols-3">
+        {profile.paths.map((path) => (
+          <PathRow key={path.key} path={path} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function Divergence({ profile }: { profile: EvidenceProfileReading }) {
+  const { path_output_identities, lineage_divergence } = profile;
+  return (
+    <Card
+      title="Where the direct and graph paths differ"
+      lede={path_output_identities.note}
+    >
+      <div className="flex flex-col gap-2">
+        {path_output_identities.artifacts.map((artifact) => (
+          <div
+            key={artifact.key}
+            className="rounded-md border border-border bg-muted/20 px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-foreground">
+                {tokenReading(artifact.key)}
+              </span>
+              <StatusPill tone={artifact.differs ? "warning" : "info"}>
+                {artifact.differs
+                  ? "Separately encoded bytes"
+                  : "Same bytes on both paths"}
+              </StatusPill>
+            </div>
+            <dl className="mt-1 divide-y divide-border/60">
+              <Row label="Direct path">
+                <Mono>{artifact.direct_sha256}</Mono>
+              </Row>
+              <Row label="Graph paths">
+                <Mono>{artifact.graph_sha256}</Mono>
+              </Row>
+              {artifact.body_sha256 === null ? null : (
+                <Row label="Body, on every path">
+                  <Mono>{artifact.body_sha256}</Mono>
+                </Row>
+              )}
+            </dl>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-md border border-border bg-muted/20 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold text-foreground">
+            Lineage identities that differ
+          </span>
+          <StatusPill tone="neutral">
+            {countReading(lineage_divergence.count)} fields
+          </StatusPill>
+        </div>
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {lineage_divergence.fields.map((field) => (
+            <li
+              key={field}
+              className="rounded-md border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-foreground"
+            >
+              {field}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+          {lineage_divergence.note}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+/* --------------------------------------------------------------- surface */
+
+export function IncomeEvidenceProfile({
+  profile,
+  nodes,
+  edges,
+}: {
+  profile: EvidenceProfileReading;
+  nodes: ReceiptGraphNode[];
+  edges: ExecutionEdge[];
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <QualityBanner profile={profile} />
+      <div className="grid gap-3 xl:grid-cols-2">
+        <Slice profile={profile} />
+        <SourceAgainstModel profile={profile} nodes={nodes} edges={edges} />
+      </div>
+      <ReportedIncome profile={profile} />
+      <Paths profile={profile} />
+      <Divergence profile={profile} />
+      <Card
+        title="What this profile is"
+        lede="The publisher declared a named evidence profile, and this reader checked every field it adds against that profile's own closed tables before drawing any of it."
+      >
+        <dl className="divide-y divide-border/60">
+          <Row label="Profile">
+            <Mono>{profile.id}</Mono>
+          </Row>
+          {profile.identities.map((identity) => (
+            <Row key={identity.key} label={tokenReading(identity.key)}>
+              <Mono>{identity.sha256}</Mono>
+            </Row>
+          ))}
+        </dl>
+      </Card>
+    </div>
+  );
+}

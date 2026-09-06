@@ -336,3 +336,42 @@ export function projectionBasisReading(basis: ProjectionBasis): string {
     default: return unread(basis, "projection provenance");
   }
 }
+
+/* --------------------------------------------- evidence profile wording */
+
+/** A published token, rendered as words. The token is the publisher's and the
+ * only change is the separator, so nothing here interprets an abbreviation and
+ * a token this dashboard has never seen still renders as itself rather than as
+ * a guess about what it means. */
+export function tokenReading(token: string): string {
+  return token.replaceAll("_", " ");
+}
+
+const REPORTED_PREFIX = "asec_reported_";
+const PRICE_SUFFIX = "_2024_price";
+
+/** Result columns share a prefix and a suffix. Both are stated once above the
+ * group and trimmed here, so each row reads as what distinguishes it; the full
+ * identifier is shown beside every trimmed name, so the trim is visible rather
+ * than hidden. A column that does not carry them is left alone. */
+export function reportedColumnReading(column: string): string {
+  const withoutPrefix = column.startsWith(REPORTED_PREFIX)
+    ? column.slice(REPORTED_PREFIX.length)
+    : column;
+  const trimmed = withoutPrefix.endsWith(PRICE_SUFFIX)
+    ? withoutPrefix.slice(0, -PRICE_SUFFIX.length)
+    : withoutPrefix;
+  return tokenReading(trimmed);
+}
+
+/** Whole counts only. Every number a profile publishes is a count of rows,
+ * columns, households or modules, so none of them is ever fractional. */
+export function countReading(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+/** A share of a whole, for the width of one segment of a composition bar. Zero
+ * counts get no segment at all rather than a hairline that reads as a value. */
+export function shareOf(count: number, total: number): number {
+  return total > 0 ? (count / total) * 100 : 0;
+}

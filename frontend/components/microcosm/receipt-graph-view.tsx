@@ -17,6 +17,7 @@ import { useSearchParams } from "next/navigation";
 
 import { useQualityContext } from "@/components/layout/quality-context";
 import { EmptyState } from "@/components/shared/empty-state";
+import { IncomeEvidenceProfile } from "@/components/microcosm/income-evidence-profile";
 import { StatusPill } from "@/components/shared/status-pill";
 import { useReceiptGraph } from "@/lib/api/hooks/use-receipt-graph";
 import {
@@ -541,6 +542,19 @@ export function ReceiptGraphSurface({
           receipts were computed here and {active.cache_hit_count} were served
           from cache.
         </p>
+      ) : null}
+
+      {/* A declared profile is read before the canvas, not after it. The
+          coverage pill above is about the recorded graph, and a reader who met
+          "full recorded coverage" first would have to be talked back out of it;
+          the first thing the profile says is that nothing here was measured
+          against an external total. */}
+      {payload.evidence_profile ? (
+        <IncomeEvidenceProfile
+          profile={payload.evidence_profile}
+          nodes={payload.nodes}
+          edges={payload.edges}
+        />
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(196px,240px)_minmax(0,1fr)_minmax(248px,312px)]">
