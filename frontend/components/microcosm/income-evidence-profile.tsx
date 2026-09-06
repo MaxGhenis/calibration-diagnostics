@@ -200,7 +200,12 @@ function QualityBanner({ profile }: { profile: EvidenceProfileReading }) {
         <div className="text-[11px] font-medium">
           Not measured here, and not measured anywhere this attachment points at
         </div>
-        <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+        {/* Named in the markup so a browser check can say *which* list a token
+            was drawn in. "Unmeasured" and "withheld" are different claims, and
+            the one defect this alignment fixed was `prior_wages` sitting in the
+            wrong one -- a check that could only count occurrences on the page
+            would not have caught it. */}
+        <ul data-quality-missing className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
           {quality.missing.map((item) => (
             <li key={item} className="inline-flex items-center gap-1.5 text-[11px]">
               <span
@@ -398,7 +403,7 @@ function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
         <div className="text-[11px] font-medium text-foreground">
           Withheld, and stated as withheld
         </div>
-        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+        <ul data-not-claimed className="mt-1.5 flex flex-wrap gap-1.5">
           {reported.not_claimed.map((claim) => (
             <li
               key={claim}

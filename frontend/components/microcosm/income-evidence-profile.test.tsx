@@ -108,6 +108,19 @@ describe("quality is drawn as incomplete, never as a passing population check", 
     expect(INCOME.markup).not.toMatch(/calibrat(ed|ion) (score|passed)/i);
   });
 
+  test("unmeasured and withheld are separate lists, and prior wages is withheld", () => {
+    // The defect this alignment fixed, pinned where it happened. `prior_wages`
+    // is not something this run failed to measure -- the scope is
+    // cross-sectional -- so it belongs among the withheld claims and nowhere
+    // else. Counting occurrences on the page would pass either way.
+    const missing = /data-quality-missing[\s\S]*?<\/ul>/.exec(INCOME.markup)?.[0] ?? "";
+    const withheld = /data-not-claimed[\s\S]*?<\/ul>/.exec(INCOME.markup)?.[0] ?? "";
+    expect(missing).not.toBe("");
+    expect(withheld).not.toBe("");
+    expect(missing).not.toMatch(/prior wages/i);
+    expect(withheld).toMatch(/prior wages/i);
+  });
+
   test("the slice is drawn with the publisher's own scope sentence", () => {
     expect(INCOME.markup).toContain("Engineering slice");
     // The publisher's corrected wording, drawn verbatim. The old assertion
