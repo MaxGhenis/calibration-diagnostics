@@ -802,6 +802,27 @@ const sizedNote = (s: RecordValue): string =>
   `holding ${s.persons} people and ${s.tax_units} tax units. ` +
   "An engineering sample of this size establishes no population accuracy.";
 
+/** The rule, replayed against the operands published beside it.
+ *
+ * The publisher pins the rule string, the fraction and every cohort's eligible
+ * households, and the surface draws all three beside the realised counts as the
+ * method the sample came out of. Pinning the string says only that the publisher
+ * named a rule this reader supports; it does not say the counts are what that
+ * rule produces. Without this, a payload whose cohorts sum, whose eligible total
+ * adds up and whose lede agrees -- and whose fraction or eligible cohort is not
+ * the one those counts came out of -- was accepted and drawn as a method.
+ *
+ * An equality rather than a bound, because a stratum that added units beyond its
+ * draw is refused on the publisher's side, so realised is the request. Both
+ * sides evaluate `floor(fraction * eligible)` in IEEE doubles over the same two
+ * published numbers, so this refuses exactly what the exporter refuses --
+ * including the floor: a share of `x.9` is `x`, and rounding it would refuse a
+ * correct run. */
+function cohortSelectionRule(cohorts: RecordValue[], fraction: number): void {
+  for (const cohort of cohorts)
+    equal(Math.floor(fraction * (cohort.eligible_households as number)), cohort.households);
+}
+
 /** The sized scope: the same closed semantics, with the size carried and
  * reconciled instead of pinned.
  *
@@ -904,6 +925,12 @@ const sizedScope: Check = value => {
   // counts added up, so the number drawn beside the rule is the one the cohort
   // table can be checked against.
   equal(sumOf(s.households_by_source_cohort as RecordValue[], "eligible_households"), measurement.eligible_households);
+  // And the rule replayed over them, per cohort. After the checks above, so a
+  // payload that is wrong about a count refuses at the count rather than here.
+  cohortSelectionRule(
+    s.households_by_source_cohort as RecordValue[],
+    measurement.sampling_fraction as number
+  );
   // Last, because it restates counts this block has already reconciled: a payload
   // whose size is wrong should refuse at the size, not at the sentence about it.
   equal(s.note, sizedNote(s));

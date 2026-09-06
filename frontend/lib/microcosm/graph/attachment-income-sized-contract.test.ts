@@ -577,6 +577,18 @@ const CASES: [string, string[], RegExp, (w: Written) => void][] = [
     w => { w.graph.scope.measurement.eligible_households += 1; },
   ],
   [
+    "a cohort's eligible count moved everywhere the payload records it",
+    ["cohortSelectionRule", "sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(Math\.floor\(fraction \* \(cohort\.eligible_households as number\)\), cohort\.households\);/,
+    w => { w.graph.scope.households_by_source_cohort[0].eligible_households += 100; w.graph.scope.measurement.eligible_households += 100; },
+  ],
+  [
+    "a sampling fraction the counts never came out of",
+    ["cohortSelectionRule", "sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(Math\.floor\(fraction \* \(cohort\.eligible_households as number\)\), cohort\.households\);/,
+    w => { w.graph.scope.measurement.sampling_fraction = 0.02; },
+  ],
+  [
     "the reviewed exporter digest missing",
     ["shape", "normalizeGraphAttachment"],
     /assert\(Object\.keys\(o\)\.length === Object\.keys\(fields\)\.length && Object\.keys\(o\)\.every\(k => Object\.hasOwn\(fields, k\)\)\);/,
@@ -601,6 +613,39 @@ const CASES: [string, string[], RegExp, (w: Written) => void][] = [
     w => { w.graph.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; w.build.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; w.manifest.provenance.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; },
   ],
 ];
+
+/** The rule the page draws as the method, replayed against the operands the page
+ * draws beside it. Both refusals live in `CASES` above; these two are the other
+ * half -- that a correct run is accepted, and that the replay is a floor. */
+describe("the published rule is replayed against the published operands", () => {
+  test("the exporter's own counts satisfy the rule at both shapes", () => {
+    for (const label of LABELS) {
+      const w = written(label);
+      expect(() => verify(w)).not.toThrow();
+      const fraction = w.graph.scope.measurement.sampling_fraction;
+      const cohorts = w.graph.scope.households_by_source_cohort;
+      expect(cohorts.map((c: any) => c.eligible_households)).toEqual([...SHAPES[label].eligible]);
+      for (const cohort of cohorts)
+        expect(Math.floor(fraction * cohort.eligible_households)).toBe(cohort.households);
+    }
+  });
+
+  test("a share whose fractional part is above a half still floors down", () => {
+    // 1,400 -> 1,490. The exporter writes eligible counts that are exact
+    // multiples of the fraction, so every other case here would pass against a
+    // reader that rounded; 0.01 x 1,490 is 14.9, which floors to the recorded
+    // 14 and rounds to 15.
+    const w = written("wide");
+    w.graph.scope.households_by_source_cohort[0].eligible_households += 90;
+    w.graph.scope.measurement.eligible_households += 90;
+    const share =
+      w.graph.scope.measurement.sampling_fraction *
+      w.graph.scope.households_by_source_cohort[0].eligible_households;
+    expect(Math.floor(share)).toBe(w.graph.scope.households_by_source_cohort[0].households);
+    expect(Math.round(share)).not.toBe(w.graph.scope.households_by_source_cohort[0].households);
+    expect(() => verify(w)).not.toThrow();
+  });
+});
 
 describe("the sized reader refuses a payload that disagrees with itself", () => {
   // The control. Without it a harness that refused everything -- or that had
