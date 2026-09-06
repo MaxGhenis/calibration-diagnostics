@@ -121,6 +121,14 @@ function shape(value: unknown, fields: Record<string, Check>): RecordValue {
 }
 
 const unique = (values: unknown[]) => assert(new Set(values).size === values.length);
+/** One column of a keyed row table, added up. Named and on one line so the frame
+ * a refusal carries says which total disagreed. */
+const sumOf = (rows: RecordValue[], key: string): number =>
+  rows.reduce((total, row) => total + (row[key] as number), 0);
+/** Several named columns of one row, added up. Same reason: a total that
+ * disagrees should say which total it was. */
+const sumKeys = (row: RecordValue, keys: readonly string[]): number =>
+  keys.reduce((total, key) => total + (row[key] as number), 0);
 /** What the per-node source-pin check actually covered in this execution. The
  * unconditional "source pins agree" sentence was true of the invented fixture
  * and vacuous for the genuine export, whose four receipts declare no pin at
@@ -769,17 +777,42 @@ const SIZED_REQUIRED_ENTITIES = ["household", "person", "tax_unit"];
  * open: an unrecognised producer is refused rather than read under whichever
  * table happens to fit. */
 const SIZED_PRODUCER_SCHEMAS = ["income_v3_first_genuine", "income_v3_measured_505hh"];
+/** The one sampler contract the sized profile supports, and the scope it ranges
+ * over. Both are pinned here for the reason every other roster on this page is:
+ * they are closed tables in the exporter, not free fields, and the surface draws
+ * a sentence about how the sample was chosen. A rule string the exporter never
+ * validated would otherwise arrive as prose and be drawn as a method. */
+const SIZED_SELECTION_RULE = "floor(fraction * eligible)";
+const SIZED_SELECTION_RULE_SCOPE = "per_source_cohort";
+/** Entities that can nest inside a household. The exporter records nesting for
+ * everything except the household itself and the person, so a nesting row for
+ * either is a contradiction rather than an extra fact. */
+const SIZED_NESTED_ENTITIES = SIZED_ENTITIES.filter(
+  entity => entity !== "household" && entity !== "person"
+);
+
+/** The lede the exporter templates from the counts beside it.
+ *
+ * It is one more recording of the same three facts, not free prose, so it is
+ * rebuilt here from the validated counts and compared. Before this the note was
+ * read as prose: a payload could say "505 sampled households ... holding 1,300
+ * people" directly above a stat row reading 41 and 107, and the page drew both. */
+const sizedNote = (s: RecordValue): string =>
+  `${s.households} sampled households from ${INCOME_V3.incomeYears.length} source cohorts, ` +
+  `holding ${s.persons} people and ${s.tax_units} tax units. ` +
+  "An engineering sample of this size establishes no population accuracy.";
 
 /** The sized scope: the same closed semantics, with the size carried and
  * reconciled instead of pinned.
  *
- * Nothing here trusts a single number. The publisher states how many
- * independent places inside its run recorded each count, the cohorts must sum
- * to the households, the people cannot be fewer than the households, and the
- * entity-row table must agree with the three headline counts. Everything that
- * is *not* the size -- the money field axes, the housing evidence fields, the
- * cohort year roster and its order -- is pinned exactly as it is for the
- * fifteen-household profile. */
+ * Nothing here trusts a single number. The publisher states how many places
+ * inside its run recorded each count, the cohorts must sum to the households,
+ * the people cannot be fewer than the households, and every other table that
+ * restates a count -- the entity rows, the nesting rows, the recorded-location
+ * listing and the lede -- has to agree with it. Everything that is *not* the
+ * size -- the money field axes, the housing evidence fields, the cohort year
+ * roster and its order -- is pinned exactly as it is for the fifteen-household
+ * profile. */
 const sizedScope: Check = value => {
   const s = shape(value, {
     households: positiveCount,
@@ -820,10 +853,7 @@ const sizedScope: Check = value => {
   );
   // A sample of whole households cannot hold fewer people than households.
   assert(s.persons >= s.households);
-  equal(
-    s.households_by_source_cohort.reduce((total: number, cohort: RecordValue) => total + cohort.households, 0),
-    s.households
-  );
+  equal(sumOf(s.households_by_source_cohort as RecordValue[], "households"), s.households);
   for (const cohort of s.households_by_source_cohort as RecordValue[])
     assert(cohort.eligible_households >= cohort.households);
   // The entity table and the three headline counts are the same facts written
@@ -834,9 +864,22 @@ const sizedScope: Check = value => {
   equal(rows.get("household"), s.households);
   equal(rows.get("person"), s.persons);
   equal(rows.get("tax_unit"), s.tax_units);
-  // Every recording the publisher claims must be one it can name.
+  const measurement = s.measurement as RecordValue;
+  // The nesting table records the same entity row counts a second time, under a
+  // different question ("how many of these sit inside one household"). The
+  // exporter refuses a disagreement; so does this. A nesting row for an entity
+  // nobody counted, or for the household or the person, is a contradiction.
+  for (const entry of measurement.nesting as RecordValue[]) {
+    assert(SIZED_NESTED_ENTITIES.includes(entry.entity as string));
+    assert(rows.has(entry.entity as string));
+    equal(rows.get(entry.entity as string), entry.rows);
+  }
+  // Every count the publisher lists must be one this scope also declares, and
+  // every count this scope declares must be listed. A closed set in both
+  // directions: an open one let a fact nobody counts -- a district total, say --
+  // arrive and be drawn under "how this size was measured".
   const recorded = new Map(
-    ((s.measurement as RecordValue).independent_recordings as RecordValue[]).map(
+    (measurement.recorded_count_locations as RecordValue[]).map(
       entry => [entry.fact as string, entry]
     )
   );
@@ -850,46 +893,78 @@ const sizedScope: Check = value => {
     assert(entry !== undefined);
     equal(entry!.count, cohort.households);
   }
+  equal(recorded.size, rows.size + INCOME_V3.incomeYears.length);
   // Households and people are what everything else is sized by, so each must
-  // have been written down more than once inside the run.
+  // have been written down in more than one place inside the run. Places, not
+  // measurements: the publisher counts a cold and warm restatement of one
+  // location apart, and this reads the location count.
   for (const entity of ["household", "person"])
-    assert((recorded.get(entity)!.recordings as number) >= 2);
+    assert((recorded.get(entity)!.locations as number) >= 2);
+  // The rule's own operands. The eligible total is the per-cohort eligible
+  // counts added up, so the number drawn beside the rule is the one the cohort
+  // table can be checked against.
+  equal(sumOf(s.households_by_source_cohort as RecordValue[], "eligible_households"), measurement.eligible_households);
+  // Last, because it restates counts this block has already reconciled: a payload
+  // whose size is wrong should refuse at the size, not at the sentence about it.
+  equal(s.note, sizedNote(s));
 };
 
 /** How the size was arrived at, as the publisher recorded it.
  *
- * Every entry names one fact, the count it carries, how many independent places
- * inside the run recorded it, and which places those were. The source names are
- * evidence, not decoration: a count with one source is a restatement and the
- * scope check above refuses it for the two load-bearing facts. */
+ * Every entry names one fact, the count it carries, how many distinct places
+ * inside the run recorded it, how many of those were a cold or warm execution
+ * restating the same place, and which places they were. The word is *location*,
+ * not measurement, and the distinction is the publisher's: the two execution
+ * manifests share one computation content key, so a warm copy of a recorded node
+ * counter is the cold copy read again and cannot disagree with it. Counting it
+ * as a second place would have made a byte-identical restatement read as
+ * corroboration. Nothing here claims two locations are statistically
+ * independent; the claim is that more than one exists and that they agree.
+ *
+ * The selection rule is drawn on the page, so it is pinned to the one sampler
+ * contract the exporter supports rather than read as free text, and its scope
+ * and operands are read beside it. */
 function sizedMeasurement(value: unknown): void {
   const m = shape(value, {
     basis: enumeration("measured_from_recorded_outputs_and_reconciled"),
-    selection_rule: v => text(v, 128),
+    selection_rule: function selectionRule(rule) {
+      text(rule, 128);
+      equal(rule, SIZED_SELECTION_RULE);
+    },
+    selection_rule_scope: enumeration(SIZED_SELECTION_RULE_SCOPE),
+    sampling_fraction: function samplingFraction(fraction) {
+      assert(typeof fraction === "number" && Number.isFinite(fraction));
+      assert((fraction as number) > 0 && (fraction as number) <= 1);
+    },
+    eligible_households: positiveCount,
     entity_structure_recorded: bool,
-    nesting: list(v => {
+    nesting: list(function nestedRow(v) {
       shape(v, {
         entity: function nestedEntity(name) {
           id(name);
-          assert(SIZED_ENTITIES.includes(name as string));
+          assert(SIZED_NESTED_ENTITIES.includes(name as string));
         },
         rows: positiveCount,
         within_one_household: enumeration(true)
       });
     }, 8),
-    independent_recordings: list(v => {
+    recorded_count_locations: list(function recordedCountLocation(v) {
       const entry = shape(v, {
         fact: id,
         count: positiveCount,
-        recordings: bounded(1, 64),
+        locations: bounded(1, 64),
+        phase_restatements: bounded(0, 64),
         sources: list(v2 => text(v2, 160), 64, 1)
       });
-      // The claimed number of recordings is the number of places named.
-      equal(entry.recordings, (entry.sources as unknown[]).length);
+      // The claimed number of locations is the number of places named, and no
+      // place is named twice -- a repeated name is a restatement, which the
+      // publisher counts in its own field.
+      equal(entry.locations, (entry.sources as unknown[]).length);
+      unique(entry.sources as unknown[]);
     }, 64, 1),
     note: reason
   });
-  unique((m.independent_recordings as RecordValue[]).map(entry => entry.fact));
+  unique((m.recorded_count_locations as RecordValue[]).map(entry => entry.fact));
   unique((m.nesting as RecordValue[]).map(entry => entry.entity));
   // A nesting table is recorded only when the producer wrote one.
   assert(m.entity_structure_recorded === ((m.nesting as unknown[]).length > 0));
@@ -991,43 +1066,40 @@ const reportedFields = (measured: boolean): Record<string, Check> => {
   };
 };
 
-/** The totals both policies share, plus the one the measured policy adds. */
+/** The row width the pinned column roster's own dtypes add up to: three
+ * eight-byte coordinates, six eight-byte results and nineteen one-byte evidence
+ * flags reach 91 bytes exactly one way. Derived rather than restated, so the
+ * published width and the published layout have to agree with each other. */
+const rosterRowBytes = (): number =>
+  ACCOUNTING_COLUMN_ROSTER.reduce((total, c) => total + INCOME_V3.dtypeBytes[c.dtype], 0);
+/** Every accounted row falls in exactly one zero-origin class in exactly one
+ * cohort year, so these counts add to the accounted rows. */
+const zeroOriginTotal = (r: RecordValue): number =>
+  (r.zero_origin_class_counts as RecordValue[]).reduce(
+    (total, entry) => total + sumKeys(entry, INCOME_V3.zeroClasses),
+    0
+  );
+
+/** The totals both policies share, plus the one the measured policy adds.
+ *
+ * Each total is asserted on one line through a named helper. A refusal names the
+ * line it came from, and three multi-line `equal(` calls all reported the same
+ * bare text, so a test could not tell which total had disagreed. */
 function reportedTotals(r: RecordValue, measured: boolean): void {
   if (measured)
     positiveCount(r.rows);
   else
     equal(r.rows, INCOME_V3.persons);
   equal(r.accounting_column_count, INCOME_V3.accountingColumns);
-  // Derived from the pinned roster's own dtype widths rather than restated, so
-  // the published row width and the column layout have to agree with each
-  // other: three eight-byte coordinates, six eight-byte results and nineteen
-  // one-byte evidence flags reach 91 bytes exactly one way.
-  equal(
-    r.accounting_row_bytes,
-    ACCOUNTING_COLUMN_ROSTER.reduce(
-      (total, column) => total + INCOME_V3.dtypeBytes[column.dtype],
-      0
-    )
-  );
+  equal(r.accounting_row_bytes, rosterRowBytes());
   equal(r.accounting_row_bytes, INCOME_V3.accountingRowBytes);
   // Every accounted row is classified exactly once per result column, so the
   // three signed classes cover the person rows and nothing is unaccounted.
   for (const row of r.signed_value_counts)
-    equal(
-      INCOME_V3.signClasses.reduce((total: number, name: string) => total + row[name], 0),
-      r.rows
-    );
+    equal(sumKeys(row, INCOME_V3.signClasses), r.rows);
   if (measured)
-    // The same statement one axis over: each accounted row falls in exactly one
-    // zero-origin class in exactly one cohort year.
-    equal(
-      (r.zero_origin_class_counts as RecordValue[]).reduce(
-        (total: number, entry: RecordValue) =>
-          total + INCOME_V3.zeroClasses.reduce((sum, name) => sum + (entry[name] as number), 0),
-        0
-      ),
-      r.rows
-    );
+    // The same statement one axis over.
+    equal(zeroOriginTotal(r), r.rows);
 }
 
 /** Named function expressions, not arrows returned by a factory: the frame name
@@ -1084,14 +1156,34 @@ const PROFILE_PROVENANCE = [
   "base_exporter_sha256",
   "loaded_module_manifest_sha256"
 ] as const;
+/** The sized profile publishes a fourth.
+ *
+ * `base_exporter_sha256` names `graph_evidence.py` on both profiles, and the
+ * sized exporter also imports the reviewed fifteen-household profile, so that
+ * file gets its own key rather than borrowing the base one. It used to be
+ * published *as* the base digest, which meant the same key named two different
+ * sources depending on which profile you were reading -- so the two profiles'
+ * identity blocks could not be compared at all. Named separately, both are
+ * bound to the manifest and required to agree across all three artifacts. */
+const SIZED_PROFILE_PROVENANCE = [
+  ...PROFILE_PROVENANCE,
+  "reviewed_exporter_sha256"
+] as const;
+const profileProvenance = (profile: string | null): readonly string[] =>
+  profile === INCOME_SIZED_PROFILE ? SIZED_PROFILE_PROVENANCE : PROFILE_PROVENANCE;
 
-const PROFILE_COMMON_FIELDS: Record<string, Check> = {
-  profile: v => {
-    id(v);
-    assert(PROFILES.includes(v as string));
-  },
-  ...Object.fromEntries(PROFILE_PROVENANCE.map(key => [key, digest]))
+const profileName: Check = v => {
+  id(v);
+  assert(PROFILES.includes(v as string));
 };
+
+const profileCommonFields = (profile: string | null): Record<string, Check> =>
+  profile === null
+    ? {}
+    : {
+        profile: profileName,
+        ...Object.fromEntries(profileProvenance(profile).map(key => [key, digest]))
+      };
 
 const INCOME_V3_GRAPH_FIELDS: Record<string, Check> = {
   scope: incomeScope,
@@ -1136,7 +1228,7 @@ function declaredProfile(raw: unknown, rawBuild: unknown): string | null {
   assert(onGraph === onBuild);
   if (onGraph === null)
     return null;
-  PROFILE_COMMON_FIELDS.profile(onGraph);
+  profileName(onGraph);
   return onGraph as string;
 }
 
@@ -1177,7 +1269,7 @@ export function normalizeGraphAttachment(
   digest(manifestSha256);
   verifyGraphManifestPresentation(manifest);
   const profile = declaredProfile(raw, rawBuild);
-  const profileCommon = profile === null ? {} : PROFILE_COMMON_FIELDS;
+  const profileCommon = profileCommonFields(profile);
   const graph = shape(raw, {
     schema_version: enumeration(GRAPH_RECEIPTS_SCHEMA),
     ...commonFields,
@@ -1215,8 +1307,13 @@ export function normalizeGraphAttachment(
   for (const key of Object.keys(profileCommon))
     equal(build[key], graph[key]);
   if (profile !== null)
-    for (const key of PROFILE_PROVENANCE)
-      equal(graph[key], manifest.provenance[key]);
+    for (const key of profileProvenance(profile))
+      equal(graph[key], manifest.provenance[key as keyof typeof manifest.provenance]);
+  if (profile === INCOME_SIZED_PROFILE)
+    // Two keys, two files. If they ever carried one digest the sized profile
+    // would be publishing the base exporter twice and the reviewed profile not
+    // at all, which is the state this key split exists to end.
+    assert(graph.base_exporter_sha256 !== graph.reviewed_exporter_sha256);
   const descriptor = manifest.attachments.graph_receipts, buildDescriptor = manifest.attachments.build_manifest;
   assert(descriptor?.status === "available" && descriptor.scope === "population");
   assert(buildDescriptor?.status === "available" && buildDescriptor.scope === "run");
@@ -1556,7 +1653,7 @@ function incomeReading(
     },
     lineage_divergence: graph.lineage_divergence,
     paths,
-    identities: PROFILE_PROVENANCE.map(key => ({
+    identities: profileProvenance(profile).map(key => ({
       key,
       sha256: graph[key]
     }))

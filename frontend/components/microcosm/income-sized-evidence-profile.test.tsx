@@ -73,13 +73,53 @@ describe("the sized profile draws the size the publisher measured", () => {
     expect(SMALL.markup).toContain(">14<");
   });
 
-  test("the wide shape's counts are on the page, thousands separated", () => {
-    // `countReading` formats with en-US grouping, so a four-figure count is
-    // drawn as "1,058" and a naive assertion on the bare digits would miss it.
+  test("the wide shape's counts are on the page", () => {
     expect(WIDE.markup).toContain("41 sampled households from 3 source cohorts");
     expect(WIDE.markup).toContain(">41<");
     expect(WIDE.markup).toContain(">107<");
     expect(WIDE.markup).toContain(">55<");
+  });
+
+  test("four-figure counts are drawn with a thousands separator", () => {
+    // `countReading` formats with en-US grouping. The only counts above 999 on
+    // this page are the eligible household totals, so this is the assertion the
+    // test that used to carry this name never actually made.
+    const measurement = WIDE.payload.evidence_profile!.scope.measurement!;
+    expect(measurement.eligible_households).toBe(4100);
+    expect(WIDE.markup).toContain("4,100");
+    expect(WIDE.markup).toContain("1,400");
+    expect(WIDE.markup).not.toContain(">4100<");
+  });
+
+  test("the drawn region names the sized profile it belongs to", () => {
+    expect(WIDE.markup).toContain(
+      'data-evidence-profile="us_asec_income_v3_five_node_sized_v1"',
+    );
+    expect(SMALL.markup).toContain(
+      'data-evidence-profile="us_asec_income_v3_five_node_sized_v1"',
+    );
+  });
+
+  test("the binding check names the sized profile by id", () => {
+    for (const { payload } of [SMALL, WIDE]) {
+      const check = payload.binding.checks.find(
+        c => c.label === "Declared evidence profile",
+      );
+      expect(check).toBeDefined();
+      expect(check!.detail).toContain("us_asec_income_v3_five_node_sized_v1");
+    }
+  });
+
+  test("the headline entities are drawn before the rest", () => {
+    // The publisher emits entity rows alphabetically, which put `family` above
+    // `household` directly beneath a stat row reading households, people, tax
+    // units. Ordering only; every published row is still drawn.
+    const drawn = /Entity rows<\/dt>[\s\S]*?>([^<]*)</.exec(WIDE.markup)![1];
+    expect(drawn.indexOf("household:")).toBeLessThan(drawn.indexOf("family:"));
+    expect(drawn.indexOf("person:")).toBeLessThan(drawn.indexOf("family:"));
+    expect(drawn.indexOf("tax unit:")).toBeLessThan(drawn.indexOf("family:"));
+    for (const row of WIDE.payload.evidence_profile!.scope.entity_rows!)
+      expect(drawn).toContain(`${row.entity.replace("_", " ")}:`);
   });
 
   test("unequal cohorts are drawn as recorded, not averaged", () => {
@@ -108,14 +148,43 @@ describe("the measurement evidence is drawn, because a measured size needs it", 
   });
 
   test("each fact is drawn with how many places recorded it, and which", () => {
-    const recordings = WIDE.payload.evidence_profile!.scope.measurement!
-      .independent_recordings;
-    for (const entry of recordings) {
-      expect(WIDE.markup).toContain(`${entry.recordings} places`);
-      for (const source of entry.sources)
-        expect(WIDE.markup).toContain(source.replace(/\./g, "."));
+    const located = WIDE.payload.evidence_profile!.scope.measurement!
+      .recorded_count_locations;
+    for (const entry of located) {
+      if (entry.locations > 1) expect(WIDE.markup).toContain(`${entry.locations} places`);
+      for (const source of entry.sources) expect(WIDE.markup).toContain(source);
     }
     expect(WIDE.markup).toContain("recorded in");
+    expect(WIDE.markup).toContain("Where each count was recorded");
+  });
+
+  test("a warm restatement is drawn apart from the places that counted", () => {
+    const person = WIDE.payload.evidence_profile!.scope.measurement!
+      .recorded_count_locations.find(entry => entry.fact === "person")!;
+    expect(person.phase_restatements).toBe(2);
+    expect(WIDE.markup).toContain("restated 2");
+    expect(WIDE.markup).toContain("by the warm execution");
+    // No location name carries an execution phase, because a warm copy of a
+    // cold location is the same place.
+    expect(WIDE.markup).not.toContain("warm-manifest");
+    expect(WIDE.markup).not.toContain("cold-manifest");
+  });
+
+  test("the selection rule is drawn with the operands it ranges over", () => {
+    expect(WIDE.markup).toContain("1% of eligible households");
+    expect(WIDE.markup).toContain("per source cohort");
+    expect(WIDE.markup).toContain("41 selected from 4,100 eligible");
+    expect(SMALL.markup).toContain("9 selected from 900 eligible");
+    // The publisher's own rule token is still shown, beneath the reading.
+    for (const { markup } of [SMALL, WIDE])
+      expect(markup).toContain("floor(fraction * eligible)");
+  });
+
+  test("eligible households are drawn beside the realised cohorts", () => {
+    expect(WIDE.markup).toContain("Eligible before selection");
+    expect(WIDE.markup).toContain("2022: 1,400");
+    expect(WIDE.markup).toContain("2024: 1,300");
+    expect(SMALL.markup).toContain("2022: 300");
   });
 
   test("the nesting table is drawn only when the producer recorded one", () => {
@@ -123,9 +192,16 @@ describe("the measurement evidence is drawn, because a measured size needs it", 
     expect(SMALL.markup).not.toContain("Units within one household");
   });
 
-  test("the producer schema is named on the page", () => {
+  test("the producer adapter is named as an adapter, not as a size", () => {
     expect(SMALL.markup).toContain("income v3 first genuine");
     expect(WIDE.markup).toContain("income v3 measured 505hh");
+    for (const { markup } of [SMALL, WIDE]) {
+      expect(markup).toContain("Producer adapter");
+      expect(markup).toContain(
+        "Names the recorded producer this export reads, not this sample.",
+      );
+      expect(markup).not.toContain("Producer schema");
+    }
   });
 });
 
@@ -133,8 +209,9 @@ describe("the fifteen-household profile is drawn exactly as before", () => {
   test("it carries no measurement block, because its size is not measured", () => {
     expect(LEGACY.payload.evidence_profile!.scope.measurement).toBeUndefined();
     expect(LEGACY.markup).not.toContain("How this size was measured");
-    expect(LEGACY.markup).not.toContain("Producer schema");
+    expect(LEGACY.markup).not.toContain("Producer adapter");
     expect(LEGACY.markup).not.toContain("Entity rows");
+    expect(LEGACY.markup).not.toContain("Eligible before selection");
   });
 
   test("it still draws everything it drew", () => {

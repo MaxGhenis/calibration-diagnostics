@@ -264,18 +264,31 @@ export interface EvidenceProfileScope {
 
 /** How a sized scope's counts were arrived at.
  *
- * A measured size is only worth as much as the number of independent places the
- * run wrote it down, so the publisher names them and the reader checks that the
- * claimed number of recordings is the number of sources listed. */
+ * A measured size is only worth as much as the number of distinct places the run
+ * wrote it down in, so the publisher names them and the reader checks that the
+ * claimed number of locations is the number of sources listed.
+ *
+ * `phase_restatements` counts the writes that are *not* separate places: a cold
+ * and a warm execution restating the same recorded location. The two manifests
+ * share one computation content key, so such a copy cannot disagree with its
+ * original and is no evidence that anything was counted twice. */
 export interface EvidenceScopeMeasurement {
   basis: string;
+  /** The producer's own rule string, pinned to the supported sampler contract. */
   selection_rule: string;
+  /** What that rule ranges over -- one stratum, not the whole frame. */
+  selection_rule_scope: string;
+  /** The recorded fraction the rule was applied at. */
+  sampling_fraction: number;
+  /** Households eligible before selection, summing the per-cohort eligibles. */
+  eligible_households: number;
   entity_structure_recorded: boolean;
   nesting: { entity: string; rows: number; within_one_household: true }[];
-  independent_recordings: {
+  recorded_count_locations: {
     fact: string;
     count: number;
-    recordings: number;
+    locations: number;
+    phase_restatements: number;
     sources: string[];
   }[];
   note: string;

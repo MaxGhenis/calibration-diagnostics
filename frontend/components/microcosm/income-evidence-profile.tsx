@@ -226,8 +226,29 @@ function QualityBanner({ profile }: { profile: EvidenceProfileReading }) {
   );
 }
 
+/** The three headline entities first, then the rest as published.
+ *
+ * The publisher emits them alphabetically, which put `family` above `household`
+ * directly beneath a stat row reading households, people, tax units. Ordering is
+ * presentation; no row is added, dropped or renamed. */
+const HEADLINE_ENTITIES = ["household", "person", "tax_unit"];
+
+function orderedEntityRows(rows: { entity: string; rows: number }[]) {
+  const rank = (entity: string) => {
+    const index = HEADLINE_ENTITIES.indexOf(entity);
+    return index === -1 ? HEADLINE_ENTITIES.length : index;
+  };
+  return [...rows].sort((a, b) => rank(a.entity) - rank(b.entity));
+}
+
 function Slice({ profile }: { profile: EvidenceProfileReading }) {
   const { scope } = profile;
+  // Present only on the sized profile, where the run recorded what it selected
+  // from. Without it the page showed a selection rule and the count it produced,
+  // and never the number the rule was applied to.
+  const eligible = scope.households_by_source_cohort.filter(
+    (cohort) => cohort.eligible_households !== undefined,
+  );
   return (
     <Card
       title="The recorded slice"
@@ -255,10 +276,21 @@ function Slice({ profile }: { profile: EvidenceProfileReading }) {
           />
         </div>
       </div>
+      {eligible.length === 0 ? null : (
+        <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          Eligible before selection:{" "}
+          {eligible
+            .map(
+              (cohort) =>
+                `${cohort.income_year}: ${countReading(cohort.eligible_households!)}`,
+            )
+            .join(" · ")}
+        </div>
+      )}
       <dl className="mt-3 divide-y divide-border/60">
         {scope.entity_rows === undefined ? null : (
           <Row label="Entity rows">
-            {scope.entity_rows
+            {orderedEntityRows(scope.entity_rows)
               .map(
                 (row) => `${tokenReading(row.entity)}: ${countReading(row.rows)}`,
               )
@@ -272,14 +304,34 @@ function Slice({ profile }: { profile: EvidenceProfileReading }) {
         </Row>
         <Row label="Loaded modules">{countReading(scope.loaded_module_count)}</Row>
         {scope.producer_schema === undefined ? null : (
-          <Row label="Producer schema">{tokenReading(scope.producer_schema)}</Row>
+          <Row label="Producer adapter">
+            <span>{tokenReading(scope.producer_schema)}</span>
+            {/* The second adapter's name carries "505hh", which reads as a
+                sample size beside a stat row saying 41. It is the name of the
+                producer whose receipts this export knows how to read, and the
+                measured counts above are the size. */}
+            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+              Names the recorded producer this export reads, not this sample.
+            </span>
+          </Row>
         )}
       </dl>
       {scope.measurement === undefined ? null : (
-        <Measurement measurement={scope.measurement} />
+        <Measurement measurement={scope.measurement} households={scope.households} />
       )}
     </Card>
   );
+}
+
+/** The recorded fraction as a percentage, at the precision it was recorded to.
+ *
+ * `0.01` is drawn as "1%" and `0.003` as "0.3%"; nothing is rounded away, so a
+ * fraction with more digits keeps them. The publisher's own decimal is shown
+ * beside the reading, the way the price basis token is, so the reading can be
+ * checked rather than taken. */
+function fractionReading(fraction: number): string {
+  const percent = fraction * 100;
+  return `${percent.toPrecision(12).replace(/\.?0+$/, "")}%`;
 }
 
 /** How the size was arrived at.
@@ -287,12 +339,20 @@ function Slice({ profile }: { profile: EvidenceProfileReading }) {
  * The fifteen-household profile never needed this block: its size was a
  * constant the reader also held, so there was nothing to show. A measured size
  * has to be assessable, and a number on its own is not — what makes it
- * assessable is how many separate places inside the run wrote it down and which
- * places those were. Both are the publisher's own; nothing here is derived. */
+ * assessable is the rule it came out of, the operands that rule was applied to,
+ * and how many separate places inside the run wrote the result down. All of them
+ * are the publisher's own; nothing here is derived.
+ *
+ * "Places", not "independent measurements". Two of the places a count appears
+ * are one recorded location restated by the warm execution, which shares a
+ * computation content key with the cold one and so cannot disagree with it. The
+ * publisher counts those apart and this draws them apart. */
 function Measurement({
   measurement,
+  households,
 }: {
   measurement: NonNullable<EvidenceProfileReading["scope"]["measurement"]>;
+  households: number;
 }) {
   return (
     <div className="mt-4 rounded-md border border-border bg-muted/20 p-3">
@@ -306,8 +366,21 @@ function Measurement({
         {measurement.note}
       </p>
       <dl className="mt-2 divide-y divide-border/60">
-        <Row label="Selection rule">
-          <Mono>{measurement.selection_rule}</Mono> per source cohort
+        <Row label="Selection">
+          {/* The rule in words with its operands, then the publisher's own rule
+              token beneath it. A reader who cannot audit the size from the page
+              has been shown a method rather than evidence. */}
+          <span>
+            {fractionReading(measurement.sampling_fraction)} of eligible
+            households, {tokenReading(measurement.selection_rule_scope)}
+          </span>
+          <span className="mt-0.5 block text-foreground">
+            {countReading(households)} selected from{" "}
+            {countReading(measurement.eligible_households)} eligible
+          </span>
+          <span className="mt-0.5 block text-muted-foreground">
+            <Mono>{measurement.selection_rule}</Mono>
+          </span>
         </Row>
         {measurement.nesting.length === 0 ? null : (
           <Row label="Units within one household">
@@ -320,29 +393,45 @@ function Measurement({
           </Row>
         )}
       </dl>
-      {/* A table would be the right semantic form here, but the recording
-        * sources are long unbroken tokens and a three-column layout pushes the
-        * whole card past a 390px viewport. Each recording is one fact, so a
-        * definition list carries the same structure and wraps. */}
+      {/* A table would be the right semantic form here, but the location names
+        * are long unbroken tokens and a three-column layout pushes the whole
+        * card past a 390px viewport. Each entry is one fact, so a definition
+        * list carries the same structure and wraps. The names themselves sit
+        * behind a disclosure: they are the run's internal field paths, and a
+        * reader checking the size wants the counts first. */}
       <dl className="mt-2 divide-y divide-border/60">
-        {measurement.independent_recordings.map((entry) => (
+        {measurement.recorded_count_locations.map((entry) => (
           <div key={entry.fact} className="py-1.5">
             <dt className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-foreground">
               <span className="font-medium">{tokenReading(entry.fact)}</span>
               <span className="tabular-nums">{countReading(entry.count)}</span>
               <span className="text-muted-foreground">
                 recorded in{" "}
-                {entry.recordings === 1
+                {entry.locations === 1
                   ? "1 place"
-                  : `${countReading(entry.recordings)} places`}
+                  : `${countReading(entry.locations)} places`}
+                {entry.phase_restatements === 0
+                  ? null
+                  : `, restated ${countReading(entry.phase_restatements)}× by the warm execution`}
               </span>
             </dt>
-            <dd className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground">
-              {entry.sources.join(" · ")}
-            </dd>
           </div>
         ))}
       </dl>
+      <Disclosure summary="Where each count was recorded">
+        <dl className="divide-y divide-border/60">
+          {measurement.recorded_count_locations.map((entry) => (
+            <div key={entry.fact} className="py-1.5">
+              <dt className="text-[11px] font-medium text-foreground">
+                {tokenReading(entry.fact)}
+              </dt>
+              <dd className="mt-0.5 break-words text-[11px] leading-relaxed text-muted-foreground">
+                {entry.sources.join(" · ")}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Disclosure>
     </div>
   );
 }

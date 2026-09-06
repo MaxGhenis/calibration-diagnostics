@@ -13,11 +13,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
-import { buildReceiptGraph } from "./adapter";
+import { buildReceiptGraph, ReceiptGraphUnavailableError } from "./adapter";
 import { normalizeGraphAttachment, INCOME_SIZED_PROFILE, INCOME_V3_PROFILE } from "./attachment";
 import type { CandidateQualityManifest } from "../quality/types";
 
 const ROOT = join(import.meta.dir, "fixtures/income-sized-exporter-written");
+const SOURCE = join(import.meta.dir, "attachment.ts");
 
 /** The digests these files were committed under. The exporter names every file
  * it writes after its own sha256, so a file whose content no longer hashes to
@@ -25,27 +26,31 @@ const ROOT = join(import.meta.dir, "fixtures/income-sized-exporter-written");
  * test of an edit rather than of the exporter. */
 const SHAPES = {
   small: {
-    manifest: "63e680d041b6705b434831f056ee0a1d55250c6f5719c193795445667e37803f",
-    graph: "8690788303c341a7ed41dff092b92f0b07ba56b2c70bcbedf1e718c75873ed11",
-    build: "4f1a0bea9474702770ad9b9e37f125c382c10edfc940ede2349547acb46540d9",
+    manifest: "574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5",
+    graph: "9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818",
+    build: "184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5",
+    population: "13973c961ea39995ac7085b2f92160485cf83abc5852685c968a34e96f1629f0",
     candidate: "us-income-sized-invented-small-v1",
     households: 9,
     persons: 31,
     taxUnits: 14,
     cohorts: [3, 3, 3],
+    eligible: [300, 300, 300],
     producer: "income_v3_first_genuine",
     entities: 6,
     nesting: 0,
   },
   wide: {
-    manifest: "95c9e319f2b46e142435c18672dad85bfb6977ceaa076b4f01c6d2940f45e651",
-    graph: "62a929052a021cb5e824a3bb112ee8b5ad1d477c35dfbc7b1446554cfa6e8b3c",
-    build: "6b0da81129480abbf973d1646dea4d1ab9140895d1eae53195addba30f69a5f7",
+    manifest: "6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa",
+    graph: "b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6",
+    build: "324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2",
+    population: "41c38ba897e673ae6d8de157b609f7b44e6577620157ff2fca0c14c08cd9ca83",
     candidate: "us-income-sized-invented-wide-v1",
     households: 41,
     persons: 107,
     taxUnits: 55,
     cohorts: [14, 14, 13],
+    eligible: [1400, 1400, 1300],
     producer: "income_v3_measured_505hh",
     entities: 6,
     nesting: 4,
@@ -182,20 +187,94 @@ describe("the reader reads what the sized exporter published", () => {
 
     test(`${label}: every count names the places the run recorded it`, () => {
       const { projection } = verify(written(label));
-      const recordings = new Map(
-        projection.evidence_profile!.scope.measurement!.independent_recordings.map(r => [
-          r.fact,
-          r,
-        ]),
+      const scope = projection.evidence_profile!.scope;
+      const located = new Map(
+        scope.measurement!.recorded_count_locations.map(r => [r.fact, r]),
       );
       for (const fact of ["household", "person"])
-        expect(recordings.get(fact)!.recordings).toBeGreaterThanOrEqual(2);
-      expect(recordings.get("household")!.count).toBe(shape.households);
-      expect(recordings.get("person")!.count).toBe(shape.persons);
-      for (const entry of recordings.values()) {
-        expect(entry.sources).toHaveLength(entry.recordings);
+        expect(located.get(fact)!.locations).toBeGreaterThanOrEqual(2);
+      expect(located.get("household")!.count).toBe(shape.households);
+      expect(located.get("person")!.count).toBe(shape.persons);
+      for (const entry of located.values()) {
+        expect(entry.sources).toHaveLength(entry.locations);
+        expect(new Set(entry.sources).size).toBe(entry.sources.length);
         for (const source of entry.sources) expect(source.length).toBeGreaterThan(0);
+        // No location name carries a phase: a warm restatement of a cold
+        // location is the same place, and the publisher counts it apart.
+        for (const source of entry.sources) {
+          expect(source.startsWith("cold-manifest")).toBe(false);
+          expect(source.startsWith("warm-manifest")).toBe(false);
+        }
       }
+      // The listing is closed: exactly the entity rows plus the three cohorts.
+      expect(located.size).toBe(scope.entity_rows!.length + shape.cohorts.length);
+      // The one fact restated by the warm execution is the node header counter.
+      expect(located.get("person")!.phase_restatements).toBe(2);
+      expect(located.get("household")!.phase_restatements).toBe(0);
+    });
+
+    test(`${label}: the rule is drawn with the operands it ranges over`, () => {
+      const { projection } = verify(written(label));
+      const scope = projection.evidence_profile!.scope;
+      const measurement = scope.measurement!;
+      expect(measurement.selection_rule).toBe("floor(fraction * eligible)");
+      expect(measurement.selection_rule_scope).toBe("per_source_cohort");
+      expect(measurement.sampling_fraction).toBe(0.01);
+      expect(
+        scope.households_by_source_cohort.map(c => c.eligible_households),
+      ).toEqual([...shape.eligible]);
+      expect(measurement.eligible_households).toBe(
+        shape.eligible.reduce((total, value) => total + value, 0),
+      );
+    });
+
+    test(`${label}: the nesting rows are the entity rows, asked differently`, () => {
+      const { projection } = verify(written(label));
+      const scope = projection.evidence_profile!.scope;
+      const rows = new Map(scope.entity_rows!.map(r => [r.entity, r.rows]));
+      expect(scope.measurement!.nesting).toHaveLength(shape.nesting);
+      for (const entry of scope.measurement!.nesting) {
+        expect(rows.get(entry.entity)).toBe(entry.rows);
+        expect(["household", "person"]).not.toContain(entry.entity);
+      }
+    });
+
+    test(`${label}: the lede is the counts beside it, in a sentence`, () => {
+      const { projection } = verify(written(label));
+      const scope = projection.evidence_profile!.scope;
+      expect(scope.note).toBe(
+        `${shape.households} sampled households from 3 source cohorts, ` +
+          `holding ${shape.persons} people and ${shape.taxUnits} tax units. ` +
+          "An engineering sample of this size establishes no population accuracy.",
+      );
+    });
+
+    test(`${label}: three exporter digests, each naming one file`, () => {
+      const w = written(label);
+      const { projection } = verify(w);
+      const identities = new Map(
+        projection.evidence_profile!.identities.map(i => [i.key, i.sha256]),
+      );
+      expect([...identities.keys()]).toEqual([
+        "root_output_review_sha256",
+        "base_exporter_sha256",
+        "loaded_module_manifest_sha256",
+        "reviewed_exporter_sha256",
+      ]);
+      expect(identities.get("base_exporter_sha256")).not.toBe(
+        identities.get("reviewed_exporter_sha256"),
+      );
+      // The same three values on all three artifacts, which is what makes them
+      // provenance rather than decoration.
+      for (const [key, value] of identities) {
+        expect(w.build[key]).toBe(value);
+        expect((w.manifest.provenance as Record<string, string>)[key]).toBe(value);
+      }
+    });
+
+    test(`${label}: this shape has its own population identity`, () => {
+      const { projection } = verify(written(label));
+      expect(projection.population_sha256).toBe(shape.population);
     });
 
     test(`${label}: five graph nodes, one separate source preparation`, () => {
@@ -232,7 +311,11 @@ describe("the two profiles refuse each other", () => {
     const w = written("wide");
     w.graph.profile = INCOME_V3_PROFILE;
     w.build.profile = INCOME_V3_PROFILE;
-    expect(() => verify(w)).toThrow();
+    expect(() => verify(w)).toThrow(ReceiptGraphUnavailableError);
+  });
+
+  test("the two shapes do not share a population digest", () => {
+    expect(SHAPES.small.population).not.toBe(SHAPES.wide.population);
   });
 
   test("the sized profile name is not the reviewed one", () => {
@@ -244,99 +327,298 @@ describe("the two profiles refuse each other", () => {
   test("both artifacts must declare the same profile", () => {
     const w = written("small");
     w.build.profile = INCOME_V3_PROFILE;
-    expect(() => verify(w)).toThrow();
+    expect(() => verify(w)).toThrow(ReceiptGraphUnavailableError);
   });
 });
 
-describe("the sized reader refuses a payload that disagrees with itself", () => {
-  const cases: [string, (w: Written) => void][] = [
-    ["the cohorts no longer sum to the households", w => {
-      w.graph.scope.households_by_source_cohort[0].households += 1;
-    }],
-    ["the entity table disagrees with the headline household count", w => {
-      const row = w.graph.scope.entity_rows.find((r: any) => r.entity === "household");
-      row.rows += 1;
-    }],
-    ["more households than people", w => {
-      w.graph.scope.persons = 1;
-    }],
-    ["a zero household count", w => {
-      w.graph.scope.households = 0;
-    }],
-    ["a fractional person count", w => {
-      w.graph.scope.persons = 30.5;
-    }],
-    ["a negative tax unit count", w => {
-      w.graph.scope.tax_units = -1;
-    }],
-    ["an unsafe household count", w => {
-      w.graph.scope.households = Number.MAX_SAFE_INTEGER + 2;
-    }],
-    ["the accounted rows disagree with the person count", w => {
-      w.graph.reported_income.rows += 1;
-    }],
-    ["the build summary counts a different sample", w => {
-      w.build.checks.direct.person_count += 1;
-    }],
-    ["the build summary counts different households", w => {
-      w.build.checks.direct.household_count += 1;
-    }],
-    ["the build summary counts different tax units", w => {
-      w.build.checks.direct.tax_unit_count += 1;
-    }],
-    ["the signed classes no longer cover the rows", w => {
-      w.graph.reported_income.signed_value_counts[0].zero += 1;
-    }],
-    ["the zero-origin classes no longer partition the rows", w => {
-      const entry = w.graph.reported_income.zero_origin_class_counts[0];
-      entry.observed_amount += 1;
-    }],
-    ["a claimed recording count that names fewer sources", w => {
-      w.graph.scope.measurement.independent_recordings[0].recordings += 1;
-    }],
-    ["a recorded count that disagrees with the scope", w => {
-      const entry = w.graph.scope.measurement.independent_recordings.find(
-        (r: any) => r.fact === "person",
-      );
-      entry.count += 1;
-    }],
-    ["a load-bearing count with a single recording", w => {
-      const entry = w.graph.scope.measurement.independent_recordings.find(
-        (r: any) => r.fact === "person",
-      );
-      entry.recordings = 1;
-      entry.sources = [entry.sources[0]];
-    }],
-    ["an unrecognised producer schema", w => {
-      w.graph.scope.producer_schema = "income_v3_some_future_producer";
-    }],
-    ["an entity nobody counts", w => {
-      w.graph.scope.entity_rows.push({ entity: "invented_entity", rows: 3 });
-    }],
-    ["a nesting table dropped while still claimed", w => {
-      w.graph.scope.measurement.nesting = [];
-    }],
-    ["a nested unit crossing a household boundary", w => {
-      w.graph.scope.measurement.nesting[0].within_one_household = false;
-    }],
-    ["a nested entity nobody counts", w => {
-      w.graph.scope.measurement.nesting[0].entity = "invented_entity";
-    }],
-    ["a cohort with more realised than eligible households", w => {
-      w.graph.scope.households_by_source_cohort[0].eligible_households = 1;
-    }],
-    ["the money field axes moved with the size", w => {
-      w.graph.scope.money_field_axes = 34;
-    }],
-    ["the accounting row width moved with the size", w => {
-      w.graph.reported_income.accounting_row_bytes = 92;
-    }],
-  ];
+/** Which check refused, not merely that one did.
+ *
+ * Ported from the income-v3 exporter contract test, for the same reason it
+ * exists there: `refuse()` throws one message for every refusal, so "it threw"
+ * says nothing about where -- and a `TypeError` from the reader or from a
+ * mutation helper would satisfy a bare `toThrow()` while proving the opposite of
+ * what the case claims. This walks the thrown stack for the frames inside
+ * `attachment.ts`, innermost first, dropping only `refuse` and `assert`, which
+ * every refusal passes through and which therefore carry no information. */
+const GENERIC = new Set(["refuse", "assert"]);
+const SOURCE_LINES = readFileSync(SOURCE, "utf8").split("\n");
 
-  for (const [name, mutate] of cases)
+function reachedBy(label: Label, mutate: (w: Written) => void) {
+  const w = written(label);
+  mutate(w);
+  let error: unknown;
+  try {
+    verify(w);
+  } catch (thrown) {
+    error = thrown;
+  }
+  expect(error).toBeInstanceOf(ReceiptGraphUnavailableError);
+  const chain = ((error as Error).stack ?? "")
+    .split("\n")
+    .map(raw => /^\s*at (\S+) .*attachment\.ts:(\d+):\d+/.exec(raw))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map(match => ({ check: match[1], line: SOURCE_LINES[Number(match[2]) - 1].trim() }))
+    .filter(frame => !GENERIC.has(frame.check));
+  expect(chain.length).toBeGreaterThan(0);
+  return chain;
+}
+
+/** Every sized mutation, the innermost checks it must travel through, the
+ * line that has to raise, and the edit that provokes it. */
+const CASES: [string, string[], RegExp, (w: Written) => void][] = [
+  [
+    "the cohorts no longer sum to the households",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(sumOf\(s\.households_by_source_cohort as RecordValue\[\], "households"\), s\.households\);/,
+    w => { w.graph.scope.households_by_source_cohort[0].households += 1; },
+  ],
+  [
+    "the entity table disagrees with the headline household count",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(rows\.get\("household"\), s\.households\);/,
+    w => { w.graph.scope.entity_rows.find((r: any) => r.entity === "household").rows += 1; },
+  ],
+  [
+    "more households than people",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /assert\(s\.persons >= s\.households\);/,
+    w => { w.graph.scope.persons = 1; },
+  ],
+  [
+    "a zero household count",
+    ["positiveScopeCount", "shape", "sizedScope"],
+    /assert\(\(value as number\) >= 1\);/,
+    w => { w.graph.scope.households = 0; },
+  ],
+  [
+    "a fractional person count",
+    ["count", "positiveScopeCount", "shape"],
+    /assert\(Number\.isSafeInteger\(value\) && value >= 0\);/,
+    w => { w.graph.scope.persons = 30.5; },
+  ],
+  [
+    "a negative tax unit count",
+    ["count", "positiveScopeCount", "shape"],
+    /assert\(Number\.isSafeInteger\(value\) && value >= 0\);/,
+    w => { w.graph.scope.tax_units = -1; },
+  ],
+  [
+    "an unsafe household count",
+    ["count", "positiveScopeCount", "shape"],
+    /assert\(Number\.isSafeInteger\(value\) && value >= 0\);/,
+    w => { w.graph.scope.households = Number.MAX_SAFE_INTEGER + 2; },
+  ],
+  [
+    "the accounted rows disagree with the person count",
+    ["reportedTotals", "sizedReported", "shape"],
+    /equal\(sumKeys\(row, INCOME_V3\.signClasses\), r\.rows\);/,
+    w => { w.graph.reported_income.rows += 1; },
+  ],
+  [
+    "the build summary counts a different sample",
+    ["incomeReading", "normalizeGraphAttachment"],
+    /equal\(direct\.person_count, scope\.persons\);/,
+    w => { w.build.checks.direct.person_count += 1; },
+  ],
+  [
+    "the build summary counts different households",
+    ["incomeReading", "normalizeGraphAttachment"],
+    /equal\(direct\.household_count, scope\.households\);/,
+    w => { w.build.checks.direct.household_count += 1; },
+  ],
+  [
+    "the build summary counts different tax units",
+    ["incomeReading", "normalizeGraphAttachment"],
+    /equal\(direct\.tax_unit_count, scope\.tax_units\);/,
+    w => { w.build.checks.direct.tax_unit_count += 1; },
+  ],
+  [
+    "the signed classes no longer cover the rows",
+    ["reportedTotals", "sizedReported", "shape"],
+    /equal\(sumKeys\(row, INCOME_V3\.signClasses\), r\.rows\);/,
+    w => { w.graph.reported_income.signed_value_counts[0].zero += 1; },
+  ],
+  [
+    "the zero-origin classes no longer partition the rows",
+    ["reportedTotals", "sizedReported", "shape"],
+    /equal\(zeroOriginTotal\(r\), r\.rows\);/,
+    w => { w.graph.reported_income.zero_origin_class_counts[0].observed_amount += 1; },
+  ],
+  [
+    "a claimed location count that names fewer sources",
+    ["recordedCountLocation", "boundedList", "shape"],
+    /equal\(entry\.locations, \(entry\.sources as unknown\[\]\)\.length\);/,
+    w => { w.graph.scope.measurement.recorded_count_locations[0].locations += 1; },
+  ],
+  [
+    "one place named twice and counted twice",
+    ["recordedCountLocation", "boundedList", "shape"],
+    /unique\(entry\.sources as unknown\[\]\);/,
+    w => { const e = w.graph.scope.measurement.recorded_count_locations.find((r: any) => r.fact === "person"); e.sources = [e.sources[0], ...e.sources.slice(0, e.sources.length - 1)]; },
+  ],
+  [
+    "a recorded count that disagrees with the scope",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(entry!\.count, count_\);/,
+    w => { w.graph.scope.measurement.recorded_count_locations.find((r: any) => r.fact === "person").count += 1; },
+  ],
+  [
+    "a load-bearing count recorded in a single place",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /assert\(\(recorded\.get\(entity\)!\.locations as number\) >= 2\);/,
+    w => { const e = w.graph.scope.measurement.recorded_count_locations.find((r: any) => r.fact === "person"); e.locations = 1; e.sources = [e.sources[0]]; },
+  ],
+  [
+    "an unrecognised producer schema",
+    ["producerSchema", "shape", "sizedScope"],
+    /assert\(SIZED_PRODUCER_SCHEMAS\.includes\(name as string\)\);/,
+    w => { w.graph.scope.producer_schema = "income_v3_some_future_producer"; },
+  ],
+  [
+    "an entity nobody counts",
+    ["entityRowSet", "shape", "sizedScope"],
+    /assert\(Array\.isArray\(rows\) && rows\.length >= SIZED_REQUIRED_ENTITIES\.length && rows\.length <= SIZED_ENTITIES\.length\);/,
+    w => { w.graph.scope.entity_rows.push({ entity: "invented_entity", rows: 3 }); },
+  ],
+  [
+    "a nesting table dropped while still claimed",
+    ["sizedMeasurement", "shape", "sizedScope"],
+    /assert\(m\.entity_structure_recorded === \(\(m\.nesting as unknown\[\]\)\.length > 0\)\);/,
+    w => { w.graph.scope.measurement.nesting = []; },
+  ],
+  [
+    "a nested unit crossing a household boundary",
+    ["oneOf", "shape", "nestedRow"],
+    /assert\(values\.includes\(value\)\);/,
+    w => { w.graph.scope.measurement.nesting[0].within_one_household = false; },
+  ],
+  [
+    "a nested entity nobody counts",
+    ["nestedEntity", "shape", "nestedRow"],
+    /assert\(SIZED_NESTED_ENTITIES\.includes\(name as string\)\);/,
+    w => { w.graph.scope.measurement.nesting[0].entity = "invented_entity"; },
+  ],
+  [
+    "a nesting row disagreeing with the entity row",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(rows\.get\(entry\.entity as string\), entry\.rows\);/,
+    w => { w.graph.scope.measurement.nesting[0].rows += 53; },
+  ],
+  [
+    "a nesting row for the household itself",
+    ["nestedEntity", "shape", "nestedRow"],
+    /assert\(SIZED_NESTED_ENTITIES\.includes\(name as string\)\);/,
+    w => { w.graph.scope.measurement.nesting[0].entity = "household"; },
+  ],
+  [
+    "a cohort with more realised than eligible households",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /assert\(cohort\.eligible_households >= cohort\.households\);/,
+    w => { w.graph.scope.households_by_source_cohort[0].eligible_households = 1; },
+  ],
+  [
+    "the money field axes moved with the size",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(s\.money_field_axes, INCOME_V3\.moneyFieldAxes\);/,
+    w => { w.graph.scope.money_field_axes = 34; },
+  ],
+  [
+    "the accounting row width moved with the size",
+    ["reportedTotals", "sizedReported", "shape"],
+    /equal\(r\.accounting_row_bytes, rosterRowBytes\(\)\);/,
+    w => { w.graph.reported_income.accounting_row_bytes = 92; },
+  ],
+  [
+    "a lede that contradicts the counts beside it",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(s\.note, sizedNote\(s\)\);/,
+    w => { w.graph.scope.note = "505 sampled households from 3 source cohorts, holding 1300 people and 55 tax units. An engineering sample of this size establishes no population accuracy."; },
+  ],
+  [
+    "a lede naming a cohort count the roster does not have",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(s\.note, sizedNote\(s\)\);/,
+    w => { w.graph.scope.note = w.graph.scope.note.replace("3 source cohorts", "4 source cohorts"); },
+  ],
+  [
+    "a fact nobody declares, added to the listing",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(recorded\.size, rows\.size \+ INCOME_V3\.incomeYears\.length\);/,
+    w => { w.graph.scope.measurement.recorded_count_locations.push({ fact: "district_households", count: 435, locations: 2, phase_restatements: 0, sources: ["a", "b"] }); },
+  ],
+  [
+    "a selection rule the exporter never validated",
+    ["selectionRule", "shape", "sizedMeasurement"],
+    /equal\(rule, SIZED_SELECTION_RULE\);/,
+    w => { w.graph.scope.measurement.selection_rule = "we kept the ones we liked"; },
+  ],
+  [
+    "a selection scope the sampler does not range over",
+    ["oneOf", "shape", "sizedMeasurement"],
+    /assert\(values\.includes\(value\)\);/,
+    w => { w.graph.scope.measurement.selection_rule_scope = "per_frame"; },
+  ],
+  [
+    "a sampling fraction above one",
+    ["samplingFraction", "shape", "sizedMeasurement"],
+    /assert\(\(fraction as number\) > 0 && \(fraction as number\) <= 1\);/,
+    w => { w.graph.scope.measurement.sampling_fraction = 1.5; },
+  ],
+  [
+    "a sampling fraction of zero",
+    ["samplingFraction", "shape", "sizedMeasurement"],
+    /assert\(\(fraction as number\) > 0 && \(fraction as number\) <= 1\);/,
+    w => { w.graph.scope.measurement.sampling_fraction = 0; },
+  ],
+  [
+    "an eligible total that is not the cohorts added up",
+    ["sizedScope", "shape", "normalizeGraphAttachment"],
+    /equal\(sumOf\(s\.households_by_source_cohort as RecordValue\[\], "eligible_households"\), measurement\.eligible_households\);/,
+    w => { w.graph.scope.measurement.eligible_households += 1; },
+  ],
+  [
+    "the reviewed exporter digest missing",
+    ["shape", "normalizeGraphAttachment"],
+    /assert\(Object\.keys\(o\)\.length === Object\.keys\(fields\)\.length && Object\.keys\(o\)\.every\(k => Object\.hasOwn\(fields, k\)\)\);/,
+    w => { delete w.graph.reviewed_exporter_sha256; delete w.build.reviewed_exporter_sha256; },
+  ],
+  [
+    "the reviewed exporter digest disagreeing across artifacts",
+    ["normalizeGraphAttachment"],
+    /equal\(build\[key\], graph\[key\]\);/,
+    w => { w.build.reviewed_exporter_sha256 = "b".repeat(64); },
+  ],
+  [
+    "the reviewed exporter digest not the one the manifest binds",
+    ["normalizeGraphAttachment"],
+    /equal\(graph\[key\], manifest\.provenance\[key as keyof typeof manifest\.provenance\]\);/,
+    w => { w.graph.reviewed_exporter_sha256 = "c".repeat(64); w.build.reviewed_exporter_sha256 = "c".repeat(64); },
+  ],
+  [
+    "the base and reviewed exporter digests collapsed into one",
+    ["normalizeGraphAttachment"],
+    /assert\(graph\.base_exporter_sha256 !== graph\.reviewed_exporter_sha256\);/,
+    w => { w.graph.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; w.build.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; w.manifest.provenance.base_exporter_sha256 = w.graph.reviewed_exporter_sha256; },
+  ],
+];
+
+describe("the sized reader refuses a payload that disagrees with itself", () => {
+  // The control. Without it a harness that refused everything -- or that had
+  // stopped reading the sized profile at all -- would pass every case below.
+  test("the unmutated exports are accepted", () => {
+    for (const label of LABELS) expect(() => verify(written(label))).not.toThrow();
+  });
+
+  // Each case names the innermost checks the value travels through, in order,
+  // and the text of the line that actually raised. Both halves matter: a chain
+  // alone would accept a refusal from the right block for the wrong reason, and
+  // a line alone would not say which block it belonged to.
+  const cases = CASES;
+
+  for (const [name, chain, line, mutate] of cases)
     test(name, () => {
-      const w = written("wide");
-      mutate(w);
-      expect(() => verify(w)).toThrow();
+      const reached = reachedBy("wide", mutate);
+      expect(reached.slice(0, chain.length).map(frame => frame.check)).toEqual(chain);
+      expect(reached[0].line).toMatch(line);
     });
 });
