@@ -57,8 +57,8 @@ from a checkout — the one thing a provenance table exists to prevent.
 | Generator | [`frontend/scripts/write-invented-income-sized-candidates.py`](../../../../../scripts/write-invented-income-sized-candidates.py) |
 | Generator receipt | [`generated.json`](generated.json), beside these files |
 | Generator sha256 | `325a1934e8e2623ffae7289fc683dcfa573a3ac8940e1636067d544c75233a48` |
-| `graph_evidence_income_sized.py` | sha256 `97f4682bf8dd35434c7c9d0c98e899599efeeef51fc022c1c94ea547d1987369` |
-| Its test helper | `test_graph_evidence_income_sized.py`, sha256 `51b261ee2b47366f48a002fe3b1780610a29502b024fdf21a66189e1d6935705` |
+| `graph_evidence_income_sized.py` | sha256 `b781734a6ce959c65e54f82fc1ccf292043559114ad201e509afc305602d77a7` |
+| Its test helper | `test_graph_evidence_income_sized.py`, sha256 `57604c11673b37cdce648b308cf6a79b0c2e2befd3634b3cb3918bc8ed0a33b6` |
 | Reviewed profile it imports | `graph_evidence_income_v3.py`, sha256 `0259cbc64af1c860beeab5f73f4ccb10618854133a6d78df0a1aa511241f7a71` |
 | Base exporter beneath both | `graph_evidence.py`, sha256 `970d95541f9f6d66f4d7adea3f7583d373bcc9b24c51fcc4324c2bf003cb055d` |
 | Producer roster read from | `us_runtime/graph_asec_income.py`, sha256 `4d2a95348310eccf0f0d52bb68faa17ff12ae28267f9c7c6bea0ac3204bd0e66` |
@@ -81,11 +81,15 @@ It refuses to run at all unless `graph_evidence_income_v3.py` and
 `graph_evidence.py` still hash to the accepted heads, so a fixture set cannot be
 regenerated against a quietly changed reviewed profile.
 
-Every file is named by its own sha256 and is self-addressed. The two artifacts
-reproduce byte for byte across runs; the manifest does not, because the writer
-stamps a wall-clock `created_at`. Regenerating therefore requires updating the
-digests recorded in `attachment-income-sized-contract.test.ts`; the generator
-rewrites each `index.json` and `generated.json` itself.
+Every file is named by its own sha256 and is self-addressed. All three files
+reproduce byte for byte across runs from unchanged exporter bytes: the writer
+takes `created_at` from the metadata the exporter passes it, which is the
+declaration's fixed timestamp, not a wall clock. So the digests move when — and
+only when — something the exporter writes into them moves, which includes the
+exporter's own `exporter_sha256`. When they do move, the digests recorded in
+`attachment-income-sized-contract.test.ts` and in the table above have to be
+updated with them; the generator rewrites each `index.json` and `generated.json`
+itself.
 
     python frontend/scripts/write-invented-income-sized-candidates.py \
       --microcosm /path/to/microcosm \
@@ -105,4 +109,4 @@ no claim: every value in it is copied from the manifest.
 
 then open
 
-    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-income-sized-invented-wide-v1&manifest_sha256=6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa
+    /calibration/dashboard/microcosm/pipeline?country=us&candidate=us-income-sized-invented-wide-v1&manifest_sha256=b139714da64353e169f0c2d3affcbbf7f3efa788f6148eebf262f69151b07b0e

@@ -26,9 +26,9 @@ const SOURCE = join(import.meta.dir, "attachment.ts");
  * test of an edit rather than of the exporter. */
 const SHAPES = {
   small: {
-    manifest: "574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5",
-    graph: "9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818",
-    build: "184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5",
+    manifest: "57b32b3df9fada892a99d4f5b48663c251195bcc003a827efee2830fc77a1f00",
+    graph: "3694976f8b50a29ea87ae46d66ed26babe075e586c86ad60315d077d78e56a74",
+    build: "a1e4dbed1a626045216618d375a4c8040ce376894c4ac05fc6ae5b583f90791e",
     population: "13973c961ea39995ac7085b2f92160485cf83abc5852685c968a34e96f1629f0",
     candidate: "us-income-sized-invented-small-v1",
     households: 9,
@@ -41,9 +41,9 @@ const SHAPES = {
     nesting: 0,
   },
   wide: {
-    manifest: "6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa",
-    graph: "b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6",
-    build: "324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2",
+    manifest: "b139714da64353e169f0c2d3affcbbf7f3efa788f6148eebf262f69151b07b0e",
+    graph: "012a4fe6d7fbcf51069c600b82094284f0e5222c80fe80c0f9898767f3641caf",
+    build: "3361f569e76fb6d6aca0e36c4567ebd2c3e6b55f23afa48fd77dba76741923d6",
     population: "41c38ba897e673ae6d8de157b609f7b44e6577620157ff2fca0c14c08cd9ca83",
     candidate: "us-income-sized-invented-wide-v1",
     households: 41,

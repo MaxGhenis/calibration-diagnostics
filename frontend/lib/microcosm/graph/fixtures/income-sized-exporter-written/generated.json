@@ -72,8 +72,8 @@
   "shapes": [
     {
       "build_summary_bytes": 5084,
-      "build_summary_sha256": "184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5",
-      "candidate_manifest_sha256": "574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5",
+      "build_summary_sha256": "a1e4dbed1a626045216618d375a4c8040ce376894c4ac05fc6ae5b583f90791e",
+      "candidate_manifest_sha256": "57b32b3df9fada892a99d4f5b48663c251195bcc003a827efee2830fc77a1f00",
       "candidate_release_id": "us-income-sized-invented-small-v1",
       "cohorts": [
         3,
@@ -86,13 +86,13 @@
         300
       ],
       "files": [
-        "artifacts/184862711702f7a9b4db67e66f56c1225821153787ccaa86f6b9b7260f3df7c5.json",
-        "artifacts/9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818.json",
+        "artifacts/3694976f8b50a29ea87ae46d66ed26babe075e586c86ad60315d077d78e56a74.json",
+        "artifacts/a1e4dbed1a626045216618d375a4c8040ce376894c4ac05fc6ae5b583f90791e.json",
         "index.json",
-        "manifests/574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5.json"
+        "manifests/57b32b3df9fada892a99d4f5b48663c251195bcc003a827efee2830fc77a1f00.json"
       ],
       "graph_receipts_bytes": 42822,
-      "graph_receipts_sha256": "9dce27400050a48d4d6dfdd0ecb2c74713c86c1828677a54da293450927ad818",
+      "graph_receipts_sha256": "3694976f8b50a29ea87ae46d66ed26babe075e586c86ad60315d077d78e56a74",
       "households": 9,
       "label": "small",
       "persons": 31,
@@ -164,8 +164,8 @@
     },
     {
       "build_summary_bytes": 5085,
-      "build_summary_sha256": "324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2",
-      "candidate_manifest_sha256": "6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa",
+      "build_summary_sha256": "3361f569e76fb6d6aca0e36c4567ebd2c3e6b55f23afa48fd77dba76741923d6",
+      "candidate_manifest_sha256": "b139714da64353e169f0c2d3affcbbf7f3efa788f6148eebf262f69151b07b0e",
       "candidate_release_id": "us-income-sized-invented-wide-v1",
       "cohorts": [
         14,
@@ -178,13 +178,13 @@
         1300
       ],
       "files": [
-        "artifacts/324a207711db98ceb1e70ca48020c9b366f0a241607ae5912e78862b02e2c0c2.json",
-        "artifacts/b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6.json",
+        "artifacts/012a4fe6d7fbcf51069c600b82094284f0e5222c80fe80c0f9898767f3641caf.json",
+        "artifacts/3361f569e76fb6d6aca0e36c4567ebd2c3e6b55f23afa48fd77dba76741923d6.json",
         "index.json",
-        "manifests/6209336c3d07bae48e592d582f203d3f31c4b63b83395a7e62e0f3fbd1b511fa.json"
+        "manifests/b139714da64353e169f0c2d3affcbbf7f3efa788f6148eebf262f69151b07b0e.json"
       ],
       "graph_receipts_bytes": 43667,
-      "graph_receipts_sha256": "b874aa5f6b4bf2aac6d0cdd6ff9cacc61acd74df63b8101a245e9cb744ff99c6",
+      "graph_receipts_sha256": "012a4fe6d7fbcf51069c600b82094284f0e5222c80fe80c0f9898767f3641caf",
       "households": 41,
       "label": "wide",
       "persons": 107,
@@ -255,7 +255,7 @@
       "tax_units": 55
     }
   ],
-  "sized_exporter_sha256": "97f4682bf8dd35434c7c9d0c98e899599efeeef51fc022c1c94ea547d1987369",
-  "sized_exporter_tests_sha256": "51b261ee2b47366f48a002fe3b1780610a29502b024fdf21a66189e1d6935705",
+  "sized_exporter_sha256": "b781734a6ce959c65e54f82fc1ccf292043559114ad201e509afc305602d77a7",
+  "sized_exporter_tests_sha256": "57604c11673b37cdce648b308cf6a79b0c2e2befd3634b3cb3918bc8ed0a33b6",
   "what": "Invented sized income-v3 exports produced by the sized exporter's own invented-fixture helper at two shapes, with the real production 28-column accounting roster substituted for the helper's renamed EVIDENCE_j stand-ins."
 }

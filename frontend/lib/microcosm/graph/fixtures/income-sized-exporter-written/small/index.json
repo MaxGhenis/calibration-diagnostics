@@ -4,8 +4,8 @@
       "candidate_release_id": "us-income-sized-invented-small-v1",
       "execution_status": "completed",
       "manifest": {
-        "path": "manifests/574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5.json",
-        "sha256": "574327bcc6dc82bb69ba08c885278e71312507ab1ecd398821b81870ddcb45b5"
+        "path": "manifests/57b32b3df9fada892a99d4f5b48663c251195bcc003a827efee2830fc77a1f00.json",
+        "sha256": "57b32b3df9fada892a99d4f5b48663c251195bcc003a827efee2830fc77a1f00"
       },
       "release_eligibility": {
         "reason": "Invented target 2024 engineering slice. Uncalibrated and excluded from release claims.",
