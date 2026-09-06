@@ -17,7 +17,7 @@ const start = new URL(`${base.replace(/\/$/, "")}/microcosm/pipeline`);
 start.searchParams.set("country", fixture.country);
 start.searchParams.set("candidate", fixture.candidates[0].id);
 start.searchParams.set("manifest_sha256", fixture.candidates[0].manifest_sha256);
-const receipt = { status: "STARTED", fixture: path.resolve(fixturePath), base, checks: [], page_errors: [] };
+const receipt = { status: "STARTED", fixture: path.resolve(fixturePath), base, checks: [], page_errors: [], console_errors: [], failed_responses: [] };
 const browser = await webkit.launch({ headless: true });
 const check = (name, passed) => {
   receipt.checks.push({ name, passed: !!passed });
@@ -28,6 +28,12 @@ try {
     const context = await browser.newContext({ viewport: { width, height }, isMobile: name === "mobile", hasTouch: name === "mobile" });
     const page = await context.newPage();
     page.on("pageerror", error => receipt.page_errors.push({ viewport: name, error: String(error) }));
+    page.on("console", message => {
+      if (message.type() === "error") receipt.console_errors.push({ viewport: name, text: message.text(), location: message.location() });
+    });
+    page.on("response", response => {
+      if (response.status() >= 400) receipt.failed_responses.push({ viewport: name, url: response.url(), status: response.status() });
+    });
     const verify = async (candidate, step) => {
       await page.waitForURL(url => url.searchParams.get("candidate") === candidate.id && url.searchParams.get("manifest_sha256") === candidate.manifest_sha256);
       await page.waitForFunction(({ selector, text }) => document.querySelector(selector)?.textContent.includes(text), { selector: candidate.profile_selector, text: candidate.sample_text });
@@ -52,9 +58,22 @@ try {
     await verify(fixture.candidates[0], "Back");
     await page.goForward({ waitUntil: "networkidle" });
     await verify(next, "Forward");
+    const incumbent = page.getByRole("combobox", { name: "Incumbent population", exact: true });
+    const incumbentOptions = await incumbent.locator("option").evaluateAll(elements => elements.map(e => ({ value: e.value, label: e.textContent })));
+    const comparison = incumbentOptions.find(e => e.label.includes(fixture.candidates[0].id));
+    assert.ok(comparison, "The other immutable candidate must be available as an incumbent.");
+    await incumbent.selectOption(comparison.value);
+    await page.waitForURL(url => url.searchParams.get("incumbent") === comparison.value);
+    await verify(next, "added incumbent");
+    check(`${name}: comparison selection is retained`, await page.getByRole("combobox", { name: "Incumbent population", exact: true }).inputValue() === comparison.value);
+    await page.getByRole("combobox", { name: "Incumbent population", exact: true }).selectOption("");
+    await page.waitForURL(url => !url.searchParams.has("incumbent"));
+    await verify(next, "cleared incumbent");
     await context.close();
   }
   check("no browser runtime errors", receipt.page_errors.length === 0);
+  check("no browser console errors", receipt.console_errors.length === 0);
+  check("no failed HTTP responses", receipt.failed_responses.length === 0);
   receipt.status = "PASS";
 } catch (error) {
   receipt.status = "FAIL";

@@ -227,7 +227,10 @@ function Inspector({
       {node.unconnected ? (
         <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
           No verified artifact dependency connects this receipt to another step
-          in the saved run manifests. Its recorded outputs remain available below.
+          in the saved run manifests.{" "}
+          {node.typed_outputs.length
+            ? "Its recorded outputs remain available below."
+            : "Its receipt identifiers remain available below."}
         </p>
       ) : null}
 
@@ -662,7 +665,7 @@ export function ReceiptGraphSurface({
             ))}
             <Field label="Outputs">
               {payload.comparison.output_identity.identical
-                ? `Identical across every recorded execution: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
+                ? `Identical across ${payload.combined_age_profile ? "the executions that record each step" : "every recorded execution"}: ${payload.comparison.output_identity.compared_artifacts} recorded artifact keys over ${payload.comparison.output_identity.compared_nodes} receipts.`
                 : `${payload.comparison.output_identity.differences.length} differences across ${payload.comparison.output_identity.compared_nodes} receipts.`}
             </Field>
             <Field label="Kernel calls">

@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "test:dev-port": "node --test scripts/available-port.node-test.mjs",
-    "verify:graph-selection": "node scripts/calibration-graph-generic-followup/selection-regression.mjs"
+    "verify:graph-selection": "node scripts/calibration-graph-generic-followup/selection-regression.mjs",
+    "verify:population-navigation": "node scripts/population-navigation/verify.mjs"
   },
   "dependencies": {
     "@policyengine/ui-kit": "^0.9.0",

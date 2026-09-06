@@ -923,6 +923,21 @@ describe("same computation, two executions", () => {
     expect(payload.nodes.every((node) => !node.identity_differs)).toBe(true);
   });
 
+  test("keeps missing receipts as identity differences outside a staged age profile", () => {
+    const source = projection();
+    source.executions[1].nodes = source.executions[1].nodes.filter(
+      (node) => node.id !== "assemble_stacked_spine",
+    );
+    const payload = buildReceiptGraph(source, manifest(), evidence(), verify());
+    const node = payload.nodes.find((node) => node.id === "assemble_stacked_spine")!;
+    expect(payload.comparison.output_identity.identical).toBe(false);
+    expect(node.identity_differs).toBe(true);
+    expect(node.states.find((state) => state.mode === "replay")!.execution).toBe("not_evidenced");
+    expect(payload.comparison.output_identity.differences.some(
+      (difference) => difference.id === node.id && difference.values.some((value) => value.value === null),
+    )).toBe(true);
+  });
+
   test("reports a diverging output key rather than showing the first one", () => {
     const source = projection();
     source.executions[1].nodes.find(

@@ -81,7 +81,6 @@ export function CountryProvider({ children }: { children: ReactNode }) {
 
   const setCountry = (next: Country) => {
     if (next === country) return;
-    setCountryState(next);
     persistCountry(next);
     // Reload server-provided data and preserve the requested query instead of
     // reusing a static route with the previous population's canonical URL.

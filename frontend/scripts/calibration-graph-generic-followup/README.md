@@ -145,9 +145,9 @@ configured to serve; the harness cannot register one.
 ## Not covered here
 
 - One candidate per run. Comparing two candidates is a separate concern.
-- The candidate selector at `quality-context.tsx` still navigates through the
-  router. Whether it meets the same prefetched-route cache behaviour was never
-  assessed, here or anywhere else.
+- Global population and country selectors use full document navigation so the
+  server reloads data for the requested query. The separate
+  `verify:population-navigation` harness checks population selection and history.
 - Nothing about the correctness of the receipts themselves. That is
   `lib/microcosm/graph/adapter.test.ts` and `app/api/microcosm/graph/route.test.ts`.
 - This is not wired into `make test` or GitHub CI. Both run without a server or
