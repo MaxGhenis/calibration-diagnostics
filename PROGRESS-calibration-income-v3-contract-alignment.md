@@ -37,10 +37,15 @@ export, does not install any genuine candidate, and writes no approval.
       fields; align types, reader, fixtures, tests, humane UI label
 - [x] Enforce the node producer roster reader-side
 - [x] Closed schema-column-name roster so `person_id` validates as a column name
-- [ ] Commit the exporter-written bytes as a fixture and read them end to end
-- [ ] Mutation tests reaching each intended check, by name
-- [ ] Full bun lint / test / build, WebKit desktop 1440 + mobile 390
-- [ ] Report to `R/calibration-income-v3-contract-alignment-REPORT.md`/`.json`
+- [x] Commit the exporter-written bytes as a fixture and read them end to end
+- [x] Mutation tests reaching each intended check, by name and by raising line
+- [x] Full bun lint / test / build, WebKit desktop 1440 + mobile 390
+- [x] Report to `R/calibration-income-v3-contract-alignment-REPORT.md`/`.json`
+
+**Lane complete.** Head `85989fc87f2bd579912272de0c34739db3edcc90`, tree clean.
+900 tests pass, 0 fail, 3,055 assertions, 65 files. Lint clean, build exit 0,
+dev-port 0 fail. WebKit 26.0: 59 checks, 0 failures, 0 page errors. Nothing
+exported, installed, pushed or approved.
 
 ## Findings so far
 
