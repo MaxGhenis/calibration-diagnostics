@@ -226,9 +226,8 @@ function Inspector({
       ) : null}
       {node.unconnected ? (
         <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-          This receipt declares no typed artifact, so nothing in the saved run
-          manifests connects it to another step. It is shown as a record, not
-          placed in the flow.
+          No verified artifact dependency connects this receipt to another step
+          in the saved run manifests. Its recorded outputs remain available below.
         </p>
       ) : null}
 

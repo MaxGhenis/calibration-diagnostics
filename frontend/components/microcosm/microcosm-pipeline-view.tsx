@@ -18,7 +18,7 @@ import {
 // selected candidate actually recorded.
 export function HistoricalOverview() {
   return (
-    <details className="rounded-lg border border-border bg-card">
+    <details className="rounded-lg border border-border bg-card [overflow-wrap:anywhere]">
       <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">
         Historical overview of the full US pipeline · July 2026
       </summary>
@@ -107,7 +107,7 @@ export function HistoricalOverview() {
                       key={step.id}
                       className="flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4 shadow-[var(--elev-1)]"
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="text-sm font-medium leading-tight text-foreground">
                           {step.title}
                         </div>

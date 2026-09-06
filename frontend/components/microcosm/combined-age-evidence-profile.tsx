@@ -16,7 +16,7 @@ const sectionClass="border-t border-border py-6";
 const headingClass="text-base font-semibold tracking-tight text-foreground";
 const noteClass="text-xs leading-relaxed text-muted-foreground";
 const cellClass="whitespace-nowrap px-3 py-2 tabular-nums";
-const weightCellClass="px-2 py-2 text-right align-top tabular-nums";
+const weightCellClass="px-1.5 py-2 text-right align-top tabular-nums";
 const anchorLabel=(anchor:string) => anchor === "original_design" ? "Original design weights" : "Incoming importance weights";
 const originLabels:Record<string,string>={empty_composition_store:"Empty composition store",same_composition_store:"Same composition store",mirror_of_accepted_composition_store:"Mirror of the accepted composition store",same_calibration_store:"Same calibration store"};
 
@@ -117,7 +117,7 @@ export function CombinedAgeEvidenceProfile({profile,nodes}:{profile:CombinedAgeP
         <h3 id="age-weights-heading" className={headingClass}>Weight concentration and effective sample size</h3>
         <p className={`mt-2 ${noteClass}`}>ESS describes the concentration of household weights. It is a diagnostic, not a measure of representativeness or a launch pass.</p>
         <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable household weight diagnostics">
-          <table className="w-full table-fixed text-xs"><caption className="sr-only">Initial and calibrated household weight diagnostics</caption><thead><tr><th scope="col" className="w-[46%] px-2 py-2 text-left align-top">Diagnostic</th><th scope="col" className={weightCellClass}>Initial importance weights</th><th scope="col" className={weightCellClass}>Calibrated weights</th></tr></thead>
+          <table className="w-full text-xs"><caption className="sr-only">Initial and calibrated household weight diagnostics</caption><thead><tr><th scope="col" className="w-[46%] px-2 py-2 text-left align-top">Diagnostic</th><th scope="col" className={weightCellClass}>Initial importance weights</th><th scope="col" className={weightCellClass}>Calibrated weights</th></tr></thead>
             <tbody>{weightRows.map(row=><tr className="border-t border-border/60" key={row.key}><th scope="row" className="px-2 py-2 text-left align-top font-normal">{row.label}</th>{(["initial_importance","calibrated"] as const).map(role=><td key={role} className={weightCellClass}>{row.format(age.weights[role][row.key] as number)}</td>)}</tr>)}</tbody>
           </table>
         </div>

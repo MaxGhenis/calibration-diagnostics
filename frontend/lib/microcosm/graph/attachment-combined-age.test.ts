@@ -29,6 +29,9 @@ describe("sealed combined-age exporter contract",() => {
       expect(p.binding.population_sha256).toBe(f.reference.population_sha256);
       expect(p.evidence_profile).toBeUndefined();
       expect(p.comparison.same_computation_content_key).toBe(false);
+      expect(p.comparison.output_identity.identical).toBe(true);
+      expect(p.comparison.output_identity.differences).toHaveLength(0);
+      expect(p.nodes.every(n=>!n.identity_differs)).toBe(true);
       expect(p.comparison.title).toBe("Composition and calibration, four recorded executions");
       expect(p.comparison.execution_note).not.toContain("a shared computation content key");
       expect(p.mappings.find(m=>m.key==="calibration")?.state).toBe("present");
@@ -36,6 +39,20 @@ describe("sealed combined-age exporter contract",() => {
       expect(p.mappings.find(m=>m.key==="calibration")?.reason).toContain("calibration_diagnostics family is missing");
     });
   }
+});
+
+test("an added calibration node still exposes a conflicting recorded identity", () => {
+  const f=writtenCombinedAge(20);
+  const v=normalizeGraphAttachment(f.graph,f.manifest,f.manifestSha,f.build);
+  const id="national.demographic_calibration";
+  const later=v.projection.executions[3].nodes.find(n=>n.id===id)!;
+  later.node_key="a".repeat(64);
+  later.frame_key="b".repeat(64);
+  const p=buildReceiptGraph(v.projection,f.manifest,f.build,v.checks);
+  expect(p.nodes.find(n=>n.id===id)?.identity_differs).toBe(true);
+  expect(p.nodes.find(n=>n.id===id)?.states.slice(0,2).map(s=>s.execution)).toEqual(["not_evidenced","not_evidenced"]);
+  expect(p.comparison.output_identity.identical).toBe(false);
+  expect(p.comparison.output_identity.differences.find(d=>d.id===id)?.values.map(v=>v.mode)).toEqual(["calibration_extension","calibration_replay"]);
 });
 const mutations:Record<string,(f:ReturnType<typeof writtenCombinedAge>)=>void>={
   "contradictory evidence classification":f=>{f.graph.genuine=f.build.genuine=true;},

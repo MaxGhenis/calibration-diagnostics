@@ -1,0 +1,19 @@
+{
+  "country": "us",
+  "candidates": [
+    {
+      "id": "us-combined-age-17004hh-development-manifest-v2-20260906",
+      "manifest_sha256": "cfd7408f20cbe425f3e153ef5066ccddf9c8a6cbeeae8dbd58396b5937ecd041",
+      "population_sha256": "18cc142c3f3adb3aef2f323094c1d6498c10e72e7eec202d74bac7261c421976",
+      "sample_text": "17,004households",
+      "profile_selector": "[aria-label=\"Combined survey national age evidence\"]"
+    },
+    {
+      "id": "us-combined-age-169hh-development-manifest-v2-20260906",
+      "manifest_sha256": "04bf718d9dd406031a6886b0dc1e2bae4cf9f330375483d34314d13ea1646845",
+      "population_sha256": "dad4bf854c5300aa51549d86fff83871005d19942757d8495ec31c29ceb91343",
+      "sample_text": "169households",
+      "profile_selector": "[aria-label=\"Combined survey national age evidence\"]"
+    }
+  ]
+}

@@ -608,7 +608,7 @@ export function pinDifferences(
     (["frame_key", "weight_key"] as const).some(
       (field) =>
         new Set(
-          projection.executions.map(
+          comparisonExecutions(projection, id).map(
             (execution) => byMode.get(execution.mode)!.get(id)?.[field] ?? null,
           ),
         ).size > 1,
@@ -740,6 +740,15 @@ export function outputFirstOrder(
   return ordered;
 }
 
+/** The sealed age profile adds two nodes after composition. Their absence in
+ * the earlier, smaller graph is expected, not a contradictory receipt. Other
+ * profiles retain the existing missing-receipt comparison. */
+function comparisonExecutions(projection: ReceiptProjection, id: string): ProjectionExecution[] {
+  return projection.combined_age_profile
+    ? projection.executions.filter(execution => execution.nodes.some(node => node.id === id))
+    : projection.executions;
+}
+
 function compareOutputs(projection: ReceiptProjection, ids: string[]) {
   const differences: {
     id: string;
@@ -754,7 +763,7 @@ function compareOutputs(projection: ReceiptProjection, ids: string[]) {
     ]),
   );
   for (const id of ids) {
-    const present = projection.executions.map((execution) => ({
+    const present = comparisonExecutions(projection, id).map((execution) => ({
       mode: execution.mode,
       node: byMode.get(execution.mode)!.get(id),
     }));
@@ -1243,7 +1252,7 @@ export function buildReceiptGraph(
           ? "One recorded execution"
           : `Same computation, ${countWord(executionCount)} executions`,
       execution_note: projection.combined_age_profile
-        ? "Composition and calibration have distinct computation content keys. Cold and warm composition share one key; the calibration extension and replay share the other. All four execution-manifest byte digests remain distinct, and the nine composition node identities stay unchanged in the calibration passes. Checkpoint materialization is provenance only."
+        ? "Composition and calibration have distinct computation content keys. Cold and warm composition share one key; the calibration extension and replay share the other. All four execution-manifest byte digests remain distinct, and the nine composition node identities stay unchanged in the calibration passes. Identity comparisons use the executions that record each node; the two added calibration nodes have no receipts in the composition-only passes. Checkpoint materialization is provenance only."
         : attached
           ? `The publisher authenticates ${countWord(executionCount)} recorded ${plural(executionCount, "execution")} with distinct execution-manifest byte digests and a shared computation content key${kernelCalls ? `, ${kernelCallClause(kernelCalls)}` : ""}. The build summary binds both identities for each execution. This authenticates aggregate evidence and its declared pointers; the browser does not independently interpret the raw execution manifests.`
           : executionCount === 1

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCountry } from "./country-context";
 import {
   candidateReleaseToken,
@@ -27,7 +27,6 @@ const QualityContext = createContext<QualityContextValue | null>(null);
 export function QualityProvider({ children }: { children: ReactNode }) {
   const { country } = useCountry();
   const search = useSearchParams();
-  const router = useRouter();
   const params = useMemo(
     () => new URLSearchParams(search.toString()),
     [search],
@@ -42,10 +41,11 @@ export function QualityProvider({ children }: { children: ReactNode }) {
         selection,
         release: candidateReleaseToken(selection) || selection.release,
         requestedIncumbent: requestedIncumbent(params, country),
+        // A population change also changes server-provided data. A document
+        // navigation preserves its complete immutable identity; the cached
+        // static route can otherwise restore the previous canonical query.
         setSelection: (patch) =>
-          router.push(selectionUrl(window.location.href, country, patch), {
-            scroll: false,
-          }),
+          window.location.assign(selectionUrl(window.location.href, country, patch)),
         href: (destination) => qualityHref(destination, selection),
       }}
     >

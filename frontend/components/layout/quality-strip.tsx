@@ -62,7 +62,7 @@ export function QualityStrip() {
           Population
           <select
             aria-label="Selected population"
-            className="mt-1 block w-full max-w-[440px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            className="mt-1 block w-full min-w-0 max-w-[440px] overflow-hidden rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
             value={context.release}
             onChange={(event) => select(event.target.value)}
           >
@@ -77,7 +77,7 @@ export function QualityStrip() {
           Incumbent comparison
           <select
             aria-label="Incumbent population"
-            className="mt-1 block w-full max-w-[350px] rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            className="mt-1 block w-full min-w-0 max-w-[350px] overflow-hidden rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
             value={comparison.incumbent}
             onChange={(event) =>
               context.setSelection({ incumbent: event.target.value })

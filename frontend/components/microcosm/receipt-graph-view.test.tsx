@@ -141,7 +141,8 @@ describe("the inspector", () => {
     expect(markup).toContain("Used by");
     const unplaced = render({ selectedId: "assign_us_puma_ladder.boundary" });
     expect(unplaced).not.toContain("Built from");
-    expect(unplaced).toContain("nothing in the saved run");
+    expect(unplaced).toContain("No verified artifact dependency connects this receipt");
+    expect(unplaced).not.toContain("This receipt declares no typed artifact");
   });
 
   test("keeps the identifiers available without leading with them", () => {

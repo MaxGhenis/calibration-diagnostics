@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import {
   DEFAULT_COUNTRY,
@@ -65,7 +65,6 @@ const CountryContext = createContext<CountryContextValue>({
 });
 
 export function CountryProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const search = useSearchParams();
   const [country, setCountryState] = useState<Country>(DEFAULT_COUNTRY);
 
@@ -84,9 +83,9 @@ export function CountryProvider({ children }: { children: ReactNode }) {
     if (next === country) return;
     setCountryState(next);
     persistCountry(next);
-    // Route through Next so server page search parameters are recalculated;
-    // raw history replacement would leave initialRelease props stale.
-    router.replace(countrySwitchUrl(window.location.href, next), { scroll: false });
+    // Reload server-provided data and preserve the requested query instead of
+    // reusing a static route with the previous population's canonical URL.
+    window.location.assign(countrySwitchUrl(window.location.href, next));
   };
 
   return (
