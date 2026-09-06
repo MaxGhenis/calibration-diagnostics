@@ -262,13 +262,21 @@ export interface EvidenceProfileQuality {
 }
 
 /** What the accounted quantity is: a measure, the nominal amounts it came from,
- * the price target it was restated to, the period it is observed over, and what
+ * the price basis it was restated onto, the period it is observed over, and what
  * the residual column does and does not mean. Every member is a published
- * token this reader pins; none is inferred from a column name. */
+ * token this reader pins; none is inferred from a column name.
+ *
+ * The price basis is three fields rather than one name. `price_basis` is the
+ * index series, `price_target_year` the year restated to, and
+ * `price_basis_resource_sha256` the digest of the contract file the accounting
+ * node records having converted with -- so the series is bound to bytes instead
+ * of asserted. */
 export interface ReportedIncomeBasis {
   measure: string;
   nominal_source: string;
-  price_target: string;
+  price_basis: string;
+  price_target_year: string;
+  price_basis_resource_sha256: string;
   reference_period: string;
   residual_meaning: string;
   note: string;

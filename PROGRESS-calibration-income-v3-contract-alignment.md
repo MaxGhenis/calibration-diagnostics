@@ -30,14 +30,15 @@ export, does not install any genuine candidate, and writes no approval.
 
 ## Next
 
-- [ ] Generate the corrected exported JSON from the real exporter's own fixture
+- [x] Generate the corrected exported JSON from the real exporter's own fixture
       helper, with the real 28 accounting column names
-- [ ] Fix `INCOME_V3.missing` (drop `prior_wages`; keep it in `not_claimed`)
-- [ ] Replace the `price_target` basis field with the three published price
+- [x] Fix `INCOME_V3.missing` (drop `prior_wages`; keep it in `not_claimed`)
+- [x] Replace the `price_target` basis field with the three published price
       fields; align types, reader, fixtures, tests, humane UI label
-- [ ] Enforce the node producer roster reader-side
-- [ ] Closed schema-column-name roster so `person_id` validates as a column name
-- [ ] Mutation tests reaching each intended check
+- [x] Enforce the node producer roster reader-side
+- [x] Closed schema-column-name roster so `person_id` validates as a column name
+- [ ] Commit the exporter-written bytes as a fixture and read them end to end
+- [ ] Mutation tests reaching each intended check, by name
 - [ ] Full bun lint / test / build, WebKit desktop 1440 + mobile 390
 - [ ] Report to `R/calibration-income-v3-contract-alignment-REPORT.md`/`.json`
 

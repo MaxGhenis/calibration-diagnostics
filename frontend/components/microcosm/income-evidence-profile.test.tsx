@@ -108,9 +108,18 @@ describe("quality is drawn as incomplete, never as a passing population check", 
     expect(INCOME.markup).not.toMatch(/calibrat(ed|ion) (score|passed)/i);
   });
 
-  test("the slice says it is not a sample of a population", () => {
+  test("the slice is drawn with the publisher's own scope sentence", () => {
     expect(INCOME.markup).toContain("Engineering slice");
-    expect(INCOME.markup).toContain("not a sample of any population");
+    // The publisher's corrected wording, drawn verbatim. The old assertion
+    // pinned "not a sample of any population", which the exporter no longer
+    // writes: a fifteen-household draw *is* a sample, just far too small to
+    // establish anything about a population, and saying so accurately is what
+    // the exporter was corrected to do. This surface must not put the discarded
+    // sentence back, so the negative half is pinned too.
+    expect(INCOME.markup).toContain(
+      "This small engineering sample does not establish population accuracy.",
+    );
+    expect(INCOME.markup).not.toContain("not a sample of any population");
   });
 });
 
@@ -124,8 +133,17 @@ describe("the accounting is readable without reading the hashes", () => {
   test("source years and the price basis are stated", () => {
     expect(INCOME.markup).toContain("Households by source income year");
     for (const year of ["2022", "2023", "2024"]) expect(INCOME.markup).toContain(year);
-    expect(INCOME.markup).toContain("2024 price target");
-    expect(INCOME.markup).toContain("cpi u rs 2024 price target year");
+    // The humane reading, the publisher's own token, and the digest of the
+    // contract file the accounting node records having converted with. The
+    // wrong series this profile once published must not survive anywhere in
+    // the drawn markup, in either the token or the reading.
+    expect(INCOME.markup).toContain("2024 annual average C-CPI-U dollars");
+    expect(INCOME.markup).toContain("census_ccpiu_annual_2024");
+    expect(INCOME.markup).toContain(
+      "88cec207a3c73e5de93d677acf16e8db9ddae9761c644c06da92cacf0feb3f63",
+    );
+    expect(INCOME.markup).not.toMatch(/cpi[ _-]?u[ _-]?rs/i);
+    expect(INCOME.markup).not.toContain("2024 price target");
     expect(INCOME.markup).toContain(
       "interview household one year after income year",
     );

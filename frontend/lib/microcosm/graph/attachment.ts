@@ -518,6 +518,10 @@ const INCOME_V3 = {
     "completed_eight_component_acs_bridge",
     "prior_wages"
   ],
+  // Nine, not ten. `prior_wages` is deliberately absent: the exporter excludes
+  // it because this profile's scope is cross-sectional, so prior wages are not
+  // something it failed to measure. It stays in `not_claimed` above, which is
+  // where "we do not assert this" belongs.
   missing: [
     "calibration",
     "fit",
@@ -525,18 +529,127 @@ const INCOME_V3 = {
     "national_totals",
     "congressional_district_pass",
     "completed_eight_component_acs_bridge",
-    "prior_wages",
     "distributions",
     "support",
     "model_validation"
   ],
+  // The conversion basis is the kernel's own contract, and the exporter now
+  // publishes it as three bound fields rather than one asserted name. The basis
+  // is chained CPI-U from the Census P60 annual index workbook, not CPI-U-RS;
+  // the digest is the contract file the accounting node records having read, so
+  // a payload naming the series without naming those bytes is refused.
   basis: {
     measure: "observed_reported_source_income",
     nominal_source: "asec_reported_nominal_amounts",
-    price_target: "cpi_u_rs_2024_price_target_year",
+    price_basis: "census_ccpiu_annual_2024",
+    price_target_year: "2024",
+    price_basis_resource_sha256:
+      "88cec207a3c73e5de93d677acf16e8db9ddae9761c644c06da92cacf0feb3f63",
     reference_period: "interview_household_one_year_after_income_year",
     residual_meaning: "signed_source_accounting_residual_not_acs_other_income"
-  }
+  },
+  /** Which earlier node each node's typed inputs may name.
+   *
+   * Keyed by node id, mirroring the exporter's own `INPUT_PRODUCERS`, which it
+   * in turn read from the five kernels rather than inferring from roster order.
+   * Keyed rather than positional on purpose: a roster this small is easy to
+   * silently shear by one if it is read by index, and the whole point of the
+   * rule is which specific node may name which specific producer.
+   *
+   * The row that matters is the last: the accounting node consumes the prepared
+   * frame and the selection, and **never the engine**. The generic reader
+   * already refuses an input whose producer is absent from the execution, is
+   * the node itself, or disagrees about the artifact -- but it would accept an
+   * accounting node that consumed the engine, which is exactly the edge the
+   * exporter now refuses by name, and exactly the edge that would let this
+   * dashboard draw a model-informed arrow into a block labelled "what the
+   * source reported". */
+  inputProducers: {
+    "asec_prepared.create": [],
+    "asec_prepared.select_households": ["asec_prepared.create"],
+    "asec_prepared.cps_carried_current": [
+      "asec_prepared.create",
+      "asec_prepared.select_households"
+    ],
+    "asec_prepared.engine_current_money": ["asec_prepared.cps_carried_current"],
+    "asec_prepared.reported_income": [
+      "asec_prepared.create",
+      "asec_prepared.select_households"
+    ]
+  } as Record<string, readonly string[]>
+};
+
+/** The accounting layout, as the production producer defines it:
+ * `COORDINATES + RESULT_COLUMNS + EVIDENCE_COLUMNS` in `graph_asec_income.py`,
+ * with `ACCOUNTING_DTYPES` alongside. Twenty-eight schema column names, in the
+ * order the exporter republishes them.
+ *
+ * This roster exists because these are **schema labels, not values**. The first
+ * one is literally `person_id`, which the publisher-text check refuses -- and
+ * should keep refusing, because that marker is what stops a raw per-person
+ * identifier arriving as prose. So column names are validated against this
+ * closed roster instead of being routed through that check: a name is accepted
+ * because it is one of these twenty-eight, never because it looked safe.
+ * Anything not on the list is refused, so widening this list is the only way to
+ * admit a new name, and that is a review rather than an accident. */
+const ACCOUNTING_COLUMN_ROSTER: readonly { name: string; dtype: string }[] = [
+  { name: "person_id", dtype: "<i8" },
+  { name: "income_year", dtype: "<i8" },
+  { name: "A_AGE", dtype: "<i8" },
+  { name: "asec_reported_wage_income_2024_price", dtype: "<f8" },
+  { name: "asec_reported_net_self_employment_income_2024_price", dtype: "<f8" },
+  { name: "asec_reported_ssi_2024_price", dtype: "<f8" },
+  { name: "asec_reported_cash_public_assistance_2024_price", dtype: "<f8" },
+  { name: "asec_reported_total_income_2024_price", dtype: "<f8" },
+  { name: "asec_reported_income_unallocated_2024_price", dtype: "<f8" },
+  { name: "WSAL_VAL.status", dtype: "u1" },
+  { name: "WSAL_VAL.validity", dtype: "u1" },
+  { name: "WSAL_VAL.zero_origin", dtype: "u1" },
+  { name: "SEMP_VAL.status", dtype: "u1" },
+  { name: "SEMP_VAL.validity", dtype: "u1" },
+  { name: "SEMP_VAL.zero_origin", dtype: "u1" },
+  { name: "FRSE_VAL.status", dtype: "u1" },
+  { name: "FRSE_VAL.validity", dtype: "u1" },
+  { name: "FRSE_VAL.zero_origin", dtype: "u1" },
+  { name: "SSI_VAL.status", dtype: "u1" },
+  { name: "SSI_VAL.validity", dtype: "u1" },
+  { name: "SSI_VAL.zero_origin", dtype: "u1" },
+  { name: "PTOTVAL.status", dtype: "u1" },
+  { name: "PTOTVAL.validity", dtype: "u1" },
+  { name: "PTOTVAL.zero_origin", dtype: "u1" },
+  { name: "PAW_VAL.status", dtype: "u1" },
+  { name: "PAW_VAL.validity", dtype: "u1" },
+  { name: "PAW_VAL.zero_origin", dtype: "u1" },
+  { name: "PAW_VAL.source_encoding_class", dtype: "u1" }
+];
+
+/** A schema column name, checked against the closed roster above rather than
+ * against the publisher-text markers. Still an identifier by shape, so a name
+ * that somehow passed the roster but was not one is refused twice. */
+const columnName: Check = value => {
+  assert(typeof value === "string" && ID.test(value));
+  assert(ACCOUNTING_COLUMN_ROSTER.some(column => column.name === value));
+};
+
+/** The three published price fields, each its own named check.
+ *
+ * Named rather than folded into `enumeration(...)` calls because these are the
+ * fields that were wrong before, and a refusal that cannot say which of the
+ * three it came from is a refusal nobody can act on. A named check keeps its
+ * own frame in a stack, so a test can pin *where* the refusal happened rather
+ * than only that one happened. */
+const priceBasisSeries: Check = value => {
+  equal(value, INCOME_V3.basis.price_basis);
+};
+const priceTargetYear: Check = value => {
+  equal(value, INCOME_V3.basis.price_target_year);
+};
+/** The digest of the contract file the accounting node records having converted
+ * with. Checked as a digest first, then against the one this profile pins, so
+ * a payload that names the right series over the wrong bytes is refused. */
+const priceBasisResourceDigest: Check = value => {
+  digest(value);
+  equal(value, INCOME_V3.basis.price_basis_resource_sha256);
 };
 
 /** An exact roster, in the published order. Order is part of the contract here
@@ -625,21 +738,23 @@ const incomeReported: Check = value => {
     accounting_columns: v => {
       assert(Array.isArray(v) && v.length === INCOME_V3.accountingColumns);
       const names: string[] = [];
-      let rowBytes = 0;
-      for (const column of v) {
+      for (const [index, column] of (v as unknown[]).entries()) {
         const c = shape(column, {
-          name: id,
+          name: columnName,
           dtype: enumeration(...Object.keys(INCOME_V3.dtypeBytes)),
           sha256: digest
         });
+        // Exact roster, in order, name and width together. The producer builds
+        // this layout from one fixed tuple, so a reordered or renamed column is
+        // a different schema rather than a rearranged one -- and the dtype is
+        // pinned per position because the published bytes carry no offset to
+        // derive it from, so an <i8 swapped for an <f8 would otherwise be
+        // invisible: both are eight bytes wide.
+        equal(c.name, ACCOUNTING_COLUMN_ROSTER[index].name);
+        equal(c.dtype, ACCOUNTING_COLUMN_ROSTER[index].dtype);
         names.push(c.name);
-        rowBytes += INCOME_V3.dtypeBytes[c.dtype];
       }
       unique(names);
-      // The row width is derivable from the declared dtypes, so it is derived
-      // rather than believed: 28 columns of these three widths reach 91 bytes
-      // one way, and a substituted dtype no longer does.
-      equal(rowBytes, INCOME_V3.accountingRowBytes);
       assert(INCOME_V3.resultColumns.every(name => names.includes(name)));
     },
     result_column_sha256: keyedRows("column", INCOME_V3.resultColumns, {
@@ -663,7 +778,13 @@ const incomeReported: Check = value => {
       shape(v, {
         measure: enumeration(INCOME_V3.basis.measure),
         nominal_source: enumeration(INCOME_V3.basis.nominal_source),
-        price_target: enumeration(INCOME_V3.basis.price_target),
+        // Three fields, not one. The series name alone was what went wrong
+        // before: it was published as an assertion and it named the wrong
+        // series. The digest is the accounting node's own recorded contract
+        // file, so the name is checked against bytes rather than believed.
+        price_basis: priceBasisSeries,
+        price_target_year: priceTargetYear,
+        price_basis_resource_sha256: priceBasisResourceDigest,
         reference_period: enumeration(INCOME_V3.basis.reference_period),
         residual_meaning: enumeration(INCOME_V3.basis.residual_meaning),
         note: reason
@@ -673,6 +794,17 @@ const incomeReported: Check = value => {
   });
   equal(r.rows, INCOME_V3.persons);
   equal(r.accounting_column_count, INCOME_V3.accountingColumns);
+  // Derived from the pinned roster's own dtype widths rather than restated, so
+  // the published row width and the column layout have to agree with each
+  // other: three eight-byte coordinates, six eight-byte results and nineteen
+  // one-byte evidence flags reach 91 bytes exactly one way.
+  equal(
+    r.accounting_row_bytes,
+    ACCOUNTING_COLUMN_ROSTER.reduce(
+      (total, column) => total + INCOME_V3.dtypeBytes[column.dtype],
+      0
+    )
+  );
   equal(r.accounting_row_bytes, INCOME_V3.accountingRowBytes);
   // Every accounted row is classified exactly once per result column, so the
   // three signed classes cover the person rows and nothing is unaccounted.
@@ -772,6 +904,26 @@ function declaredProfile(raw: unknown, rawBuild: unknown): string | null {
 /** Both artifacts have already passed the unchanged candidate reader's byte and
  * embedded identity checks. This entry point adds strict shape, per-node and
  * separate execution-byte/content-key binding; all interpretation stays shared. */
+/** Whether this profile permits this node to consume that producer.
+ *
+ * The generic reader already refuses a typed input whose producer is absent
+ * from the execution, is the node itself, or disagrees about the artifact --
+ * but all three would accept an accounting node consuming the engine, which is
+ * the one edge that changes what the drawn surface means. "What the source
+ * reported" stops being what the source reported the moment a model output
+ * flows into it, and the canvas would draw that arrow without comment.
+ *
+ * The exporter refuses it by name through its own `INPUT_PRODUCERS`; this is
+ * the reader's half of the same rule, so a payload that got past the exporter
+ * by some other route still cannot be drawn. A node with no roster row at all
+ * is refused rather than waved through, so adding a sixth node cannot silently
+ * arrive unconstrained. */
+function permittedInputProducer(node: string, producer: string): void {
+  const permitted = INCOME_V3.inputProducers[node];
+  assert(permitted !== undefined);
+  assert(permitted.includes(producer));
+}
+
 export function normalizeGraphAttachment(
   raw: unknown,
   manifest: CandidateQualityManifest,
@@ -963,6 +1115,8 @@ export function normalizeGraphAttachment(
         // Both fields are nullable in the wire contract, so two nulls agree.
         equal(o.numeric, a.numeric);
         equal(o.tolerance, a.tolerance);
+        if (profile === INCOME_V3_PROFILE)
+          permittedInputProducer(n.id as string, a.producer as string);
         dependencies.get(n.id)!.add(a.producer as string);
       }
       if (n.receipt_present && n.node_key !== null) {

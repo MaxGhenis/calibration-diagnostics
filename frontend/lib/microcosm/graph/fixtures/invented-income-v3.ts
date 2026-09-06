@@ -1,7 +1,13 @@
 // Invented aggregate evidence only. These bytes describe no real population and
-// no real run. Every digest here is a repeated hex character, every count is
-// chosen to satisfy the profile's own arithmetic, and the accounting columns are
-// named after the closed roster the profile pins rather than read from anything.
+// no real run. Every digest here is invented and every count is chosen to
+// satisfy the profile's own arithmetic.
+//
+// The schema is not invented, and deliberately so: the accounting column names
+// are the production producer's real twenty-eight, the price basis is the real
+// contract the accounting node records, and the quality roster is the real nine.
+// A fixture that renamed those would pass against itself and fail against every
+// genuine export -- which is the one failure a fixture exists to prevent.
+//
 // Nothing in this file may be cited as evidence about the United States, the
 // ASEC, or any Microcosm build.
 import { createHash } from "node:crypto";
@@ -86,26 +92,36 @@ const ZERO_CLASSES = [
 const INCOME_YEARS = ["2022", "2023", "2024"] as const;
 const PERSONS = 52;
 
-/** Twenty-eight declared columns whose declared widths reach the profile's
- * ninety-one byte row exactly once: nine eight-byte columns and nineteen
- * one-byte columns. The six result columns are among the eight-byte ones. */
+/** The real twenty-eight column schema, in the real order.
+ *
+ * The names are the production producer's own
+ * `COORDINATES + RESULT_COLUMNS + EVIDENCE_COLUMNS`, so this fixture carries the
+ * names a genuine export carries -- including `person_id`, `A_AGE` and the
+ * dotted evidence axes. Renaming them to invented stand-ins would have hidden
+ * exactly the incompatibility this fixture exists to catch: a reader that
+ * refuses `person_id` as publisher prose passes against invented names and
+ * fails against every real export.
+ *
+ * Only the digests are invented. Names and widths are schema, not values, and
+ * the widths reach the ninety-one byte row: three plus six eight-byte columns
+ * and nineteen one-byte flags. */
+const COORDINATE_COLUMNS = ["person_id", "income_year", "A_AGE"] as const;
+const EVIDENCE_COLUMNS = [
+  ...["WSAL_VAL", "SEMP_VAL", "FRSE_VAL", "SSI_VAL", "PTOTVAL"].flatMap(
+    (field) => ["status", "validity", "zero_origin"].map((axis) => `${field}.${axis}`),
+  ),
+  "PAW_VAL.status",
+  "PAW_VAL.validity",
+  "PAW_VAL.zero_origin",
+  "PAW_VAL.source_encoding_class",
+] as const;
+
 function accountingColumns() {
-  const wide = [
-    ...RESULT_COLUMNS,
-    "invented_wide_a",
-    "invented_wide_b",
-    "invented_wide_c",
-  ].map((name, index) => ({
-    name,
-    dtype: index === 8 ? "<i8" : "<f8",
-    sha256: key(`column:${name}`),
-  }));
-  const narrow = Array.from({ length: 19 }, (_, index) => ({
-    name: `invented_flag_${index}`,
-    dtype: "u1",
-    sha256: key(`column:flag:${index}`),
-  }));
-  return [...wide, ...narrow];
+  return [
+    ...COORDINATE_COLUMNS.map((name) => ({ name, dtype: "<i8" })),
+    ...RESULT_COLUMNS.map((name) => ({ name, dtype: "<f8" })),
+    ...EVIDENCE_COLUMNS.map((name) => ({ name, dtype: "u1" })),
+  ].map((column) => ({ ...column, sha256: key(`column:${column.name}`) }));
 }
 
 /** Three signed classes covering all fifty-two invented rows. Unlike the run the
@@ -303,7 +319,7 @@ export function inventedIncomeV3(options: InventedIncomeV3Options = {}) {
       housing_universe_evidence_fields: 7,
       housing_universe_carried_cells: 12,
       loaded_module_count: 214,
-      note: "Fifteen invented households from three source cohorts. An engineering slice, not a sample of any population.",
+      note: "Fifteen invented households from three source cohorts. This small engineering sample does not establish population accuracy.",
     },
     quality: {
       status: "incomplete",
@@ -318,7 +334,6 @@ export function inventedIncomeV3(options: InventedIncomeV3Options = {}) {
         "national_totals",
         "congressional_district_pass",
         "completed_eight_component_acs_bridge",
-        "prior_wages",
         "distributions",
         "support",
         "model_validation",
@@ -345,11 +360,14 @@ export function inventedIncomeV3(options: InventedIncomeV3Options = {}) {
       basis: {
         measure: "observed_reported_source_income",
         nominal_source: "asec_reported_nominal_amounts",
-        price_target: "cpi_u_rs_2024_price_target_year",
+        price_basis: "census_ccpiu_annual_2024",
+        price_target_year: "2024",
+        price_basis_resource_sha256:
+          "88cec207a3c73e5de93d677acf16e8db9ddae9761c644c06da92cacf0feb3f63",
         reference_period: "interview_household_one_year_after_income_year",
         residual_meaning:
           "signed_source_accounting_residual_not_acs_other_income",
-        note: "Invented amounts as recorded by the source, restated to a 2024 price target. The unallocated column is a signed accounting residual, not an estimate of any income category.",
+        note: "Invented amounts as recorded by the source, restated to 2024 annual average C-CPI-U dollars on the census_ccpiu_annual_2024 basis that the accounting node records. The unallocated column is a signed accounting residual, not an estimate of any income category.",
       },
       not_claimed: [
         "simulated_ssi",

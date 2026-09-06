@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 import { StatusPill } from "@/components/shared/status-pill";
 import {
   countReading,
+  priceBasisReading,
   reportedColumnReading,
   shareOf,
   tokenReading,
@@ -271,7 +272,9 @@ function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
       pills={
         <>
           <StatusPill tone="neutral">{tokenReading(basis.measure)}</StatusPill>
-          <StatusPill tone="neutral">2024 price target</StatusPill>
+          <StatusPill tone="neutral">
+            {priceBasisReading(basis.price_basis, basis.price_target_year)}
+          </StatusPill>
         </>
       }
     >
@@ -279,8 +282,19 @@ function ReportedIncome({ profile }: { profile: EvidenceProfileReading }) {
         <Row label="Nominal source">
           {tokenReading(basis.nominal_source)}
         </Row>
-        <Row label="Price target">
-          {tokenReading(basis.price_target)}
+        {/* The series in words, then the publisher's own token, then the digest
+            of the contract file the accounting node records having converted
+            with. The reading is this dashboard's; the token and the digest are
+            the publisher's, and both are shown so the reading can be checked
+            rather than taken. */}
+        <Row label="Price basis">
+          <span>{priceBasisReading(basis.price_basis, basis.price_target_year)}</span>
+          <span className="mt-0.5 block font-mono text-[11px] break-all text-muted-foreground">
+            {basis.price_basis}
+          </span>
+          <span className="mt-0.5 block font-mono text-[11px] break-all text-muted-foreground">
+            {basis.price_basis_resource_sha256}
+          </span>
         </Row>
         <Row label="Reference period">
           {tokenReading(basis.reference_period)}

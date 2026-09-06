@@ -347,6 +347,25 @@ export function tokenReading(token: string): string {
   return token.replaceAll("_", " ");
 }
 
+/** The price basis in words.
+ *
+ * `tokenReading` is deliberately not used here. It only swaps separators, so it
+ * would render the publisher's token as "census ccpiu annual 2024" -- which
+ * reads like English while telling a reader nothing, and quietly drops that
+ * "ccpiu" is the *chained* CPI-U rather than the CPI-U-RS this profile once
+ * wrongly named. A basis is worth naming properly or not at all, so each one is
+ * worded explicitly and an unrecognised token throws rather than being guessed
+ * at. The publisher's own token and the digest of the contract file it was read
+ * from are shown beside this reading, never replaced by it. */
+export function priceBasisReading(basis: string, targetYear: string): string {
+  switch (basis) {
+    case "census_ccpiu_annual_2024":
+      return `${targetYear} annual average C-CPI-U dollars`;
+    default:
+      return unread(basis as never, "price basis");
+  }
+}
+
 const REPORTED_PREFIX = "asec_reported_";
 const PRICE_SUFFIX = "_2024_price";
 
