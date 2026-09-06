@@ -718,16 +718,22 @@ const incomeLineage: Check = value => {
   equal(o.count, o.fields.length);
 };
 
-/** Carried on both artifacts, because the exporter writes one identity block
- * into each. A build summary that omits them is a different publisher. */
+/** The identities a profile adds to the run's own. They are provenance, so they
+ * are bound to the candidate manifest exactly as the original eight are, and
+ * they are carried on both artifacts because the publisher writes one identity
+ * block into each. A build summary that omits them is a different publisher. */
+const PROFILE_PROVENANCE = [
+  "root_output_review_sha256",
+  "base_exporter_sha256",
+  "loaded_module_manifest_sha256"
+] as const;
+
 const PROFILE_COMMON_FIELDS: Record<string, Check> = {
   profile: v => {
     id(v);
     assert(PROFILES.includes(v as string));
   },
-  root_output_review_sha256: digest,
-  base_exporter_sha256: digest,
-  loaded_module_manifest_sha256: digest
+  ...Object.fromEntries(PROFILE_PROVENANCE.map(key => [key, digest]))
 };
 
 const INCOME_V3_GRAPH_FIELDS: Record<string, Check> = {
@@ -817,6 +823,9 @@ export function normalizeGraphAttachment(
   });
   for (const key of Object.keys(profileCommon))
     equal(build[key], graph[key]);
+  if (profile !== null)
+    for (const key of PROFILE_PROVENANCE)
+      equal(graph[key], manifest.provenance[key]);
   const descriptor = manifest.attachments.graph_receipts, buildDescriptor = manifest.attachments.build_manifest;
   assert(descriptor?.status === "available" && descriptor.scope === "population");
   assert(buildDescriptor?.status === "available" && buildDescriptor.scope === "run");
@@ -1000,7 +1009,7 @@ export function normalizeGraphAttachment(
       kernel_impl_hash: null,
       computation_content_key: graph.computation_content_key,
       content_key_note: graph.content_key_note,
-      evidence_profile: evidenceProfile,
+      ...(evidenceProfile ? { evidence_profile: evidenceProfile } : {}),
       executions
     },
     checks
@@ -1141,11 +1150,7 @@ function incomeV3Reading(
     },
     lineage_divergence: graph.lineage_divergence,
     paths,
-    identities: [
-      "root_output_review_sha256",
-      "base_exporter_sha256",
-      "loaded_module_manifest_sha256"
-    ].map(key => ({
+    identities: PROFILE_PROVENANCE.map(key => ({
       key,
       sha256: graph[key]
     }))
