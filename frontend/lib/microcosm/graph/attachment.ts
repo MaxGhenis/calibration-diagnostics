@@ -99,11 +99,18 @@ const nullable = (check: Check): Check => value => {
 };
 
 const reason: Check = value => text(value, 2048);
-const enumeration = (...values: unknown[]): Check => value => assert(values.includes(value));
-const list = (check: Check, max = 64, min = 0): Check => value => {
-  assert(Array.isArray(value) && value.length >= min && value.length <= max);
-  value.forEach(check);
-};
+/** One of a closed set. A named function expression, not an arrow, so a refusal
+ * from inside it keeps its own frame: `oneOf` beside the enclosing check names
+ * both what kind of rule refused and which block it belongs to. */
+const enumeration = (...values: unknown[]): Check =>
+  function oneOf(value) {
+    assert(values.includes(value));
+  };
+const list = (check: Check, max = 64, min = 0): Check =>
+  function boundedList(value) {
+    assert(Array.isArray(value) && value.length >= min && value.length <= max);
+    value.forEach(check);
+  };
 
 function shape(value: unknown, fields: Record<string, Check>): RecordValue {
   const o = object(value);
@@ -654,35 +661,46 @@ const priceBasisResourceDigest: Check = value => {
 
 /** An exact roster, in the published order. Order is part of the contract here
  * because the exporter writes each of these from a fixed tuple; a reordered
- * list is a different publisher, not a rearranged one. */
-const exactList = (expected: readonly string[]): Check => value => {
-  assert(Array.isArray(value) && value.length === expected.length);
-  (value as unknown[]).forEach((entry, index) => {
-    id(entry);
-    equal(entry, expected[index]);
-  });
-};
+ * list is a different publisher, not a rearranged one.
+ *
+ * The returned check is a named function expression rather than an arrow, so a
+ * refusal from inside it says `exactRoster` in a stack instead of
+ * `<anonymous>`. That is the difference between a test that can pin which check
+ * refused and one that can only say that something did. */
+const exactList = (expected: readonly string[]): Check =>
+  function exactRoster(value) {
+    assert(Array.isArray(value) && value.length === expected.length);
+    // A plain loop, not `forEach`: an anonymous callback puts an unnamed frame
+    // between this check and the refusal it raised, which is the one thing a
+    // stack read for evidence cannot afford.
+    for (const [index, entry] of (value as unknown[]).entries()) {
+      id(entry);
+      equal(entry, expected[index]);
+    }
+  };
 
 /** Rows keyed by a name, one per expected key, in the expected order. */
 const keyedRows = (
   key: string,
   expected: readonly string[],
   fields: Record<string, Check>
-): Check => value => {
-  assert(Array.isArray(value) && value.length === expected.length);
-  (value as unknown[]).forEach((entry, index) => {
-    const row = shape(entry, {
-      [key]: id,
-      ...fields
+): Check =>
+  function keyedRowSet(value) {
+    assert(Array.isArray(value) && value.length === expected.length);
+    (value as unknown[]).forEach((entry, index) => {
+      const row = shape(entry, {
+        [key]: id,
+        ...fields
+      });
+      equal(row[key], expected[index]);
     });
-    equal(row[key], expected[index]);
-  });
-};
+  };
 
-const bounded = (min: number, max: number): Check => value => {
-  count(value);
-  assert(value >= min && value <= max);
-};
+const bounded = (min: number, max: number): Check =>
+  function boundedCount(value) {
+    count(value);
+    assert(value >= min && value <= max);
+  };
 
 const incomeScope: Check = value => {
   const s = shape(value, {

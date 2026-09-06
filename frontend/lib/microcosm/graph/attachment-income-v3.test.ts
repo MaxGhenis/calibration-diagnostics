@@ -36,6 +36,21 @@ function refusal(change: (input: Fixture) => void) {
 const graphOf = (input: Fixture) => input.graph as Record<string, any>;
 const buildOf = (input: Fixture) => input.build as Record<string, any>;
 
+/** Make one node consume another's typed output, in both executions, keeping
+ * every other published claim about the input intact. The artifact, its key,
+ * its numeric mode and its tolerance are the producer's own, so the only thing
+ * wrong with the result is who is named as consuming whom -- which is exactly
+ * the claim the roster rule exists to refuse. */
+function consume(input: Fixture, node: string, producer: string) {
+  for (const execution of graphOf(input).executions) {
+    const consumer = execution.nodes.find((n: any) => n.id === node);
+    const source = execution.nodes.find((n: any) => n.id === producer);
+    consumer.typed_inputs = [
+      { ...source.typed_outputs[0], producer, producer_key: source.node_key },
+    ];
+  }
+}
+
 describe("the four-node contract is untouched by profiles", () => {
   test("an attachment that declares no profile still reads, and carries no profile", () => {
     const legacy = inventedGraph();
@@ -265,14 +280,23 @@ describe("corrupted income-v3 annotations are refused", () => {
     ["declared widths that no longer reach the row", (i) => { graphOf(i).reported_income.accounting_columns[0].dtype = "u1"; }],
     ["a row width the columns do not reach", (i) => { graphOf(i).reported_income.accounting_row_bytes = 90; }],
     ["a duplicated accounting column name", (i) => { graphOf(i).reported_income.accounting_columns[27].name = graphOf(i).reported_income.accounting_columns[26].name; }],
-    ["a result column absent from the accounting roster", (i) => { graphOf(i).reported_income.accounting_columns[0].name = "invented_replacement"; }],
+    ["an accounting column name that is not on the producer's roster", (i) => { graphOf(i).reported_income.accounting_columns[0].name = "invented_replacement"; }],
+    ["a safe-looking column name that is still not one of the twenty-eight", (i) => { graphOf(i).reported_income.accounting_columns[1].name = "income_year_v2"; }],
+    ["a reordered accounting roster", (i) => { const c = graphOf(i).reported_income.accounting_columns; [c[0], c[1]] = [c[1], c[0]]; }],
+    ["publisher prose arriving where a column name belongs", (i) => { graphOf(i).reported_income.accounting_columns[0].name = "the person id column"; }],
+    ["a result column renamed out of the roster", (i) => { graphOf(i).reported_income.accounting_columns[3].name = "person_id"; }],
     ["a rewritten arithmetic order", (i) => { graphOf(i).reported_income.arithmetic_order = "U=T-W"; }],
     ["reordered result columns", (i) => { graphOf(i).reported_income.result_column_sha256.reverse(); }],
     ["signed classes that do not cover the rows", (i) => { graphOf(i).reported_income.signed_value_counts[0].zero += 1; }],
     ["a zero-origin class count beyond the person rows", (i) => { graphOf(i).reported_income.zero_origin_class_counts[0].observed_amount = 53; }],
     ["a zero-origin class this profile does not publish", (i) => { graphOf(i).reported_income.zero_origin_class_counts[0].invented_class = 0; }],
     ["a source year this profile does not describe", (i) => { graphOf(i).reported_income.zero_origin_class_counts[2].income_year = "2025"; }],
-    ["a different price target", (i) => { graphOf(i).reported_income.basis.price_target = "nominal"; }],
+    ["the wrong price series this profile once published", (i) => { graphOf(i).reported_income.basis.price_basis = "cpi_u_rs_2024_price_target_year"; }],
+    ["a price target year the basis was not restated to", (i) => { graphOf(i).reported_income.basis.price_target_year = "2023"; }],
+    ["a price basis digest the accounting node never recorded", (i) => { graphOf(i).reported_income.basis.price_basis_resource_sha256 = "a".repeat(64); }],
+    ["a price basis digest that is not a digest", (i) => { graphOf(i).reported_income.basis.price_basis_resource_sha256 = "census_ccpiu_annual_2024"; }],
+    ["the retired single price field put back", (i) => { graphOf(i).reported_income.basis.price_target = "cpi_u_rs_2024_price_target_year"; }],
+    ["a price basis dropped altogether", (i) => { delete graphOf(i).reported_income.basis.price_basis; }],
     ["a residual redescribed as an income category", (i) => { graphOf(i).reported_income.basis.residual_meaning = "acs_other_income"; }],
     ["a shortened withheld-claim list", (i) => { graphOf(i).reported_income.not_claimed.pop(); }],
     ["a claim quietly withdrawn from the withheld list", (i) => { graphOf(i).reported_income.not_claimed[0] = "simulated_something"; }],
@@ -297,6 +321,12 @@ describe("corrupted income-v3 annotations are refused", () => {
     ["a warm reuse that called a kernel", (i) => { const warm = graphOf(i).executions[1]; warm.nodes[0].cache = "computed"; warm.kernel_calls = 1; warm.computed_count = 1; warm.cache_hit_count = 4; buildOf(i).checks.warm.kernel_calls = 1; }],
     ["a cold execution that prepared no source", (i) => { graphOf(i).executions[0].source_preparation_calls = 0; buildOf(i).checks.cold.source_preparation_calls = 0; }],
     ["an execution mode this profile does not describe", (i) => { graphOf(i).executions[0].mode = "tepid"; buildOf(i).checks.tepid = buildOf(i).checks.cold; delete buildOf(i).checks.cold; }],
+    // The edge the exporter's own producer roster refuses by name. Every
+    // generic check still passes here: the producer is in the execution, it is
+    // not the node itself, and the input agrees with the output it names.
+    ["the accounting node consuming the engine", (i) => { consume(i, "asec_prepared.reported_income", "asec_prepared.engine_current_money"); }],
+    ["the selection node consuming the carried frame", (i) => { consume(i, "asec_prepared.select_households", "asec_prepared.cps_carried_current"); }],
+    ["the prepared frame consuming anything at all", (i) => { consume(i, "asec_prepared.create", "asec_prepared.select_households"); }],
   ];
   for (const [name, change] of cases) test(name, () => refusal(change));
 });

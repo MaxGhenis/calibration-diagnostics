@@ -1,0 +1,21 @@
+{
+  "candidates": [
+    {
+      "candidate_release_id": "us-asec-income-v3-15hh-invented-v1",
+      "execution_status": "completed",
+      "manifest": {
+        "path": "manifests/c9ec679f93cc0f30953edf78d0915f4c7c945dfd58a0c1072c669f83030a22b7.json",
+        "sha256": "c9ec679f93cc0f30953edf78d0915f4c7c945dfd58a0c1072c669f83030a22b7"
+      },
+      "release_eligibility": {
+        "reason": "Invented target 2024 engineering slice. Uncalibrated and excluded from release claims.",
+        "status": "excluded"
+      },
+      "run_id": "invented-income-v3-run",
+      "updated_at": "2026-09-06T04:41:28+00:00"
+    }
+  ],
+  "country": "us",
+  "schema_version": "microcosm.candidate_quality_index.v1",
+  "updated_at": "2026-09-06T04:41:28+00:00"
+}
